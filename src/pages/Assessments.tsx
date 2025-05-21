@@ -42,48 +42,64 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import type { Assessment, AssessmentCategory } from "@/types/assessment";
 import { cn } from "@/lib/utils";
+import { MatAdminAssessmentsView } from "@/components/MatAdminAssessmentsView";
 
 export function AssessmentsPage() {
   const { role } = useUser();
+  const isMatAdmin = role === "mat-admin";
+  const assessments = isMatAdmin ? mockAssessmentsAdmin : mockAssessmentsForDeptHead;
+  
+  // Define all hooks unconditionally here
   const [searchTerm, setSearchTerm] = useState("");
   const [categoryFilter, setCategoryFilter] = useState<AssessmentCategory | "all">("all");
   const [statusFilter, setStatusFilter] = useState<"all" | "completed" | "in-progress" | "not-started" | "overdue">("all");
   const [schoolFilter, setSchoolFilter] = useState<string>("all");
   const [view, setView] = useState<"table" | "cards">("table");
   
-  const isMatAdmin = role === "mat-admin";
-  const assessments = isMatAdmin ? mockAssessmentsAdmin : mockAssessmentsForDeptHead;
-  
   const uniqueSchools = useMemo(() => {
     const schools = [...new Set(assessments.map(a => a.school.id))];
     return mockSchools.filter(school => schools.includes(school.id));
   }, [assessments]);
-
-  const filteredAssessments = assessments.filter((assessment) => {
-    // Search term filter
-    const matchesSearch = 
-      assessment.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      assessment.school.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      assessment.category.toLowerCase().includes(searchTerm.toLowerCase());
-    
-    // Category filter
-    const matchesCategory = categoryFilter === "all" || assessment.category === categoryFilter;
-    
-    // Status filter
-    const matchesStatus = 
-      statusFilter === "all" || 
-      (statusFilter === "completed" && assessment.status === "Completed") ||
-      (statusFilter === "in-progress" && assessment.status === "In Progress") ||
-      (statusFilter === "not-started" && assessment.status === "Not Started") ||
-      (statusFilter === "overdue" && assessment.status === "Overdue");
-    
-    // School filter
-    const matchesSchool = schoolFilter === "all" || assessment.school.id === schoolFilter;
-
-    return matchesSearch && matchesCategory && matchesStatus && matchesSchool;
-  });
-
+  
   const uniqueCategories = [...new Set(assessments.map(a => a.category))];
+  
+  const filteredAssessments = useMemo(() => {
+    if (!isMatAdmin) {
+      return assessments.filter((assessment) => {
+        // Search term filter
+        const matchesSearch = 
+          assessment.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+          assessment.school.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+          assessment.category.toLowerCase().includes(searchTerm.toLowerCase());
+        
+        // Category filter
+        const matchesCategory = categoryFilter === "all" || assessment.category === categoryFilter;
+        
+        // Status filter
+        const matchesStatus = 
+          statusFilter === "all" || 
+          (statusFilter === "completed" && assessment.status === "Completed") ||
+          (statusFilter === "in-progress" && assessment.status === "In Progress") ||
+          (statusFilter === "not-started" && assessment.status === "Not Started") ||
+          (statusFilter === "overdue" && assessment.status === "Overdue");
+        
+        // School filter
+        const matchesSchool = schoolFilter === "all" || assessment.school.id === schoolFilter;
+
+        return matchesSearch && matchesCategory && matchesStatus && matchesSchool;
+      });
+    }
+    return [];
+  }, [isMatAdmin, assessments, searchTerm, categoryFilter, statusFilter, schoolFilter]);
+  
+  // Calculate how many assessments are overdue or in-progress
+  const overdueCount = useMemo(() => {
+    return assessments.filter(a => a.status === "Overdue").length;
+  }, [assessments]);
+  
+  const inProgressCount = useMemo(() => {
+    return assessments.filter(a => a.status === "In Progress").length;
+  }, [assessments]);
   
   const getStatusColor = (status: string) => {
     switch (status) {
@@ -114,28 +130,35 @@ export function AssessmentsPage() {
         return null;
     }
   };
-
-  // Calculate how many assessments are overdue or in-progress
-  const overdueCount = assessments.filter(a => a.status === "Overdue").length;
-  const inProgressCount = assessments.filter(a => a.status === "In Progress").length;
   
+  // Now that all hooks are defined, we can use conditional rendering
+  if (isMatAdmin) {
+    return (
+      <div className="container py-10">
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
+          <div>
+            <h1 className="text-3xl font-bold tracking-tight">All Assessments</h1>
+            <p className="text-muted-foreground">
+              View and manage assessments across all schools.
+            </p>
+          </div>
+        </div>
+        
+        <MatAdminAssessmentsView assessments={assessments} />
+      </div>
+    );
+  }
+  
+  // Department Head view
   return (
     <div className="container py-10">
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">
-            {isMatAdmin ? "All Assessments" : "My Assessments"}
-          </h1>
+          <h1 className="text-3xl font-bold tracking-tight">My Assessments</h1>
           <p className="text-muted-foreground">
-            {isMatAdmin
-              ? "View and manage assessments across all schools."
-              : `You have ${overdueCount} overdue and ${inProgressCount} in-progress assessments.`}
+            You have {overdueCount} overdue and {inProgressCount} in-progress assessments.
           </p>
         </div>
-        <Button className="flex items-center gap-2 self-start">
-          <PlusCircle className="h-4 w-4" />
-          New Assessment
-        </Button>
       </div>
 
       <div className="space-y-5">
@@ -278,39 +301,43 @@ export function AssessmentsPage() {
                         </Badge>
                       </TableCell>
                       <TableCell>
-                        <div className="flex items-center gap-2">
-                          <div className="w-20 h-2 rounded-full bg-slate-100 overflow-hidden">
-                            <div 
-                              className={cn(
-                                "h-full rounded-full", 
-                                assessment.completedStandards === 0 ? "bg-slate-200" :
-                                assessment.completedStandards === assessment.totalStandards ? "bg-emerald-500" :
-                                assessment.status === "Overdue" ? "bg-rose-500" : "bg-indigo-500"
-                              )} 
-                              style={{ 
-                                width: `${(assessment.completedStandards / assessment.totalStandards) * 100}%` 
-                              }}
-                            ></div>
+                        <div className="flex flex-col space-y-1">
+                          <div className="flex items-center gap-2">
+                            <div className="h-2 w-full bg-slate-100 rounded-full overflow-hidden">
+                              <div
+                                className={cn(
+                                  "h-full", 
+                                  assessment.status === "Completed" ? "bg-emerald-500" :
+                                  assessment.status === "Overdue" ? "bg-rose-500" : "bg-indigo-500"
+                                )}
+                                style={{
+                                  width: `${(assessment.completedStandards / assessment.totalStandards) * 100}%`,
+                                }}
+                              />
+                            </div>
+                            <span className="text-sm">
+                              {assessment.completedStandards}/{assessment.totalStandards}
+                            </span>
                           </div>
-                          <span className="text-sm whitespace-nowrap">
-                            {assessment.completedStandards}/{assessment.totalStandards}
-                          </span>
                         </div>
                       </TableCell>
                       <TableCell>
-                        <div 
-                          className={cn(
-                            "inline-flex items-center gap-1.5 whitespace-nowrap rounded-md px-2 py-1 text-xs font-medium",
-                            assessment.status === "Overdue" ? "bg-rose-50 text-rose-700 border border-rose-100" : 
-                            assessment.dueDate ? "bg-amber-50 text-amber-700 border border-amber-100" : "bg-slate-50 text-slate-600 border border-slate-100"
-                          )}
-                        >
-                          <Calendar className="h-3.5 w-3.5" />
-                          <span>
-                            {assessment.dueDate || "No deadline"}
-                            {assessment.status === "Overdue" && " (Overdue)"}
-                          </span>
-                        </div>
+                        {assessment.dueDate ? (
+                          <div 
+                            className={cn(
+                              "inline-flex items-center gap-1.5 whitespace-nowrap rounded-md px-2 py-1 text-xs font-medium",
+                              assessment.status === "Overdue" ? "bg-rose-50 text-rose-700 border border-rose-100" : "bg-amber-50 text-amber-700 border border-amber-100"
+                            )}
+                          >
+                            <Calendar className="h-3.5 w-3.5" />
+                            <span>
+                              {assessment.dueDate}
+                              {assessment.status === "Overdue" && " (Overdue)"}
+                            </span>
+                          </div>
+                        ) : (
+                          <span className="text-sm text-muted-foreground">No deadline</span>
+                        )}
                       </TableCell>
                       <TableCell>
                         <Badge className={cn("gap-1 font-medium", getStatusColor(assessment.status))}>
@@ -319,19 +346,34 @@ export function AssessmentsPage() {
                         </Badge>
                       </TableCell>
                       <TableCell className="text-right">
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          className="gap-1 group-hover:border-primary group-hover:text-primary transition-colors"
-                          asChild
-                        >
-                          <Link to={`/assessments/${assessment.id}`}>
-                            {assessment.status === "Not Started" || assessment.status === "In Progress"
-                              ? (role === "department-head" ? "Continue" : "View")
-                              : "View"}
-                            <ChevronRight className="h-4 w-4" />
-                          </Link>
-                        </Button>
+                        {assessment.status === "Completed" ? (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="gap-1"
+                            asChild
+                          >
+                            <Link to={`/assessments/${assessment.id}`}>
+                              View
+                              <ChevronRight className="h-4 w-4" />
+                            </Link>
+                          </Button>
+                        ) : (
+                          <Button
+                            variant={assessment.status === "Overdue" ? "default" : "outline"}
+                            size="sm"
+                            className={cn(
+                              "gap-1",
+                              assessment.status !== "Overdue" && "group-hover:border-primary group-hover:text-primary transition-colors"
+                            )}
+                            asChild
+                          >
+                            <Link to={`/assessments/${assessment.id}`}>
+                              Continue
+                              <ChevronRight className="h-4 w-4" />
+                            </Link>
+                          </Button>
+                        )}
                       </TableCell>
                     </TableRow>
                   ))
@@ -340,12 +382,6 @@ export function AssessmentsPage() {
             </Table>
           </CardContent>
         </Card>
-
-        {role === "department-head" && filteredAssessments.length > 0 && (
-          <p className="text-xs text-muted-foreground italic">
-            Tip: Click on any assessment to view details or continue your progress. You can filter by school, category, or status.
-          </p>
-        )}
       </div>
     </div>
   );

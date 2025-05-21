@@ -4,8 +4,7 @@ import type {
   AssessmentStatus, 
   School, 
   Standard, 
-  User,
-  Rating
+  User
 } from "@/types/assessment";
 
 // Mock Schools
@@ -136,7 +135,7 @@ export const financeStandards: Standard[] = [
   },
 ];
 
-// Add IT standards
+// IT Standards
 export const itStandards: Standard[] = [
   {
     id: "it1",
@@ -161,7 +160,7 @@ export const itStandards: Standard[] = [
   },
 ];
 
-// Add Governance standards
+// Governance Standards
 export const governanceStandards: Standard[] = [
   {
     id: "eg1",
@@ -186,7 +185,7 @@ export const governanceStandards: Standard[] = [
   },
 ];
 
-// Add Estates standards
+// Estates Standards
 export const estatesStandards: Standard[] = [
   {
     id: "bo1",
@@ -240,7 +239,7 @@ export const mockAssessmentsAdmin: Assessment[] = [
     dueDate: "2024-07-30",
     assignedTo: [mockUsers[3]],
     standards: hrStandards.map(std => 
-      ({ ...std, rating: (Math.floor(Math.random() * 3) + 2) as 2 | 3 | 4, lastUpdated: "2024-07-10" })
+      ({ ...std, rating: (Math.floor(Math.random() * 3) + 2) as 2 | 3 | 4, lastUpdated: "2024-07-10", evidence: "Detailed documentation has been provided supporting the current rating. All policies have been reviewed and updated." })
     ),
   },
   {
@@ -303,9 +302,39 @@ export const mockAssessmentsAdmin: Assessment[] = [
     dueDate: "2024-07-15",
     assignedTo: [mockUsers[3]],
   },
+  {
+    id: "12",
+    name: "IT Strategy & Support Assessment",
+    category: "IT Strategy & Support",
+    school: mockSchools[2],
+    completedStandards: 3,
+    totalStandards: 3,
+    lastUpdated: "2024-07-14",
+    status: "Completed",
+    dueDate: "2024-07-20",
+    assignedTo: [mockUsers[2]],
+    standards: itStandards.map(std => 
+      ({ ...std, rating: (Math.floor(Math.random() * 2) + 3) as 3 | 4, lastUpdated: "2024-07-14", evidence: "All IT systems have been thoroughly assessed and documented. Security protocols are in place and regularly tested." })
+    ),
+  },
+  {
+    id: "13",
+    name: "Governance Assessment",
+    category: "Governance",
+    school: mockSchools[4],
+    completedStandards: 3,
+    totalStandards: 3,
+    lastUpdated: "2024-07-05",
+    status: "Completed",
+    dueDate: "2024-07-10",
+    assignedTo: [mockUsers[0]],
+    standards: governanceStandards.map(std => 
+      ({ ...std, rating: (Math.floor(Math.random() * 2) + 2) as 2 | 3, lastUpdated: "2024-07-05", evidence: "Governance structures have been reviewed and documented. Board meetings are regular with full attendance and engagement." })
+    ),
+  },
 ];
 
-// Mock Assessments for Department Head view (expanded with more categories)
+// Mock Assessments for Department Head view (user 0 - Education Head)
 export const mockAssessmentsForDeptHead: Assessment[] = [
   {
     id: "1",
@@ -331,57 +360,20 @@ export const mockAssessmentsForDeptHead: Assessment[] = [
     lastUpdated: "2024-07-12",
     status: "In Progress",
     dueDate: "2024-08-20",
+    standards: educationStandards.map((std, idx) => 
+      idx < 3 ? { ...std, rating: (idx % 2) + 2 as 2 | 3, lastUpdated: "2024-07-12" } : std
+    ),
   },
   {
     id: "8",
-    name: "IT Strategy & Support Assessment",
-    category: "IT Strategy & Support",
-    school: mockSchools[0],
+    name: "Education Assessment",
+    category: "Education",
+    school: mockSchools[2],
     completedStandards: 0,
-    totalStandards: 3,
+    totalStandards: 6,
     lastUpdated: "-",
     status: "Not Started",
-    dueDate: "2024-09-10",
-    standards: itStandards,
-  },
-  {
-    id: "9",
-    name: "Governance Assessment",
-    category: "Governance",
-    school: mockSchools[2],
-    completedStandards: 3,
-    totalStandards: 3,
-    lastUpdated: "2024-07-18",
-    status: "Completed",
-    dueDate: "2024-07-31",
-    standards: governanceStandards.map(std => 
-      ({ ...std, rating: 3 as Rating, lastUpdated: "2024-07-18", evidence: "All governance policies and procedures have been reviewed and updated in line with DfE requirements. The board has conducted a self-assessment and identified areas for development." })
-    ),
-  },
-  {
-    id: "10",
-    name: "Human Resources Assessment",
-    category: "Human Resources",
-    school: mockSchools[3],
-    completedStandards: 2,
-    totalStandards: 5,
-    lastUpdated: "2024-07-16",
-    status: "Overdue",
-    dueDate: "2024-07-15",
-    standards: hrStandards,
-  },
-  {
-    id: "11",
-    name: "Estates Assessment",
-    category: "Estates",
-    school: mockSchools[1],
-    completedStandards: 1,
-    totalStandards: 3,
-    lastUpdated: "2024-07-20",
-    status: "In Progress",
-    dueDate: "2024-08-15",
-    standards: estatesStandards.map((std, idx) => 
-      idx < 1 ? { ...std, rating: 2 as Rating, lastUpdated: "2024-07-20", evidence: "Some maintenance work has been scheduled but significant gaps remain in the overall maintenance plan." } : std
-    ),
+    dueDate: "2024-09-15",
+    standards: educationStandards,
   },
 ]; 
