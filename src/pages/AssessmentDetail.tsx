@@ -38,7 +38,7 @@ import {
   User,
   XCircle,
 } from "lucide-react";
-import { RatingLabels, type Rating, type Standard } from "@/types/assessment";
+import { RatingLabels, RatingDescriptions, type Rating, type Standard } from "@/types/assessment";
 import {
   Tooltip,
   TooltipContent,
@@ -417,15 +417,20 @@ export function AssessmentDetailPage() {
                   return (
                     <Button
                       key={standard.id}
-                      variant={activeStandard?.id === standard.id ? "default" : "ghost"}
+                      variant="ghost"
                       className={cn(
-                        "w-full justify-between rounded-lg hover:bg-slate-100 px-4 py-3 h-auto",
-                        activeStandard?.id === standard.id ? "bg-slate-100 hover:bg-slate-200" : "bg-transparent",
+                        "w-full justify-between rounded-lg px-4 py-3 h-auto border transition-colors",
+                        activeStandard?.id === standard.id 
+                          ? "border-primary/70 bg-primary/5" 
+                          : "border-transparent hover:bg-slate-50",
                       )}
                       onClick={() => setActiveStandard(standard)}
                     >
                       <div className="flex items-center gap-3">
-                        <div className="bg-slate-200 text-slate-700 rounded-full w-6 h-6 flex items-center justify-center text-xs font-medium">
+                        <div className={cn(
+                          "text-slate-700 rounded-full w-6 h-6 flex items-center justify-center text-xs font-medium",
+                          activeStandard?.id === standard.id ? "bg-primary/10 text-primary" : "bg-slate-200"
+                        )}>
                           {index + 1}
                         </div>
                         <div className="text-left">
@@ -474,15 +479,19 @@ export function AssessmentDetailPage() {
                       </Button>
                     </div>
                   </div>
-                  <CardTitle className="text-xl font-bold flex items-start gap-2">
-                    <span>{activeStandard.code}:</span>
-                    <span>{activeStandard.title}</span>
-                  </CardTitle>
-                  <CardDescription className="text-base mt-1">
-                    {activeStandard.description}
-                  </CardDescription>
+                  
+                  {/* Improved title and description layout */}
+                  <div className="mb-2">
+                    <div className="flex items-baseline gap-1.5">
+                      <span className="text-lg font-semibold text-slate-500">{activeStandard.code}:</span>
+                      <h2 className="text-2xl font-bold leading-tight">{activeStandard.title}</h2>
+                    </div>
+                  </div>
+                  <div className="bg-slate-50 border border-slate-100 p-4 rounded-md mt-2">
+                    <p className="text-base text-slate-600 leading-relaxed">{activeStandard.description}</p>
+                  </div>
                 </CardHeader>
-                <CardContent className="pt-4">
+                <CardContent className="pt-6">
                   <div className="space-y-8">
                     <div>
                       <div className="flex items-center justify-between mb-3">
@@ -496,10 +505,10 @@ export function AssessmentDetailPage() {
                               </Button>
                             </TooltipTrigger>
                             <TooltipContent className="max-w-sm">
-                              <p>1: Basic - Early stage implementation with limited evidence</p>
-                              <p>2: Developing - Partial implementation with some evidence</p>
-                              <p>3: Established - Well-established with substantial evidence</p>
-                              <p>4: Leading - Exemplary practice with comprehensive evidence</p>
+                              <p>1: Inadequate - {RatingDescriptions[1]}</p>
+                              <p>2: Requires Improvement - {RatingDescriptions[2]}</p>
+                              <p>3: Good - {RatingDescriptions[3]}</p>
+                              <p>4: Outstanding - {RatingDescriptions[4]}</p>
                             </TooltipContent>
                           </Tooltip>
                         </TooltipProvider>
@@ -514,7 +523,7 @@ export function AssessmentDetailPage() {
                               className={cn(
                                 "border rounded-lg px-4 py-3 cursor-pointer transition-all relative",
                                 isSelected 
-                                  ? "border-primary bg-primary/5 ring-1 ring-primary" 
+                                  ? "border-primary bg-primary/5" 
                                   : "hover:border-slate-400",
                                 role !== "department-head" || assessment.status === "Completed" 
                                   ? "opacity-60 pointer-events-none" 
@@ -523,15 +532,16 @@ export function AssessmentDetailPage() {
                               onClick={() => role === "department-head" && assessment.status !== "Completed" && 
                                 handleRatingChange(activeStandard.id, rating as Rating)}
                             >
-                              <div className="flex items-center justify-between mb-1">
-                                <span className="font-medium">{rating}: {RatingLabels[rating as 1 | 2 | 3 | 4]}</span>
-                                {isSelected && <Check className="h-4 w-4 text-primary" />}
+                              <div className="flex items-center justify-between">
+                                <div className="flex items-center gap-1.5">
+                                  <span className="font-medium">{rating}:</span>
+                                  <span className="font-medium">{RatingLabels[rating as 1 | 2 | 3 | 4]}</span>
+                                </div>
+                                {/* Fixed checkmark position */}
+                                {isSelected && <Check className="h-4 w-4 text-primary shrink-0" />}
                               </div>
-                              <p className="text-xs text-muted-foreground">
-                                {rating === 1 && "Early stage implementation with limited evidence"}
-                                {rating === 2 && "Partial implementation with some evidence"}
-                                {rating === 3 && "Well-established with substantial evidence"}
-                                {rating === 4 && "Exemplary practice with comprehensive evidence"}
+                              <p className="text-xs text-muted-foreground mt-1.5">
+                                {RatingDescriptions[rating as 1 | 2 | 3 | 4]}
                               </p>
                               {role === "department-head" && assessment.status !== "Completed" && (
                                 <span className="absolute top-2 right-2 text-xs font-mono text-muted-foreground bg-gray-50 px-1.5 py-0.5 rounded">
@@ -696,6 +706,32 @@ export function AssessmentDetailPage() {
               Thank you for completing the {assessment.name} for {assessment.school.name}.
             </DialogDescription>
           </DialogHeader>
+
+          {assessment.standards && assessment.standards.length > 0 && (
+            <div className="space-y-2 my-2">
+              <h4 className="text-sm font-medium">Assessment Summary:</h4>
+              <div className="grid grid-cols-2 gap-2 text-sm">
+                {[1, 2, 3, 4].map(rating => {
+                  const count = assessment.standards!.filter(s => ratings[s.id] === rating).length;
+                  if (count === 0) return null;
+                  
+                  const color = rating === 1 ? "text-red-600" :
+                              rating === 2 ? "text-amber-600" :
+                              rating === 3 ? "text-blue-600" :
+                              "text-green-600";
+                  
+                  return (
+                    <div key={rating} className="flex items-center gap-1.5">
+                      <span className={cn("font-medium", color)}>
+                        {count}× {RatingLabels[rating as 1|2|3|4]}
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+          
           <p className="text-sm">
             Your assessment has been submitted and will be reviewed by the MAT administrators.
             You can view your submission at any time from the assessments dashboard.

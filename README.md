@@ -11,15 +11,24 @@ Assurly is a web-based platform for Multi-Academy Trusts (MATs) to conduct and m
   - Department Heads: Complete assessments for specific schools and categories
 
 - **Assessment Management**:
-  - View assessments with filtering by status, category, and search terms
-  - Complete standards assessments with a 1-4 rating scale
-  - Add evidence and comments to support ratings
-  - Track assessment progress visually
+  - View assessments with advanced filtering (school, category, status, search)
+  - Cross-school assessment management for department heads
+  - Interactive assessment completion with visual progress tracking
+  - Optional evidence collection with clear guidance
+
+- **Enhanced Assessment Completion**:
+  - Intuitive step-by-step navigation between standards
+  - Clear visual indicators for completion status
+  - Quick school switching for department heads
+  - Keyboard shortcuts for power users (navigation, rating)
+  - Smart progress tracking with visual feedback
 
 - **User-Friendly Interface**:
   - Modern, responsive design using shadcn/ui components
-  - Role-specific views and navigation
-  - Intuitive assessment completion flow
+  - Role-specific views and contextual navigation
+  - Toast notifications for user actions
+  - Help tooltips and guidance throughout the process
+  - Success confirmations for major actions
 
 ## Tech Stack
 
@@ -29,6 +38,7 @@ Assurly is a web-based platform for Multi-Academy Trusts (MATs) to conduct and m
 - **Routing**: React Router
 - **Icons**: Lucide React
 - **State Management**: React Context API
+- **Notifications**: Toast system
 
 ## Project Structure
 
@@ -88,10 +98,17 @@ Use the role switcher in the top-right corner to toggle between "MAT Administrat
 
 ### Completing Assessments (Department Head)
 
-1. Browse the list of standards in the left panel
-2. Select a standard to view and rate
-3. Assign a rating (1-4) and provide supporting evidence
-4. Save progress or submit the completed assessment
+1. Browse the numbered standards in the left panel
+2. Select a standard to view and rate, or use the Previous/Next buttons to navigate
+3. Choose a rating (1-4) from the card options
+4. Optionally add evidence/comments in the text area
+5. Use "Save Progress" to save your work, or "Save & Continue" to proceed to the next standard
+6. Complete all standards to enable the "Submit Assessment" button
+7. Power users can use keyboard shortcuts (shown at bottom of assessment page)
+
+### School Switching
+
+Department Heads can easily switch between schools for the same assessment category using the school selector at the top of the assessment detail page.
 
 ## Development
 

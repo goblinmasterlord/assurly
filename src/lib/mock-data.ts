@@ -4,7 +4,8 @@ import type {
   AssessmentStatus, 
   School, 
   Standard, 
-  User
+  User,
+  Rating
 } from "@/types/assessment";
 
 // Mock Schools
@@ -135,6 +136,81 @@ export const financeStandards: Standard[] = [
   },
 ];
 
+// Add IT standards
+export const itStandards: Standard[] = [
+  {
+    id: "it1",
+    code: "IT1",
+    title: "IT & Digital Strategy",
+    description: "A trust-wide strategy that aligns IT investment with educational, operational, and transformation priorities. Reviewed regularly and board-approved.",
+    rating: null,
+  },
+  {
+    id: "it2",
+    code: "IT2",
+    title: "IT Service Management & Support",
+    description: "Reliable, efficient IT support that meets user needs. Includes helpdesk data, uptime reporting, SLAs, and continuous service improvement.",
+    rating: null,
+  },
+  {
+    id: "it3",
+    code: "IT3",
+    title: "Compliance with DfE Technology Standards",
+    description: "Systems and infrastructure aligned with Department for Education standards for broadband, devices, cybersecurity, and cloud services.",
+    rating: null,
+  },
+];
+
+// Add Governance standards
+export const governanceStandards: Standard[] = [
+  {
+    id: "eg1",
+    code: "EG1",
+    title: "Strategic Leadership",
+    description: "Clear vision, ethos, and strategic direction set and monitored by the board. Evidence of alignment to trust-wide priorities and improvement plans.",
+    rating: null,
+  },
+  {
+    id: "eg2",
+    code: "EG2",
+    title: "Accountability for Educational and Financial Performance",
+    description: "Robust oversight of educational outcomes, safeguarding, and financial performance. Challenge and support provided to executive leaders.",
+    rating: null,
+  },
+  {
+    id: "eg3",
+    code: "EG3",
+    title: "Governance Capacity & Skills",
+    description: "Effective recruitment, induction, and development of trustees and governors. Skills audit and succession planning in place.",
+    rating: null,
+  },
+];
+
+// Add Estates standards
+export const estatesStandards: Standard[] = [
+  {
+    id: "bo1",
+    code: "BO1",
+    title: "Health & Safety Compliance",
+    description: "Compliance with statutory Health & Safety legislation and regulations, including fire safety, risk assessments, COSHH, and training.",
+    rating: null,
+  },
+  {
+    id: "bo2",
+    code: "BO2",
+    title: "Estate Statutory Compliance",
+    description: "Assurance that buildings meet all statutory requirements (e.g., asbestos, water hygiene, gas, electrical, accessibility).",
+    rating: null,
+  },
+  {
+    id: "bo3",
+    code: "BO3",
+    title: "Estate Management & Maintenance",
+    description: "Planned and reactive maintenance schedules in place and monitored. Assessment of estate condition, site security, and effective use of facilities.",
+    rating: null,
+  },
+];
+
 // Mock Assessments for MAT Admin view
 export const mockAssessmentsAdmin: Assessment[] = [
   {
@@ -229,7 +305,7 @@ export const mockAssessmentsAdmin: Assessment[] = [
   },
 ];
 
-// Mock Assessments for Department Head view (user 0 - Education Head)
+// Mock Assessments for Department Head view (expanded with more categories)
 export const mockAssessmentsForDeptHead: Assessment[] = [
   {
     id: "1",
@@ -255,20 +331,57 @@ export const mockAssessmentsForDeptHead: Assessment[] = [
     lastUpdated: "2024-07-12",
     status: "In Progress",
     dueDate: "2024-08-20",
-    standards: educationStandards.map((std, idx) => 
-      idx < 3 ? { ...std, rating: (idx % 2) + 2 as 2 | 3, lastUpdated: "2024-07-12" } : std
-    ),
   },
   {
     id: "8",
-    name: "Education Assessment",
-    category: "Education",
-    school: mockSchools[2],
+    name: "IT Strategy & Support Assessment",
+    category: "IT Strategy & Support",
+    school: mockSchools[0],
     completedStandards: 0,
-    totalStandards: 6,
+    totalStandards: 3,
     lastUpdated: "-",
     status: "Not Started",
-    dueDate: "2024-09-15",
-    standards: educationStandards,
+    dueDate: "2024-09-10",
+    standards: itStandards,
+  },
+  {
+    id: "9",
+    name: "Governance Assessment",
+    category: "Governance",
+    school: mockSchools[2],
+    completedStandards: 3,
+    totalStandards: 3,
+    lastUpdated: "2024-07-18",
+    status: "Completed",
+    dueDate: "2024-07-31",
+    standards: governanceStandards.map(std => 
+      ({ ...std, rating: 3 as Rating, lastUpdated: "2024-07-18", evidence: "All governance policies and procedures have been reviewed and updated in line with DfE requirements. The board has conducted a self-assessment and identified areas for development." })
+    ),
+  },
+  {
+    id: "10",
+    name: "Human Resources Assessment",
+    category: "Human Resources",
+    school: mockSchools[3],
+    completedStandards: 2,
+    totalStandards: 5,
+    lastUpdated: "2024-07-16",
+    status: "Overdue",
+    dueDate: "2024-07-15",
+    standards: hrStandards,
+  },
+  {
+    id: "11",
+    name: "Estates Assessment",
+    category: "Estates",
+    school: mockSchools[1],
+    completedStandards: 1,
+    totalStandards: 3,
+    lastUpdated: "2024-07-20",
+    status: "In Progress",
+    dueDate: "2024-08-15",
+    standards: estatesStandards.map((std, idx) => 
+      idx < 1 ? { ...std, rating: 2 as Rating, lastUpdated: "2024-07-20", evidence: "Some maintenance work has been scheduled but significant gaps remain in the overall maintenance plan." } : std
+    ),
   },
 ]; 

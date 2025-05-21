@@ -13,10 +13,18 @@ export type Rating = 1 | 2 | 3 | 4 | null;
 
 // Rating labels for display
 export const RatingLabels: Record<NonNullable<Rating>, string> = {
-  1: "Basic",
-  2: "Developing",
-  3: "Established",
-  4: "Leading"
+  1: "Inadequate",
+  2: "Requires Improvement",
+  3: "Good",
+  4: "Outstanding"
+};
+
+// Rating descriptions for each level
+export const RatingDescriptions: Record<NonNullable<Rating>, string> = {
+  1: "Significant weaknesses requiring immediate intervention and urgent improvement",
+  2: "Basic standards met with notable areas for development and improvement",
+  3: "Consistent, effective practice with some areas of strength",
+  4: "Exemplary, sector-leading practice with evidence of sustained impact"
 };
 
 // Assessment status
