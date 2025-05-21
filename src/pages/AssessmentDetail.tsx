@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import { useParams, useNavigate, Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import {
@@ -10,15 +10,9 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import {
-  Form,
-  FormControl,
-  FormDescription,
-  FormField,
-  FormItem,
-  FormLabel,
-  FormMessage,
-} from "@/components/ui/form";
-import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
+  RadioGroup,
+  RadioGroupItem,
+} from "@/components/ui/radio-group";
 import { Textarea } from "@/components/ui/textarea";
 import { Progress } from "@/components/ui/progress";
 import { Badge } from "@/components/ui/badge";
@@ -29,25 +23,61 @@ import {
   mockAssessmentsForDeptHead,
 } from "@/lib/mock-data";
 import {
+  AlertCircle,
   ArrowLeft,
+  ArrowRight,
   Calendar,
   Check,
+  CheckCircle,
   ChevronRight,
+  HelpCircle,
+  Info,
+  Loader2,
   Save,
   School,
   User,
+  XCircle,
 } from "lucide-react";
 import { RatingLabels, type Rating, type Standard } from "@/types/assessment";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
+import {
+  Accordion,
+  AccordionContent,
+  AccordionItem,
+  AccordionTrigger,
+} from "@/components/ui/accordion";
+import { cn } from "@/lib/utils";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { useToast } from "@/hooks/use-toast";
 
 export function AssessmentDetailPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { role } = useUser();
+  const { toast } = useToast();
   
   // Get the assessment based on user role
   const isMatAdmin = role === "mat-admin";
   const assessments = isMatAdmin ? mockAssessmentsAdmin : mockAssessmentsForDeptHead;
   const assessment = assessments.find(a => a.id === id);
+  
+  // Get other assessments for the same category but different schools (for department heads)
+  const relatedAssessments = role === "department-head" ? assessments.filter(a => 
+    a.id !== id && 
+    a.category === assessment?.category
+  ) : [];
   
   const [activeStandard, setActiveStandard] = useState<Standard | null>(
     assessment?.standards && assessment.standards.length > 0
@@ -72,7 +102,71 @@ export function AssessmentDetailPage() {
         }, {} as Record<string, string>)
       : {}
   );
+
+  const [saving, setSaving] = useState(false);
+  const [showSuccessDialog, setShowSuccessDialog] = useState(false);
+  const [activeStandardIndex, setActiveStandardIndex] = useState(0);
   
+  useEffect(() => {
+    if (assessment?.standards && activeStandard) {
+      const index = assessment.standards.findIndex(s => s.id === activeStandard.id);
+      if (index !== -1) {
+        setActiveStandardIndex(index);
+      }
+    }
+  }, [activeStandard, assessment]);
+
+  const goToNextStandard = () => {
+    if (assessment?.standards && activeStandardIndex < assessment.standards.length - 1) {
+      setActiveStandard(assessment.standards[activeStandardIndex + 1]);
+    }
+  };
+
+  const goToPreviousStandard = () => {
+    if (assessment?.standards && activeStandardIndex > 0) {
+      setActiveStandard(assessment.standards[activeStandardIndex - 1]);
+    }
+  };
+  
+  // Add keyboard navigation
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Only activate keyboard shortcuts when we're in the assessment detail view
+      if (!activeStandard || role !== "department-head" || assessment?.status === "Completed") return;
+
+      // Arrow right or 'j': Next standard
+      if ((e.key === "ArrowRight" || e.key.toLowerCase() === "j") && !e.ctrlKey && !e.metaKey) {
+        goToNextStandard();
+      }
+      // Arrow left or 'k': Previous standard
+      else if ((e.key === "ArrowLeft" || e.key.toLowerCase() === "k") && !e.ctrlKey && !e.metaKey) {
+        goToPreviousStandard();
+      }
+      // Numbers 1-4: Set rating for current standard
+      else if (["1", "2", "3", "4"].includes(e.key) && !e.ctrlKey && !e.metaKey) {
+        handleRatingChange(activeStandard.id, parseInt(e.key) as Rating);
+      }
+      // 's': Save progress
+      else if (e.key.toLowerCase() === "s" && (e.ctrlKey || e.metaKey)) {
+        e.preventDefault(); // Prevent browser save dialog
+        handleSave();
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => {
+      window.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [activeStandard, activeStandardIndex, assessment, role]);
+
+  // Update the UI for keyboard shortcuts help
+  const keyboardShortcuts = [
+    { key: "→ / J", action: "Next standard" },
+    { key: "← / K", action: "Previous standard" },
+    { key: "1-4", action: "Set rating" },
+    { key: "⌘S / Ctrl+S", action: "Save progress" }
+  ];
+
   if (!assessment) {
     return (
       <div className="container py-10">
@@ -124,16 +218,42 @@ export function AssessmentDetailPage() {
   };
   
   const handleSave = () => {
-    // In a real app, this would save to the backend
-    // For now, we'll just show a success message
-    alert("Assessment progress saved!");
+    setSaving(true);
+    // Simulate API call with timeout
+    setTimeout(() => {
+      setSaving(false);
+      toast({
+        title: "Progress saved",
+        description: "Your assessment progress has been saved successfully",
+        variant: "default",
+      });
+    }, 800);
   };
   
   const handleSubmit = () => {
-    // In a real app, this would submit the assessment
-    // For now, we'll just show a success message
-    alert("Assessment submitted successfully!");
-    navigate("/assessments");
+    setSaving(true);
+    // Simulate API call with timeout
+    setTimeout(() => {
+      setSaving(false);
+      setShowSuccessDialog(true);
+      toast({
+        title: "Assessment submitted",
+        description: "Your assessment has been submitted successfully",
+        variant: "default",
+      });
+    }, 1000);
+  };
+
+  const getStandardStatus = (standard: Standard) => {
+    const rating = ratings[standard.id];
+    
+    if (rating !== null) {
+      return "complete";
+    } else if (evidence[standard.id] && evidence[standard.id].length > 0) {
+      return "partial";
+    } else {
+      return "incomplete";
+    }
   };
   
   const getStatusColor = (status: string) => {
@@ -150,226 +270,457 @@ export function AssessmentDetailPage() {
         return "bg-slate-100 text-slate-800 hover:bg-slate-200";
     }
   };
+
+  const getStatusIcon = (status: string) => {
+    switch (status) {
+      case "complete":
+        return <CheckCircle className="h-5 w-5 text-green-600" />;
+      case "partial":
+        return <AlertCircle className="h-5 w-5 text-amber-500" />;
+      case "incomplete":
+        return <XCircle className="h-5 w-5 text-slate-300" />;
+      default:
+        return null;
+    }
+  };
+
+  const isCompleted = progressPercentage === 100;
+  const canSubmit = isCompleted && role === "department-head" && assessment.status !== "Completed";
   
   return (
-    <div className="container py-10">
-      <div className="flex items-center mb-6">
+    <div className="container max-w-7xl py-6 md:py-10">
+      <div className="flex flex-wrap items-center justify-between gap-4 mb-6">
         <Button
-          variant="ghost"
+          variant="outline"
           size="sm"
           onClick={() => navigate("/assessments")}
-          className="mr-2"
         >
           <ArrowLeft className="mr-2 h-4 w-4" />
           Back to Assessments
         </Button>
+        
+        {/* Related assessments dropdown for department heads */}
+        {role === "department-head" && relatedAssessments.length > 0 && (
+          <div className="flex items-center">
+            <p className="text-sm text-muted-foreground mr-2 hidden sm:block">Switch to another school:</p>
+            <Select 
+              onValueChange={(value) => navigate(`/assessments/${value}`)}
+            >
+              <SelectTrigger className="w-[180px] h-9">
+                <School className="mr-2 h-4 w-4" />
+                <SelectValue placeholder="Change School" />
+              </SelectTrigger>
+              <SelectContent>
+                {relatedAssessments.map(ra => (
+                  <SelectItem key={ra.id} value={ra.id}>
+                    {ra.school.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        )}
       </div>
       
-      <div className="grid grid-cols-1 gap-6 md:grid-cols-3">
-        {/* Assessment Info Card */}
-        <Card className="md:col-span-3">
-          <CardHeader>
-            <div className="flex items-center justify-between">
+      {/* Assessment Header Card */}
+      <Card className="mb-6">
+        <CardHeader className="pb-3">
+          <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
+            <div>
+              <CardTitle className="text-2xl font-bold">{assessment.name}</CardTitle>
+              <CardDescription className="text-base">
+                {assessment.school.name} • {assessment.category}
+              </CardDescription>
+            </div>
+            <Badge className={cn(getStatusColor(assessment.status), "self-start whitespace-nowrap")}>
+              {assessment.status}
+            </Badge>
+          </div>
+        </CardHeader>
+        <CardContent>
+          <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-4">
+            <div className="flex items-start space-x-4">
+              <School className="h-5 w-5 text-muted-foreground mt-0.5" />
               <div>
-                <CardTitle className="text-2xl">{assessment.name}</CardTitle>
-                <CardDescription>
-                  {assessment.school.name} • {assessment.category}
-                </CardDescription>
-              </div>
-              <Badge className={getStatusColor(assessment.status)}>
-                {assessment.status}
-              </Badge>
-            </div>
-          </CardHeader>
-          <CardContent>
-            <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-4">
-              <div className="flex items-center space-x-4">
-                <School className="h-5 w-5 text-muted-foreground" />
-                <div>
-                  <p className="text-sm font-medium">School</p>
-                  <p className="text-sm text-muted-foreground">
-                    {assessment.school.name}
-                  </p>
-                </div>
-              </div>
-              
-              {assessment.assignedTo && assessment.assignedTo.length > 0 && (
-                <div className="flex items-center space-x-4">
-                  <User className="h-5 w-5 text-muted-foreground" />
-                  <div>
-                    <p className="text-sm font-medium">Assigned To</p>
-                    <p className="text-sm text-muted-foreground">
-                      {assessment.assignedTo[0].name}
-                    </p>
-                  </div>
-                </div>
-              )}
-              
-              <div className="flex items-center space-x-4">
-                <Calendar className="h-5 w-5 text-muted-foreground" />
-                <div>
-                  <p className="text-sm font-medium">Due Date</p>
-                  <p className="text-sm text-muted-foreground">
-                    {assessment.dueDate || "No due date"}
-                  </p>
-                </div>
-              </div>
-              
-              <div className="flex items-center space-x-4">
-                <div className="w-full">
-                  <div className="flex items-center justify-between mb-1">
-                    <p className="text-sm font-medium">Progress</p>
-                    <p className="text-sm text-muted-foreground">
-                      {completedCount}/{totalCount} Standards
-                    </p>
-                  </div>
-                  <Progress value={progressPercentage} className="h-2" />
-                </div>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-        
-        {/* Only show assessment form for department heads or in-progress assessments */}
-        {(role === "department-head" || assessment.status !== "Completed") && assessment.standards && (
-          <>
-            {/* Standards List */}
-            <div className="space-y-4">
-              <h3 className="text-lg font-medium">Standards</h3>
-              <div className="space-y-2">
-                {assessment.standards.map((standard, index) => (
-                  <Button
-                    key={standard.id}
-                    variant={activeStandard?.id === standard.id ? "default" : "outline"}
-                    className="w-full justify-between"
-                    onClick={() => setActiveStandard(standard)}
-                  >
-                    <div className="flex items-center">
-                      <span className="mr-2">{standard.code}</span>
-                      <span className="truncate">{standard.title}</span>
-                    </div>
-                    <div className="flex items-center">
-                      {ratings[standard.id] !== null && (
-                        <Badge variant="outline" className="mr-2">
-                          {ratings[standard.id] && RatingLabels[ratings[standard.id] as 1 | 2 | 3 | 4]}
-                        </Badge>
-                      )}
-                      <ChevronRight className="h-4 w-4" />
-                    </div>
-                  </Button>
-                ))}
+                <p className="text-sm font-medium">School</p>
+                <p className="text-sm text-muted-foreground">
+                  {assessment.school.name}
+                </p>
               </div>
             </div>
             
-            {/* Standard Detail */}
-            <div className="md:col-span-2">
-              {activeStandard && (
-                <Card>
-                  <CardHeader>
-                    <CardTitle>
-                      {activeStandard.code}: {activeStandard.title}
-                    </CardTitle>
-                    <CardDescription>
-                      {activeStandard.description}
-                    </CardDescription>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="space-y-6">
-                      <div>
-                        <h4 className="text-sm font-medium mb-3">Rating</h4>
-                        <RadioGroup
-                          value={ratings[activeStandard.id]?.toString() || ""}
-                          onValueChange={(value) => 
-                            handleRatingChange(
-                              activeStandard.id, 
-                              value ? parseInt(value) as Rating : null
-                            )
-                          }
-                          className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4"
-                          disabled={role !== "department-head" || assessment.status === "Completed"}
-                        >
-                          {[1, 2, 3, 4].map((rating) => (
-                            <div key={rating} className="flex items-center space-x-2">
-                              <RadioGroupItem
-                                value={rating.toString()}
-                                id={`rating-${activeStandard.id}-${rating}`}
-                              />
-                              <FormLabel
-                                htmlFor={`rating-${activeStandard.id}-${rating}`}
-                                className="font-normal"
-                              >
-                                {rating}: {RatingLabels[rating as 1 | 2 | 3 | 4]}
-                              </FormLabel>
-                            </div>
-                          ))}
-                        </RadioGroup>
-                      </div>
-                      
-                      <div>
-                        <h4 className="text-sm font-medium mb-3">Evidence / Comments</h4>
-                        <Textarea
-                          placeholder="Provide evidence to support your rating..."
-                          value={evidence[activeStandard.id] || ""}
-                          onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => handleEvidenceChange(activeStandard.id, e.target.value)}
-                          disabled={role !== "department-head" || assessment.status === "Completed"}
-                          className="min-h-[120px]"
-                        />
-                      </div>
-                    </div>
-                  </CardContent>
-                  
-                  {role === "department-head" && assessment.status !== "Completed" && (
-                    <CardFooter className="flex justify-between">
-                      <Button variant="outline" onClick={handleSave}>
-                        <Save className="mr-2 h-4 w-4" />
-                        Save Progress
-                      </Button>
-                      <Button onClick={handleSubmit}>
-                        <Check className="mr-2 h-4 w-4" />
-                        Submit Assessment
-                      </Button>
-                    </CardFooter>
-                  )}
-                </Card>
-              )}
+            {assessment.assignedTo && assessment.assignedTo.length > 0 && (
+              <div className="flex items-start space-x-4">
+                <User className="h-5 w-5 text-muted-foreground mt-0.5" />
+                <div>
+                  <p className="text-sm font-medium">Assigned To</p>
+                  <p className="text-sm text-muted-foreground">
+                    {assessment.assignedTo[0].name}
+                  </p>
+                </div>
+              </div>
+            )}
+            
+            <div className="flex items-start space-x-4">
+              <Calendar className="h-5 w-5 text-muted-foreground mt-0.5" />
+              <div>
+                <p className="text-sm font-medium">Due Date</p>
+                <p className="text-sm text-muted-foreground">
+                  {assessment.dueDate || "No due date"}
+                </p>
+              </div>
             </div>
-          </>
-        )}
-        
-        {/* Show read-only view for completed assessments for MAT admins */}
-        {role === "mat-admin" && assessment.status === "Completed" && assessment.standards && (
-          <Card className="md:col-span-3">
-            <CardHeader>
-              <CardTitle>Assessment Results</CardTitle>
+            
+            <div className="flex items-start space-x-4">
+              <div className="w-full">
+                <div className="flex items-center justify-between mb-1.5">
+                  <p className="text-sm font-medium">Progress</p>
+                  <p className="text-sm font-medium">
+                    <span className="text-primary">{completedCount}</span>/<span>{totalCount}</span>
+                  </p>
+                </div>
+                <div className="relative">
+                  <Progress 
+                    value={progressPercentage} 
+                    className="h-2.5" 
+                    indicatorClassName={isCompleted ? "bg-green-600" : undefined}
+                  />
+                </div>
+              </div>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+      
+      {/* Only show assessment form for department heads or in-progress assessments */}
+      {(role === "department-head" || assessment.status !== "Completed") && assessment.standards && (
+        <div className="grid grid-cols-1 md:grid-cols-12 gap-6">
+          {/* Standards List - Sidebar */}
+          <Card className="md:col-span-4 lg:col-span-3 h-fit">
+            <CardHeader className="py-4 px-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <CardTitle className="text-lg font-bold">Standards</CardTitle>
+                  <CardDescription className="text-sm">
+                    Complete all standards below
+                  </CardDescription>
+                </div>
+                <Badge variant="outline" className="whitespace-nowrap">
+                  {completedCount}/{totalCount}
+                </Badge>
+              </div>
             </CardHeader>
-            <CardContent>
-              <div className="space-y-6">
-                {assessment.standards.map((standard) => (
-                  <div key={standard.id} className="border-b pb-4 last:border-0">
-                    <div className="flex items-center justify-between mb-2">
-                      <h3 className="text-lg font-medium">
-                        {standard.code}: {standard.title}
-                      </h3>
-                      {standard.rating && (
-                        <Badge>
-                          {standard.rating}: {RatingLabels[standard.rating]}
-                        </Badge>
+            <CardContent className="px-2 py-2 max-h-[60vh] overflow-y-auto">
+              <div className="space-y-1">
+                {assessment.standards.map((standard, index) => {
+                  const status = getStatusStatus(standard);
+                  return (
+                    <Button
+                      key={standard.id}
+                      variant={activeStandard?.id === standard.id ? "default" : "ghost"}
+                      className={cn(
+                        "w-full justify-between rounded-lg hover:bg-slate-100 px-4 py-3 h-auto",
+                        activeStandard?.id === standard.id ? "bg-slate-100 hover:bg-slate-200" : "bg-transparent",
                       )}
-                    </div>
-                    <p className="text-muted-foreground mb-4">{standard.description}</p>
-                    {standard.evidence && (
-                      <div>
-                        <h4 className="text-sm font-medium mb-1">Evidence / Comments:</h4>
-                        <p className="text-sm">{standard.evidence}</p>
+                      onClick={() => setActiveStandard(standard)}
+                    >
+                      <div className="flex items-center gap-3">
+                        <div className="bg-slate-200 text-slate-700 rounded-full w-6 h-6 flex items-center justify-center text-xs font-medium">
+                          {index + 1}
+                        </div>
+                        <div className="text-left">
+                          <span className={cn("font-medium block text-sm", activeStandard?.id === standard.id ? "text-primary" : "")}>{standard.code}</span>
+                          <span className={cn("text-xs truncate max-w-[150px] block", activeStandard?.id === standard.id ? "text-foreground" : "text-muted-foreground")}>{standard.title}</span>
+                        </div>
                       </div>
-                    )}
-                  </div>
-                ))}
+                      <div className="flex items-center">
+                        {getStatusIcon(getStandardStatus(standard))}
+                      </div>
+                    </Button>
+                  );
+                })}
               </div>
             </CardContent>
           </Card>
-        )}
-      </div>
+            
+          {/* Standard Detail - Main Content */}
+          <div className="md:col-span-8 lg:col-span-9">
+            {activeStandard && (
+              <Card className="h-full">
+                <CardHeader className="pb-2">
+                  <div className="flex items-center justify-between mb-2">
+                    <Badge variant="outline" className="text-primary border-primary">
+                      Standard {activeStandardIndex + 1} of {totalCount}
+                    </Badge>
+                    <div className="flex items-center text-sm text-muted-foreground">
+                      <Button 
+                        variant="ghost" 
+                        size="sm" 
+                        onClick={goToPreviousStandard}
+                        disabled={activeStandardIndex === 0}
+                        className="h-8 px-2"
+                      >
+                        Previous
+                      </Button>
+                      <span className="mx-2">|</span>
+                      <Button 
+                        variant="ghost" 
+                        size="sm" 
+                        onClick={goToNextStandard}
+                        disabled={activeStandardIndex === totalCount - 1}
+                        className="h-8 px-2"
+                      >
+                        Next
+                      </Button>
+                    </div>
+                  </div>
+                  <CardTitle className="text-xl font-bold flex items-start gap-2">
+                    <span>{activeStandard.code}:</span>
+                    <span>{activeStandard.title}</span>
+                  </CardTitle>
+                  <CardDescription className="text-base mt-1">
+                    {activeStandard.description}
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="pt-4">
+                  <div className="space-y-8">
+                    <div>
+                      <div className="flex items-center justify-between mb-3">
+                        <h3 className="text-base font-medium">Rating</h3>
+                        <TooltipProvider>
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
+                                <span className="sr-only">Rating help</span>
+                                <HelpCircle className="h-4 w-4" />
+                              </Button>
+                            </TooltipTrigger>
+                            <TooltipContent className="max-w-sm">
+                              <p>1: Basic - Early stage implementation with limited evidence</p>
+                              <p>2: Developing - Partial implementation with some evidence</p>
+                              <p>3: Established - Well-established with substantial evidence</p>
+                              <p>4: Leading - Exemplary practice with comprehensive evidence</p>
+                            </TooltipContent>
+                          </Tooltip>
+                        </TooltipProvider>
+                      </div>
+                      
+                      <div className="grid grid-cols-1 lg:grid-cols-4 gap-3">
+                        {[1, 2, 3, 4].map((rating) => {
+                          const isSelected = ratings[activeStandard.id] === rating;
+                          return (
+                            <div 
+                              key={rating}
+                              className={cn(
+                                "border rounded-lg px-4 py-3 cursor-pointer transition-all relative",
+                                isSelected 
+                                  ? "border-primary bg-primary/5 ring-1 ring-primary" 
+                                  : "hover:border-slate-400",
+                                role !== "department-head" || assessment.status === "Completed" 
+                                  ? "opacity-60 pointer-events-none" 
+                                  : ""
+                              )}
+                              onClick={() => role === "department-head" && assessment.status !== "Completed" && 
+                                handleRatingChange(activeStandard.id, rating as Rating)}
+                            >
+                              <div className="flex items-center justify-between mb-1">
+                                <span className="font-medium">{rating}: {RatingLabels[rating as 1 | 2 | 3 | 4]}</span>
+                                {isSelected && <Check className="h-4 w-4 text-primary" />}
+                              </div>
+                              <p className="text-xs text-muted-foreground">
+                                {rating === 1 && "Early stage implementation with limited evidence"}
+                                {rating === 2 && "Partial implementation with some evidence"}
+                                {rating === 3 && "Well-established with substantial evidence"}
+                                {rating === 4 && "Exemplary practice with comprehensive evidence"}
+                              </p>
+                              {role === "department-head" && assessment.status !== "Completed" && (
+                                <span className="absolute top-2 right-2 text-xs font-mono text-muted-foreground bg-gray-50 px-1.5 py-0.5 rounded">
+                                  {rating}
+                                </span>
+                              )}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                    
+                    <div>
+                      <div className="flex items-center justify-between mb-3">
+                        <h3 className="text-base font-medium">Evidence / Comments <span className="text-xs text-muted-foreground">(Optional)</span></h3>
+                        <span className="text-xs text-muted-foreground">
+                          {evidence[activeStandard.id]?.length || 0} / 500 characters
+                        </span>
+                      </div>
+                      <Textarea
+                        placeholder="Provide specific evidence to support your rating (optional)..."
+                        value={evidence[activeStandard.id] || ""}
+                        onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => 
+                          handleEvidenceChange(activeStandard.id, e.target.value)
+                        }
+                        disabled={role !== "department-head" || assessment.status === "Completed"}
+                        className="min-h-[150px] resize-y"
+                        maxLength={500}
+                      />
+                      <p className="mt-2 text-sm text-muted-foreground">
+                        <Info className="inline h-3.5 w-3.5 mr-1" />
+                        Please provide specific examples and relevant details to support your rating
+                      </p>
+                    </div>
+                  </div>
+                </CardContent>
+                
+                {role === "department-head" && assessment.status !== "Completed" && (
+                  <>
+                    <CardFooter className="flex flex-col sm:flex-row justify-between gap-3 pt-0 px-6">
+                      <Button 
+                        variant="outline" 
+                        className="w-full sm:w-auto"
+                        onClick={handleSave}
+                        disabled={saving}
+                      >
+                        {saving ? (
+                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        ) : (
+                          <Save className="mr-2 h-4 w-4" />
+                        )}
+                        Save Progress
+                      </Button>
+                      <div className="flex gap-3 w-full sm:w-auto">
+                        {activeStandardIndex < totalCount - 1 ? (
+                          <Button 
+                            className="flex-1"
+                            onClick={() => {
+                              handleSave();
+                              goToNextStandard();
+                            }}
+                            disabled={saving}
+                          >
+                            Save & Continue
+                            <ArrowRight className="ml-2 h-4 w-4" />
+                          </Button>
+                        ) : (
+                          <Button 
+                            className="flex-1"
+                            onClick={handleSubmit}
+                            disabled={!canSubmit || saving}
+                            variant={canSubmit ? "default" : "outline"}
+                          >
+                            {saving ? (
+                              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                            ) : (
+                              <Check className="mr-2 h-4 w-4" />
+                            )}
+                            {isCompleted ? "Submit Assessment" : "Complete All Standards to Submit"}
+                          </Button>
+                        )}
+                      </div>
+                    </CardFooter>
+                    <div className="px-6 pb-6">
+                      <div className="border-t pt-3 mt-2">
+                        <p className="text-xs text-muted-foreground">
+                          <span className="font-medium">Keyboard shortcuts:</span>
+                          <span className="flex flex-wrap gap-x-6 gap-y-1 mt-1">
+                            {keyboardShortcuts.map((shortcut) => (
+                              <span key={shortcut.key} className="flex items-center">
+                                <kbd className="bg-slate-100 px-1.5 py-0.5 rounded text-xs font-mono">{shortcut.key}</kbd>
+                                <span className="mx-1">-</span>
+                                <span>{shortcut.action}</span>
+                              </span>
+                            ))}
+                          </span>
+                        </p>
+                      </div>
+                    </div>
+                  </>
+                )}
+              </Card>
+            )}
+          </div>
+        </div>
+      )}
+      
+      {/* Show read-only view for completed assessments for MAT admins */}
+      {role === "mat-admin" && assessment.status === "Completed" && assessment.standards && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-xl">Assessment Results</CardTitle>
+            <CardDescription>
+              Completed on {assessment.lastUpdated} by {assessment.assignedTo?.[0]?.name || "Unknown"}
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <Accordion type="multiple" className="space-y-4">
+              {assessment.standards.map((standard) => (
+                <AccordionItem 
+                  key={standard.id} 
+                  value={standard.id}
+                  className="border rounded-lg px-0 overflow-hidden"
+                >
+                  <AccordionTrigger className="px-4 py-3 hover:bg-slate-50 [&>svg]:h-4 [&>svg]:w-4 [&[data-state=open]>svg]:rotate-180">
+                    <div className="flex items-center gap-4">
+                      <Badge variant={standard.rating ? "default" : "outline"} className="h-7 px-2">
+                        {standard.rating ? `${standard.rating}: ${RatingLabels[standard.rating]}` : "Not Rated"}
+                      </Badge>
+                      <span className="font-medium">
+                        {standard.code}: {standard.title}
+                      </span>
+                    </div>
+                  </AccordionTrigger>
+                  <AccordionContent className="px-4 pb-4 pt-0">
+                    <div className="space-y-3">
+                      <p className="text-muted-foreground">{standard.description}</p>
+                      {standard.evidence && (
+                        <div className="bg-slate-50 p-3 rounded border">
+                          <h4 className="text-sm font-medium mb-1">Evidence / Comments:</h4>
+                          <p className="text-sm">{standard.evidence}</p>
+                        </div>
+                      )}
+                    </div>
+                  </AccordionContent>
+                </AccordionItem>
+              ))}
+            </Accordion>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Submission Success Dialog */}
+      <Dialog open={showSuccessDialog} onOpenChange={setShowSuccessDialog}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <CheckCircle className="h-5 w-5 text-green-600" />
+              Assessment Submitted Successfully
+            </DialogTitle>
+            <DialogDescription>
+              Thank you for completing the {assessment.name} for {assessment.school.name}.
+            </DialogDescription>
+          </DialogHeader>
+          <p className="text-sm">
+            Your assessment has been submitted and will be reviewed by the MAT administrators.
+            You can view your submission at any time from the assessments dashboard.
+          </p>
+          <DialogFooter>
+            <Button onClick={() => {
+              setShowSuccessDialog(false);
+              navigate("/assessments");
+            }}>
+              Return to Assessments
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
-} 
+}
+
+// Helper function to get the status of a standard based on its completion state
+const getStatusStatus = (standard: Standard) => {
+  if (standard.rating) {
+    return "complete";
+  } else if (standard.evidence) {
+    return "partial";
+  } else {
+    return "incomplete";
+  }
+}; 

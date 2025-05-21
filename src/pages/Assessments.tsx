@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { Link } from "react-router-dom";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -22,8 +22,9 @@ import { useUser } from "@/contexts/UserContext";
 import {
   mockAssessmentsAdmin,
   mockAssessmentsForDeptHead,
+  mockSchools,
 } from "@/lib/mock-data";
-import { Calendar, Filter, Plus, Search } from "lucide-react";
+import { Calendar, Filter, Plus, School, Search } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import type { Assessment, AssessmentCategory } from "@/types/assessment";
@@ -33,10 +34,16 @@ export function AssessmentsPage() {
   const [searchTerm, setSearchTerm] = useState("");
   const [categoryFilter, setCategoryFilter] = useState<AssessmentCategory | "all">("all");
   const [statusFilter, setStatusFilter] = useState<"all" | "completed" | "in-progress" | "not-started" | "overdue">("all");
+  const [schoolFilter, setSchoolFilter] = useState<string>("all");
   
   const isMatAdmin = role === "mat-admin";
   const assessments = isMatAdmin ? mockAssessmentsAdmin : mockAssessmentsForDeptHead;
   
+  const uniqueSchools = useMemo(() => {
+    const schools = [...new Set(assessments.map(a => a.school.id))];
+    return mockSchools.filter(school => schools.includes(school.id));
+  }, [assessments]);
+
   const filteredAssessments = assessments.filter((assessment) => {
     // Search term filter
     const matchesSearch = 
@@ -55,7 +62,10 @@ export function AssessmentsPage() {
       (statusFilter === "not-started" && assessment.status === "Not Started") ||
       (statusFilter === "overdue" && assessment.status === "Overdue");
     
-    return matchesSearch && matchesCategory && matchesStatus;
+    // School filter
+    const matchesSchool = schoolFilter === "all" || assessment.school.id === schoolFilter;
+
+    return matchesSearch && matchesCategory && matchesStatus && matchesSchool;
   });
 
   const uniqueCategories = [...new Set(assessments.map(a => a.category))];
@@ -113,7 +123,23 @@ export function AssessmentsPage() {
                 Filter
               </Button>
             </div>
-            <div className="flex space-x-2">
+            <div className="flex flex-wrap gap-2">
+              {uniqueSchools.length > 1 && (
+                <Select value={schoolFilter} onValueChange={setSchoolFilter}>
+                  <SelectTrigger className="w-[180px]">
+                    <School className="mr-2 h-4 w-4 text-muted-foreground" />
+                    <SelectValue placeholder="All Schools" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All Schools</SelectItem>
+                    {uniqueSchools.map((school) => (
+                      <SelectItem key={school.id} value={school.id}>
+                        {school.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              )}
               <Select value={categoryFilter} onValueChange={(value) => setCategoryFilter(value as AssessmentCategory | "all")}>
                 <SelectTrigger className="w-[180px]">
                   <SelectValue placeholder="All Categories" />
@@ -147,7 +173,7 @@ export function AssessmentsPage() {
             <TableHeader>
               <TableRow>
                 <TableHead>Assessment</TableHead>
-                {isMatAdmin && <TableHead>School</TableHead>}
+                <TableHead>School</TableHead>
                 <TableHead>Category</TableHead>
                 <TableHead>Progress</TableHead>
                 {isMatAdmin && <TableHead>Assigned To</TableHead>}
@@ -160,7 +186,7 @@ export function AssessmentsPage() {
               {filteredAssessments.length === 0 ? (
                 <TableRow>
                   <TableCell
-                    colSpan={isMatAdmin ? 8 : 6}
+                    colSpan={isMatAdmin ? 8 : 7}
                     className="h-24 text-center"
                   >
                     No assessments found.
@@ -172,9 +198,12 @@ export function AssessmentsPage() {
                     <TableCell className="font-medium">
                       {assessment.name}
                     </TableCell>
-                    {isMatAdmin && (
-                      <TableCell>{assessment.school.name}</TableCell>
-                    )}
+                    <TableCell>
+                      <div className="flex items-center">
+                        <School className="mr-2 h-4 w-4 text-muted-foreground" />
+                        <span>{assessment.school.name}</span>
+                      </div>
+                    </TableCell>
                     <TableCell>{assessment.category}</TableCell>
                     <TableCell>
                       <div className="flex items-center gap-2">
