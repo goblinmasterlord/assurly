@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { format } from "date-fns";
-import { CalendarIcon, CheckCircle, ChevronDown, ChevronRight, School as SchoolIcon, Search, Send } from "lucide-react";
+import { CalendarIcon, CheckCircle, ChevronDown, ChevronRight, School as SchoolIcon, Search, Send, ChevronLeft } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Calendar } from "@/components/ui/calendar";
 import {
@@ -36,12 +36,151 @@ type AssessmentInvitationSheetProps = {
   onOpenChange: (open: boolean) => void;
 };
 
+// Simple calendar component without relying on external dependencies
+const SimpleDatePicker = ({ 
+  selected, 
+  onSelect 
+}: { 
+  selected?: Date; 
+  onSelect: (date: Date) => void;
+}) => {
+  const [currentMonth, setCurrentMonth] = useState(new Date());
+  
+  // Get current date for "today" highlighting
+  const today = new Date();
+  const currentDay = today.getDate();
+  const currentMonthNum = today.getMonth();
+  const currentYear = today.getFullYear();
+  
+  // Get details for the displayed month
+  const month = currentMonth.getMonth();
+  const year = currentMonth.getFullYear();
+  const monthName = format(currentMonth, "MMMM yyyy");
+  
+  // Calculate the first day of the month
+  const firstDay = new Date(year, month, 1);
+  const startingDay = firstDay.getDay(); // 0 = Sunday, 1 = Monday, etc.
+  
+  // Calculate the number of days in the month
+  const lastDay = new Date(year, month + 1, 0);
+  const daysInMonth = lastDay.getDate();
+  
+  // Generate days of the week
+  const daysOfWeek = ["Su", "Mo", "Tu", "We", "Th", "Fr", "Sa"];
+  
+  // Generate calendar grid
+  const days = [];
+  
+  // Previous month's days
+  for (let i = 0; i < startingDay; i++) {
+    days.push(null);
+  }
+  
+  // Current month's days
+  for (let i = 1; i <= daysInMonth; i++) {
+    days.push(new Date(year, month, i));
+  }
+  
+  // Go to previous month
+  const prevMonth = () => {
+    setCurrentMonth(new Date(year, month - 1, 1));
+  };
+  
+  // Go to next month
+  const nextMonth = () => {
+    setCurrentMonth(new Date(year, month + 1, 1));
+  };
+  
+  // Check if a date is in the past
+  const isPastDate = (date: Date) => {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    return date < today;
+  };
+  
+  // Is the date the currently selected one?
+  const isSelected = (date: Date) => {
+    if (!selected) return false;
+    return date.getDate() === selected.getDate() && 
+           date.getMonth() === selected.getMonth() && 
+           date.getFullYear() === selected.getFullYear();
+  };
+  
+  return (
+    <div className="p-3 bg-white">
+      {/* Month navigation */}
+      <div className="flex justify-between items-center mb-4">
+        <button 
+          onClick={prevMonth}
+          className="p-1 rounded-md hover:bg-slate-100"
+          type="button"
+        >
+          <ChevronLeft className="h-4 w-4" />
+        </button>
+        <h2 className="text-sm font-medium">{monthName}</h2>
+        <button 
+          onClick={nextMonth}
+          className="p-1 rounded-md hover:bg-slate-100"
+          type="button"
+        >
+          <ChevronRight className="h-4 w-4" />
+        </button>
+      </div>
+      
+      {/* Days of week */}
+      <div className="grid grid-cols-7 mb-1">
+        {daysOfWeek.map(day => (
+          <div key={day} className="text-center py-1 text-xs font-medium text-slate-500">
+            {day}
+          </div>
+        ))}
+      </div>
+      
+      {/* Calendar days */}
+      <div className="grid grid-cols-7 gap-1">
+        {days.map((day, index) => {
+          if (!day) {
+            return <div key={`empty-${index}`} className="h-9"></div>;
+          }
+          
+          const isDisabled = isPastDate(day);
+          const isToday = day.getDate() === currentDay && 
+                          day.getMonth() === currentMonthNum && 
+                          day.getFullYear() === currentYear;
+          
+          return (
+            <button
+              key={day.toISOString()}
+              onClick={() => {
+                if (!isDisabled) {
+                  onSelect(day);
+                }
+              }}
+              disabled={isDisabled}
+              className={cn(
+                "h-9 w-9 rounded-md flex items-center justify-center text-sm",
+                isDisabled ? "text-slate-300 cursor-not-allowed" : "hover:bg-slate-100",
+                isSelected(day) ? "bg-primary text-primary-foreground hover:bg-primary" : "",
+                isToday && !isSelected(day) ? "border border-primary text-primary" : ""
+              )}
+              type="button"
+            >
+              {day.getDate()}
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+};
+
 export function AssessmentInvitationSheet({ open, onOpenChange }: AssessmentInvitationSheetProps) {
   const [category, setCategory] = useState<AssessmentCategory | "">("");
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedSchools, setSelectedSchools] = useState<string[]>([]);
   const [dueDate, setDueDate] = useState<Date>();
   const [isSelectAllOpen, setIsSelectAllOpen] = useState(false);
+  const [datePickerOpen, setDatePickerOpen] = useState(false);
   
   // Filter schools based on the search term
   const filteredSchools = mockSchools.filter(school => 
@@ -113,7 +252,7 @@ export function AssessmentInvitationSheet({ open, onOpenChange }: AssessmentInvi
                 <SelectItem value="Estates">Estates</SelectItem>
                 <SelectItem value="Governance">Governance</SelectItem>
                 <SelectItem value="IT & Information Services">IT & Information Services</SelectItem>
-                <SelectItem value="IT (Strategy & Support)">IT (Strategy & Support)</SelectItem>
+                <SelectItem value="IT Strategy & Support">IT Strategy & Support</SelectItem>
               </SelectContent>
             </Select>
             {category && (
@@ -124,7 +263,7 @@ export function AssessmentInvitationSheet({ open, onOpenChange }: AssessmentInvi
                 {category === "Estates" && "Health & safety, estate management, asset planning, etc."}
                 {category === "Governance" && "Strategic leadership, accountability, governance structures, etc."}
                 {category === "IT & Information Services" && "Data security, breach management, GDPR compliance, etc."}
-                {category === "IT (Strategy & Support)" && "IT strategy, service management, asset management, etc."}
+                {category === "IT Strategy & Support" && "IT strategy, service management, asset management, etc."}
               </p>
             )}
           </div>
@@ -134,7 +273,7 @@ export function AssessmentInvitationSheet({ open, onOpenChange }: AssessmentInvi
             <Label htmlFor="dueDate" className="text-sm font-medium">
               Due Date
             </Label>
-            <Popover>
+            <Popover open={datePickerOpen} onOpenChange={setDatePickerOpen}>
               <PopoverTrigger asChild>
                 <Button
                   id="dueDate"
@@ -148,14 +287,19 @@ export function AssessmentInvitationSheet({ open, onOpenChange }: AssessmentInvi
                   {dueDate ? format(dueDate, "PPP") : "Select due date"}
                 </Button>
               </PopoverTrigger>
-              <PopoverContent className="w-auto p-0" align="start">
-                <Calendar
-                  mode="single"
+              <PopoverContent align="start" className="p-0 w-auto">
+                <div className="border-b p-3">
+                  <div className="text-sm font-medium">Select date</div>
+                  <div className="text-xs text-muted-foreground">
+                    Choose when schools need to complete this assessment
+                  </div>
+                </div>
+                <SimpleDatePicker
                   selected={dueDate}
-                  onSelect={setDueDate}
-                  initialFocus
-                  disabled={(date) => date < new Date()}
-                  className="border-0 rounded-md"
+                  onSelect={(date) => {
+                    setDueDate(date);
+                    setDatePickerOpen(false);
+                  }}
                 />
               </PopoverContent>
             </Popover>
@@ -212,7 +356,7 @@ export function AssessmentInvitationSheet({ open, onOpenChange }: AssessmentInvi
               />
             </div>
             
-            <div className="border rounded-md h-[180px] overflow-y-auto">
+            <div className="border rounded-md h-[240px] overflow-y-auto">
               {filteredSchools.length === 0 ? (
                 <div className="flex flex-col items-center justify-center h-full text-sm text-muted-foreground">
                   <p>No schools found</p>
@@ -250,14 +394,14 @@ export function AssessmentInvitationSheet({ open, onOpenChange }: AssessmentInvi
           </div>
         </div>
         
-        <div className="border-t mt-auto pt-4 pb-2 flex-shrink-0">
+        <div className="border-t mt-auto pt-6 pb-4 flex-shrink-0">
           {(category && selectedSchools.length > 0) && (
-            <div className="p-3 bg-blue-50 border border-blue-100 rounded-md mb-4">
-              <div className="flex items-start gap-2.5">
-                <CheckCircle className="h-4 w-4 text-blue-500 mt-0.5" />
-                <div className="space-y-1">
+            <div className="p-4 bg-blue-50 border border-blue-100 rounded-lg mb-5">
+              <div className="flex items-start gap-3">
+                <CheckCircle className="h-5 w-5 text-blue-500 mt-0.5 flex-shrink-0" />
+                <div className="space-y-1.5">
                   <p className="text-sm font-medium text-blue-700">Ready to send</p>
-                  <p className="text-xs text-blue-600">
+                  <p className="text-sm text-blue-600">
                     Requesting {selectedSchools.length} {selectedSchools.length === 1 ? 'school' : 'schools'} to complete the <span className="font-medium">{category}</span> assessment
                     {dueDate ? ` by ${format(dueDate, "PPP")}` : ''}.
                   </p>
@@ -267,20 +411,22 @@ export function AssessmentInvitationSheet({ open, onOpenChange }: AssessmentInvi
           )}
           
           <div className="flex gap-3">
-            <Button 
-              variant="outline" 
-              onClick={() => onOpenChange(false)}
+            <Button
+              type="button"
+              variant="outline"
               className="flex-1"
+              onClick={() => onOpenChange(false)}
             >
               Cancel
             </Button>
-            <Button 
-              onClick={handleSendInvitations}
+            <Button
+              type="button"
+              className="flex-1 gap-2"
               disabled={!category || selectedSchools.length === 0}
-              className="gap-2 flex-1"
+              onClick={handleSendInvitations}
             >
               <Send className="h-4 w-4" />
-              Request
+              Request Assessment
             </Button>
           </div>
         </div>

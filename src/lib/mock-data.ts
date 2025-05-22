@@ -226,6 +226,8 @@ export const mockAssessmentsAdmin: Assessment[] = [
     standards: educationStandards.map((std, idx) => 
       idx < 4 ? { ...std, rating: (idx % 3) + 1 as 1 | 2 | 3 | 4, lastUpdated: "2024-07-15" } : std
     ),
+    term: "Summer",
+    academicYear: "2023-2024"
   },
   {
     id: "2",
@@ -236,15 +238,17 @@ export const mockAssessmentsAdmin: Assessment[] = [
     totalStandards: 5,
     lastUpdated: "2024-07-10",
     status: "Completed",
-    dueDate: "2024-07-30",
+    dueDate: "2024-07-31",
     assignedTo: [mockUsers[3]],
     standards: hrStandards.map(std => 
-      ({ ...std, rating: (Math.floor(Math.random() * 3) + 2) as 2 | 3 | 4, lastUpdated: "2024-07-10", evidence: "Detailed documentation has been provided supporting the current rating. All policies have been reviewed and updated." })
+      ({ ...std, rating: (Math.floor(Math.random() * 4) + 1) as 1 | 2 | 3 | 4, lastUpdated: "2024-07-10", evidence: "Comprehensive HR policy review conducted and updated. All staff training on new procedures completed." })
     ),
+    term: "Summer",
+    academicYear: "2023-2024"
   },
   {
     id: "3",
-    name: "Finance & Procurement Assessment",
+    name: "Finance Assessment",
     category: "Finance & Procurement",
     school: mockSchools[1],
     completedStandards: 2,
@@ -253,6 +257,8 @@ export const mockAssessmentsAdmin: Assessment[] = [
     status: "In Progress",
     dueDate: "2024-08-15",
     assignedTo: [mockUsers[1]],
+    term: "Spring",
+    academicYear: "2023-2024"
   },
   {
     id: "4",
@@ -265,6 +271,8 @@ export const mockAssessmentsAdmin: Assessment[] = [
     status: "Not Started",
     dueDate: "2024-09-01",
     assignedTo: [mockUsers[4]],
+    term: "Autumn",
+    academicYear: "2024-2025"
   },
   {
     id: "5",
@@ -277,6 +285,8 @@ export const mockAssessmentsAdmin: Assessment[] = [
     status: "In Progress",
     dueDate: "2024-08-20",
     assignedTo: [mockUsers[0]],
+    term: "Spring",
+    academicYear: "2023-2024"
   },
   {
     id: "6",
@@ -289,6 +299,8 @@ export const mockAssessmentsAdmin: Assessment[] = [
     status: "Not Started",
     dueDate: "2024-08-25",
     assignedTo: [mockUsers[2]],
+    term: "Autumn",
+    academicYear: "2024-2025"
   },
   {
     id: "7",
@@ -301,6 +313,8 @@ export const mockAssessmentsAdmin: Assessment[] = [
     status: "Overdue",
     dueDate: "2024-07-15",
     assignedTo: [mockUsers[3]],
+    term: "Summer",
+    academicYear: "2023-2024"
   },
   {
     id: "12",
@@ -316,6 +330,8 @@ export const mockAssessmentsAdmin: Assessment[] = [
     standards: itStandards.map(std => 
       ({ ...std, rating: (Math.floor(Math.random() * 2) + 3) as 3 | 4, lastUpdated: "2024-07-14", evidence: "All IT systems have been thoroughly assessed and documented. Security protocols are in place and regularly tested." })
     ),
+    term: "Spring",
+    academicYear: "2023-2024"
   },
   {
     id: "13",
@@ -331,6 +347,46 @@ export const mockAssessmentsAdmin: Assessment[] = [
     standards: governanceStandards.map(std => 
       ({ ...std, rating: (Math.floor(Math.random() * 2) + 2) as 2 | 3, lastUpdated: "2024-07-05", evidence: "Governance structures have been reviewed and documented. Board meetings are regular with full attendance and engagement." })
     ),
+    term: "Spring",
+    academicYear: "2023-2024"
+  },
+  {
+    id: "14",
+    name: "Estates Assessment with Critical Issues",
+    category: "Estates",
+    school: mockSchools[4],
+    completedStandards: 3,
+    totalStandards: 3,
+    lastUpdated: "2024-07-18",
+    status: "Completed",
+    dueDate: "2024-07-15",
+    assignedTo: [mockUsers[4]],
+    standards: estatesStandards.map((std, idx) => {
+      if (idx === 0) {
+        return { 
+          ...std, 
+          rating: 1, 
+          lastUpdated: "2024-07-18", 
+          evidence: "Critical issues found with fire safety compliance. Multiple exit routes blocked and fire extinguishers missing or expired. Immediate action required." 
+        };
+      } else if (idx === 1) {
+        return { 
+          ...std, 
+          rating: 1, 
+          lastUpdated: "2024-07-18", 
+          evidence: "Asbestos management plan not in place. Water hygiene testing overdue by 6 months. Electrical testing certificates expired. Urgent attention needed." 
+        };
+      } else {
+        return { 
+          ...std, 
+          rating: 2, 
+          lastUpdated: "2024-07-18", 
+          evidence: "Basic maintenance schedule exists but is not consistently followed. Site security needs improvement with multiple access points unsecured." 
+        };
+      }
+    }),
+    term: "Summer",
+    academicYear: "2023-2024"
   },
 ];
 
@@ -346,9 +402,12 @@ export const mockAssessmentsForDeptHead: Assessment[] = [
     lastUpdated: "2024-07-15",
     status: "In Progress",
     dueDate: "2024-08-30",
+    assignedTo: [mockUsers[0]],
     standards: educationStandards.map((std, idx) => 
       idx < 4 ? { ...std, rating: (idx % 3) + 2 as 2 | 3 | 4, lastUpdated: "2024-07-15" } : std
     ),
+    term: "Summer",
+    academicYear: "2023-2024"
   },
   {
     id: "5",
@@ -360,9 +419,12 @@ export const mockAssessmentsForDeptHead: Assessment[] = [
     lastUpdated: "2024-07-12",
     status: "In Progress",
     dueDate: "2024-08-20",
+    assignedTo: [mockUsers[0]],
     standards: educationStandards.map((std, idx) => 
       idx < 3 ? { ...std, rating: (idx % 2) + 2 as 2 | 3, lastUpdated: "2024-07-12" } : std
     ),
+    term: "Spring",
+    academicYear: "2023-2024"
   },
   {
     id: "8",
@@ -374,6 +436,40 @@ export const mockAssessmentsForDeptHead: Assessment[] = [
     lastUpdated: "-",
     status: "Not Started",
     dueDate: "2024-09-15",
+    assignedTo: [mockUsers[0]],
     standards: educationStandards,
+    term: "Autumn",
+    academicYear: "2024-2025"
+  },
+  {
+    id: "15",
+    name: "Education Assessment",
+    category: "Education",
+    school: mockSchools[3],
+    completedStandards: 6,
+    totalStandards: 6,
+    lastUpdated: "2024-07-17",
+    status: "Completed",
+    dueDate: "2024-07-15",
+    assignedTo: [mockUsers[0]],
+    standards: educationStandards.map((std, idx) => {
+      if (idx === 2) {
+        return {
+          ...std,
+          rating: 1,
+          lastUpdated: "2024-07-17",
+          evidence: "Critical gaps in personal development provision. No evidence of SMSC activities. Character development program absent. Urgent improvements needed."
+        };
+      } else {
+        return {
+          ...std,
+          rating: idx % 2 === 0 ? 3 : 2,
+          lastUpdated: "2024-07-17",
+          evidence: "Standard meets basic requirements but opportunities for enhancement identified."
+        };
+      }
+    }),
+    term: "Summer",
+    academicYear: "2023-2024"
   },
 ]; 

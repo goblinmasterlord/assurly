@@ -279,7 +279,7 @@ export function AssessmentsPage() {
                     <TableRow key={assessment.id} className="group">
                       <TableCell className="font-medium">
                         <div className="flex flex-col">
-                          <span className="group-hover:text-primary transition-colors">
+                          <span className="transition-colors">
                             {assessment.name}
                           </span>
                           <span className="text-xs text-muted-foreground">
@@ -350,7 +350,7 @@ export function AssessmentsPage() {
                           <Button
                             variant="outline"
                             size="sm"
-                            className="gap-1"
+                            className="gap-1 group-hover:border-primary group-hover:text-primary transition-colors"
                             asChild
                           >
                             <Link to={`/assessments/${assessment.id}`}>

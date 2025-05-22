@@ -2,7 +2,7 @@ import { Link, Outlet } from "react-router-dom";
 import { RoleSwitcher } from "@/components/RoleSwitcher";
 import { Button } from "@/components/ui/button";
 import { useUser } from "@/contexts/UserContext";
-import { ClipboardList, Home, PieChart } from "lucide-react";
+import { ClipboardList } from "lucide-react";
 
 export function RootLayout() {
   const { role } = useUser();
@@ -17,23 +17,11 @@ export function RootLayout() {
             </Link>
             <nav className="hidden md:flex space-x-4">
               <Button variant="link" size="sm" asChild>
-                <Link to="/" className="flex items-center">
-                  <Home className="mr-1 h-4 w-4" /> Home
-                </Link>
-              </Button>
-              <Button variant="link" size="sm" asChild>
                 <Link to="/assessments" className="flex items-center">
                   <ClipboardList className="mr-1 h-4 w-4" /> 
                   {role === "mat-admin" ? "All Assessments" : "My Assessments"}
                 </Link>
               </Button>
-              {role === "mat-admin" && (
-                <Button variant="link" size="sm" asChild>
-                  <Link to="/reports" className="flex items-center">
-                    <PieChart className="mr-1 h-4 w-4" /> Reports
-                  </Link>
-                </Button>
-              )}
             </nav>
           </div>
           <div className="flex items-center space-x-4">

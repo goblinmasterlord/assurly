@@ -8,6 +8,15 @@ export type AssessmentCategory =
   | "IT & Information Services"
   | "IT Strategy & Support";
 
+// Academic terms
+export type AcademicTerm = 
+  | "Autumn"
+  | "Spring"
+  | "Summer";
+
+// Academic years
+export type AcademicYear = string; // Format: "2023-2024"
+
 // Rating scale 1-4
 export type Rating = 1 | 2 | 3 | 4 | null;
 
@@ -65,6 +74,8 @@ export interface Assessment {
   dueDate?: string;
   assignedTo?: User[];
   standards?: Standard[];
+  term?: AcademicTerm;
+  academicYear?: AcademicYear;
 }
 
 // School model

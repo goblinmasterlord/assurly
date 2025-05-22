@@ -49,7 +49,13 @@ import {
   FileText,
   BookOpen,
   ClipboardCheck,
-  SendHorizonal
+  SendHorizonal,
+  TableIcon,
+  LayoutGrid,
+  ClipboardList,
+  CalendarCheck,
+  UserCheck,
+  AlertCircle
 } from "lucide-react";
 import { mockSchools, mockUsers } from "@/lib/mock-data";
 import { AssessmentInvitationSheet } from "@/components/AssessmentInvitationSheet";
@@ -64,6 +70,8 @@ export function MatAdminAssessmentsView({ assessments }: AssessmentsViewProps) {
   const [categoryFilter, setCategoryFilter] = useState<AssessmentCategory | "all">("all");
   const [schoolFilter, setSchoolFilter] = useState<string>("all");
   const [invitationSheetOpen, setInvitationSheetOpen] = useState(false);
+  const [completedView, setCompletedView] = useState<"cards" | "table">("cards");
+  const [ongoingView, setOngoingView] = useState<"cards" | "table">("table");
 
   // Get unique schools from assessments
   const uniqueSchools = useMemo(() => {
@@ -219,6 +227,483 @@ export function MatAdminAssessmentsView({ assessments }: AssessmentsViewProps) {
     return `${assessment.assignedTo[0].name} + ${assessment.assignedTo.length - 1} more`;
   };
 
+  // Helper to check if an assessment has any critical standards (rating = 1)
+  const hasCriticalStandards = (assessment: Assessment) => {
+    if (!assessment.standards) return false;
+    return assessment.standards.some(standard => standard.rating === 1);
+  };
+
+  // Helper to count critical standards in an assessment
+  const countCriticalStandards = (assessment: Assessment) => {
+    if (!assessment.standards) return 0;
+    return assessment.standards.filter(standard => standard.rating === 1).length;
+  };
+
+  // Helper function to get the background gradient for a rating card
+  const getRatingGradient = (rating: number) => {
+    if (rating < 2) return "bg-gradient-to-r from-rose-50 to-white";
+    if (rating < 3) return "bg-gradient-to-r from-amber-50 to-white";
+    if (rating < 4) return "bg-gradient-to-r from-emerald-50 to-white";
+    return "bg-gradient-to-r from-indigo-50 to-white";
+  };
+
+  // Card view for assessments
+  const renderCardView = (assessment: Assessment, isCompleted: boolean) => {
+    const categoryAverages = calculateCategoryAverages(assessment);
+    const overallAverage = calculateOverallAverage(assessment);
+    
+    return (
+      <Accordion 
+        type="single" 
+        collapsible 
+        key={assessment.id}
+        className="border rounded-lg overflow-hidden hover:border-primary transition-all duration-200"
+      >
+        <AccordionItem value="item-1" className="border-0">
+          <AccordionTrigger className="px-5 py-4 hover:no-underline hover:bg-slate-50 data-[state=open]:bg-slate-50">
+            <div className="flex items-center justify-between w-full">
+              <div className="flex items-center gap-4">
+                <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-emerald-50 border border-emerald-100">
+                  <SchoolIcon className="h-5 w-5 text-emerald-600" />
+                </div>
+                <div className="flex flex-col min-w-0">
+                  <div className="font-medium text-base truncate">{assessment.school.name}</div>
+                  <div className="flex items-center flex-wrap gap-2 text-xs text-slate-600 mt-0.5">
+                    <Badge variant="outline" className="bg-slate-50 font-normal text-xs py-0 h-5">
+                      {assessment.category}
+                    </Badge>
+                    <span>•</span>
+                    <span className="flex items-center gap-1">
+                      <Calendar className="h-3 w-3" />
+                      {isCompleted ? `Completed ${assessment.lastUpdated}` : assessment.dueDate ? `Due ${assessment.dueDate}` : "No deadline"}
+                    </span>
+                  </div>
+                </div>
+              </div>
+              
+              <div className="flex items-center gap-5">
+                {isCompleted ? (
+                  <div className="flex items-center gap-2.5">
+                    <div className={`flex items-center justify-center h-9 w-9 rounded-md ${getRatingColor(overallAverage)} border border-white/20`}>
+                      <span className="text-white font-medium text-sm">{overallAverage.toFixed(1)}</span>
+                    </div>
+                    <div className="flex flex-col">
+                      <span className="text-xs font-medium">Overall Score</span>
+                      <span className="text-xs text-slate-500">
+                        {assessment.completedStandards}/{assessment.totalStandards} Standards
+                      </span>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="flex items-center gap-2.5">
+                    <Badge className={cn("gap-1 font-medium", getStatusColor(assessment.status))}>
+                      {getStatusIcon(assessment.status)}
+                      {assessment.status}
+                    </Badge>
+                  </div>
+                )}
+              </div>
+            </div>
+          </AccordionTrigger>
+          {isCompleted && (
+            <AccordionContent className="px-5 pb-5 pt-0 border-t">
+              <div className="space-y-6">
+                {/* Assessment metadata */}
+                <div className="flex flex-wrap gap-5 text-sm pt-5 pb-1 text-slate-600">
+                  <div className="flex items-center gap-2">
+                    <ClipboardList className="h-4 w-4 text-muted-foreground" />
+                    <span className="text-muted-foreground">Assessment:</span>
+                    <span className="font-medium text-slate-900">{assessment.name}</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <CalendarCheck className="h-4 w-4 text-muted-foreground" />
+                    <span className="text-muted-foreground">Completed on:</span>
+                    <span className="font-medium text-slate-900">{assessment.lastUpdated}</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <UserCheck className="h-4 w-4 text-muted-foreground" />
+                    <span className="text-muted-foreground">Assigned to:</span>
+                    <span className="font-medium text-slate-900">{getAssignedUsers(assessment)}</span>
+                  </div>
+                </div>
+                
+                {/* Performance Summary */}
+                <div>
+                  <div className="flex items-center justify-between mb-3">
+                    <h3 className="text-sm font-medium text-slate-900">Performance by Area</h3>
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
+                    {Object.entries(categoryAverages).map(([key, { average, title }]) => (
+                      <div key={key} className={`flex items-center gap-3 p-3.5 border rounded-lg ${getRatingGradient(average)} hover:border-primary transition-colors`}>
+                        <div className={`flex items-center justify-center h-9 w-9 rounded-md ${getRatingColor(average)}`}>
+                          <span className="text-white font-medium">{average.toFixed(1)}</span>
+                        </div>
+                        <div className="flex flex-col">
+                          <span className="font-medium text-sm text-slate-900">{title}</span>
+                          <span className={`text-xs ${getRatingTextColor(average)}`}>
+                            {average >= 3.5 ? "Outstanding" : 
+                             average >= 2.5 ? "Good" : 
+                             average >= 1.5 ? "Requires Improvement" : "Inadequate"}
+                          </span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+                
+                {/* Show Problematic Standards */}
+                {hasCriticalStandards(assessment) && (
+                  <div>
+                    <h3 className="text-sm font-medium text-slate-900 mb-3">Critical Standards</h3>
+                    <div className="border rounded-lg overflow-hidden">
+                      {assessment.standards && assessment.standards
+                        .filter(standard => standard.rating === 1)
+                        .map(standard => (
+                          <div key={standard.id} className="p-3 border-b last:border-b-0 bg-rose-50">
+                            <div className="flex items-start gap-3">
+                              <div className="flex items-center justify-center h-8 w-8 rounded-md bg-rose-500 mt-0.5 flex-shrink-0">
+                                <span className="text-white font-medium text-sm">1</span>
+                              </div>
+                              <div className="flex-1">
+                                <div className="flex items-center justify-between">
+                                  <span className="font-medium text-sm text-slate-900">{standard.code}: {standard.title}</span>
+                                </div>
+                                <p className="text-xs text-rose-700 mt-1 line-clamp-2">{standard.evidence || "No evidence provided."}</p>
+                              </div>
+                            </div>
+                          </div>
+                        ))
+                      }
+                    </div>
+                  </div>
+                )}
+                
+                <div className="flex justify-end border-t pt-4 mt-2">
+                  <Button
+                    size="sm"
+                    className="gap-1.5"
+                    asChild
+                  >
+                    <Link to={`/assessments/${assessment.id}`}>
+                      View Full Assessment
+                      <ChevronRight className="h-4 w-4" />
+                    </Link>
+                  </Button>
+                </div>
+              </div>
+            </AccordionContent>
+          )}
+          {!isCompleted && (
+            <AccordionContent className="px-5 pb-5 pt-0 border-t">
+              <div className="space-y-6">
+                {/* Assessment metadata */}
+                <div className="flex flex-wrap gap-5 text-sm pt-5 pb-1 text-slate-600">
+                  <div className="flex items-center gap-2">
+                    <span className="text-muted-foreground">Assessment:</span>
+                    <span className="font-medium text-slate-900">{assessment.name}</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-muted-foreground">Status:</span>
+                    <Badge className={cn("gap-1 font-medium", getStatusColor(assessment.status))}>
+                      {getStatusIcon(assessment.status)}
+                      {assessment.status}
+                    </Badge>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-muted-foreground">Assigned to:</span>
+                    <span className="font-medium text-slate-900">{getAssignedUsers(assessment)}</span>
+                  </div>
+                </div>
+                
+                {/* Progress */}
+                <div>
+                  <h3 className="text-sm font-medium mb-3 text-slate-900">Completion Progress</h3>
+                  <div className="p-4 border rounded-lg bg-slate-50">
+                    <div className="mb-2 flex items-center justify-between">
+                      <span className="text-sm font-medium">
+                        {assessment.completedStandards} of {assessment.totalStandards} standards completed
+                      </span>
+                      <span className="text-sm font-medium">
+                        {Math.round((assessment.completedStandards / assessment.totalStandards) * 100)}%
+                      </span>
+                    </div>
+                    <Progress 
+                      value={(assessment.completedStandards / assessment.totalStandards) * 100} 
+                      className="h-2"
+                      indicatorClassName={
+                        assessment.completedStandards === 0 ? "bg-slate-200" :
+                        assessment.completedStandards === assessment.totalStandards ? "bg-emerald-500" :
+                        assessment.status === "Overdue" ? "bg-rose-500" : "bg-indigo-500"
+                      }
+                    />
+                  </div>
+                </div>
+                
+                <div className="flex justify-end">
+                  <Button
+                    size="sm"
+                    className="gap-1.5"
+                    asChild
+                  >
+                    <Link to={`/assessments/${assessment.id}`}>
+                      View Assessment
+                      <ChevronRight className="h-4 w-4" />
+                    </Link>
+                  </Button>
+                </div>
+              </div>
+            </AccordionContent>
+          )}
+        </AccordionItem>
+      </Accordion>
+    );
+  };
+
+  // Render header with view toggle
+  const renderHeader = (
+    placeholder: string, 
+    view: "cards" | "table", 
+    setView: (view: "cards" | "table") => void
+  ) => (
+    <CardHeader className="p-5 pb-3">
+      <div className="flex flex-col space-y-4 md:flex-row md:items-center md:justify-between md:space-y-0">
+        <div className="flex flex-1 items-center space-x-2">
+          <div className="relative flex-1 md:max-w-sm">
+            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+            <Input
+              type="search"
+              placeholder={placeholder}
+              className="pl-9"
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+            />
+          </div>
+          <div className="flex items-center gap-1.5 ml-2">
+            <Button 
+              variant="outline" 
+              size="sm" 
+              className={cn(
+                "h-9 w-9 p-0", 
+                view === "table" ? "border-primary bg-primary/5 text-primary" : ""
+              )}
+              onClick={() => setView("table")}
+              title="Table view"
+            >
+              <TableIcon className="h-4 w-4" />
+              <span className="sr-only">Table view</span>
+            </Button>
+            <Button 
+              variant="outline" 
+              size="sm" 
+              className={cn(
+                "h-9 w-9 p-0", 
+                view === "cards" ? "border-primary bg-primary/5 text-primary" : ""
+              )}
+              onClick={() => setView("cards")}
+              title="Card view"
+            >
+              <LayoutGrid className="h-4 w-4" />
+              <span className="sr-only">Card view</span>
+            </Button>
+          </div>
+        </div>
+        <div className="flex flex-wrap gap-3">
+          {uniqueSchools.length > 1 && (
+            <Select value={schoolFilter} onValueChange={setSchoolFilter}>
+              <SelectTrigger className="h-9 w-full md:w-[180px] bg-white gap-1.5">
+                <SchoolIcon className="h-3.5 w-3.5 text-muted-foreground opacity-70" />
+                <SelectValue placeholder="All Schools" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Schools</SelectItem>
+                {uniqueSchools.map((school) => (
+                  <SelectItem key={school.id} value={school.id}>
+                    {school.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          )}
+          <Select value={categoryFilter} onValueChange={(value) => setCategoryFilter(value as AssessmentCategory | "all")}>
+            <SelectTrigger className="h-9 w-full md:w-[180px] bg-white">
+              <SelectValue placeholder="All Categories" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All Categories</SelectItem>
+              {uniqueCategories.map((category) => (
+                <SelectItem key={category} value={category}>
+                  {category}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+      </div>
+    </CardHeader>
+  );
+
+  // Table view for assessments
+  const renderTableView = (isCompleted: boolean) => (
+    <Table>
+      <TableHeader>
+        <TableRow className="bg-slate-50">
+          <TableHead className="py-3">Assessment</TableHead>
+          <TableHead>School</TableHead>
+          <TableHead>Category</TableHead>
+          <TableHead>Progress</TableHead>
+          {isCompleted ? (
+            <TableHead>Completed Date</TableHead>
+          ) : (
+            <TableHead>Due Date</TableHead>
+          )}
+          <TableHead>Status</TableHead>
+          <TableHead className="text-right">Actions</TableHead>
+        </TableRow>
+      </TableHeader>
+      <TableBody>
+        {filteredAssessments.length === 0 ? (
+          <TableRow>
+            <TableCell
+              colSpan={7}
+              className="h-24 text-center"
+            >
+              <div className="flex flex-col items-center justify-center py-8 text-muted-foreground">
+                <XCircle className="h-10 w-10 mb-2 opacity-20" />
+                <p>No assessments found matching your filters.</p>
+                <Button 
+                  variant="link" 
+                  className="mt-2"
+                  onClick={() => {
+                    setSearchTerm("");
+                    setCategoryFilter("all");
+                    setSchoolFilter("all");
+                  }}
+                >
+                  Clear all filters
+                </Button>
+              </div>
+            </TableCell>
+          </TableRow>
+        ) : (
+          filteredAssessments.map((assessment) => (
+            <TableRow key={assessment.id} className="group">
+              <TableCell className="font-medium">
+                <div className="flex flex-col">
+                  <span className="transition-colors">
+                    {assessment.name}
+                  </span>
+                  <span className="text-xs text-muted-foreground">
+                    Last updated: {assessment.lastUpdated !== "-" ? assessment.lastUpdated : "Never"}
+                  </span>
+                </div>
+              </TableCell>
+              <TableCell>
+                <div className="flex items-center gap-2">
+                  <div className="flex h-7 w-7 items-center justify-center rounded-full bg-violet-50">
+                    <SchoolIcon className="h-3.5 w-3.5 text-violet-500" />
+                  </div>
+                  <span>{assessment.school.name}</span>
+                </div>
+              </TableCell>
+              <TableCell>
+                <Badge variant="outline" className="bg-slate-50 font-normal">
+                  {assessment.category}
+                </Badge>
+              </TableCell>
+              <TableCell>
+                {isCompleted ? (
+                  <div className="flex items-center gap-2">
+                    <div className={`flex items-center justify-center h-7 w-7 rounded-full ${getRatingColor(calculateOverallAverage(assessment))}`}>
+                      <span className="text-white font-medium text-xs">{calculateOverallAverage(assessment).toFixed(1)}</span>
+                    </div>
+                    <span className="text-sm whitespace-nowrap">
+                      {assessment.completedStandards}/{assessment.totalStandards}
+                    </span>
+                  </div>
+                ) : (
+                  <div className="flex items-center gap-2">
+                    <Progress 
+                      value={(assessment.completedStandards / assessment.totalStandards) * 100} 
+                      className="w-20 h-2"
+                      indicatorClassName={
+                        assessment.completedStandards === 0 ? "bg-slate-200" :
+                        assessment.completedStandards === assessment.totalStandards ? "bg-emerald-500" :
+                        assessment.status === "Overdue" ? "bg-rose-500" : "bg-indigo-500"
+                      }
+                    />
+                    <span className="text-sm whitespace-nowrap">
+                      {assessment.completedStandards}/{assessment.totalStandards}
+                    </span>
+                  </div>
+                )}
+              </TableCell>
+              <TableCell>
+                {isCompleted ? (
+                  <div className="flex items-center gap-1.5">
+                    <Calendar className="h-3.5 w-3.5 text-slate-500" />
+                    <span className="text-sm">{assessment.lastUpdated}</span>
+                  </div>
+                ) : (
+                  <div 
+                    className={cn(
+                      "inline-flex items-center gap-1.5 whitespace-nowrap rounded-md px-2 py-1 text-xs font-medium",
+                      assessment.status === "Overdue" ? "bg-rose-50 text-rose-700 border border-rose-100" : 
+                      assessment.dueDate ? "bg-amber-50 text-amber-700 border border-amber-100" : "bg-slate-50 text-slate-600 border border-slate-100"
+                    )}
+                  >
+                    <Calendar className="h-3.5 w-3.5" />
+                    <span>
+                      {assessment.dueDate || "No deadline"}
+                      {assessment.status === "Overdue" && " (Overdue)"}
+                    </span>
+                  </div>
+                )}
+              </TableCell>
+              <TableCell>
+                <Badge className={cn("gap-1 font-medium", getStatusColor(assessment.status))}>
+                  {getStatusIcon(assessment.status)}
+                  {assessment.status}
+                </Badge>
+              </TableCell>
+              <TableCell className="text-right">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="gap-1 group-hover:border-primary group-hover:text-primary transition-colors"
+                  asChild
+                >
+                  <Link to={`/assessments/${assessment.id}`}>
+                    View
+                    <ChevronRight className="h-4 w-4" />
+                  </Link>
+                </Button>
+              </TableCell>
+            </TableRow>
+          ))
+        )}
+      </TableBody>
+    </Table>
+  );
+
+  // Empty state component
+  const renderEmptyState = () => (
+    <div className="flex flex-col items-center justify-center py-10 text-muted-foreground">
+      <XCircle className="h-12 w-12 mb-3 opacity-20" />
+      <p>No assessments found matching your filters.</p>
+      <Button 
+        variant="link" 
+        className="mt-2"
+        onClick={() => {
+          setSearchTerm("");
+          setCategoryFilter("all");
+          setSchoolFilter("all");
+        }}
+      >
+        Clear all filters
+      </Button>
+    </div>
+  );
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
@@ -233,11 +718,11 @@ export function MatAdminAssessmentsView({ assessments }: AssessmentsViewProps) {
       </div>
       
       <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-        <div className="mb-8 border-b">
-          <TabsList className="w-full justify-start rounded-none border-b-0 bg-transparent p-0">
+        <div className="mb-6">
+          <TabsList className="h-12 w-full justify-start rounded-md bg-slate-50 p-1">
             <TabsTrigger 
               value="completed" 
-              className="relative rounded-none border-b-2 border-transparent px-4 py-3 font-medium text-muted-foreground data-[state=active]:border-primary data-[state=active]:text-foreground data-[state=active]:shadow-none"
+              className="rounded-md px-5 py-2.5 font-medium text-muted-foreground data-[state=active]:bg-white data-[state=active]:text-foreground data-[state=active]:shadow-sm"
             >
               <div className="flex items-center gap-2">
                 <CheckSquare className="h-4 w-4" />
@@ -246,7 +731,7 @@ export function MatAdminAssessmentsView({ assessments }: AssessmentsViewProps) {
             </TabsTrigger>
             <TabsTrigger 
               value="ongoing" 
-              className="relative rounded-none border-b-2 border-transparent px-4 py-3 font-medium text-muted-foreground data-[state=active]:border-primary data-[state=active]:text-foreground data-[state=active]:shadow-none"
+              className="rounded-md px-5 py-2.5 font-medium text-muted-foreground data-[state=active]:bg-white data-[state=active]:text-foreground data-[state=active]:shadow-sm"
             >
               <div className="flex items-center gap-2">
                 <Clock3 className="h-4 w-4" />
@@ -256,231 +741,19 @@ export function MatAdminAssessmentsView({ assessments }: AssessmentsViewProps) {
           </TabsList>
         </div>
 
-        {/* Completed Assessments Tab with drill-down capability */}
+        {/* Completed Assessments Tab */}
         <TabsContent value="completed" className="mt-0">
           <Card className="border-slate-200">
-            <CardHeader className="p-5 pb-3">
-              <div className="flex flex-col space-y-4 md:flex-row md:items-center md:justify-between md:space-y-0">
-                <div className="flex flex-1 items-center space-x-2">
-                  <div className="relative flex-1 md:max-w-sm">
-                    <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-                    <Input
-                      type="search"
-                      placeholder="Search completed assessments..."
-                      className="pl-9"
-                      value={searchTerm}
-                      onChange={(e) => setSearchTerm(e.target.value)}
-                    />
-                  </div>
-                </div>
-                <div className="flex flex-wrap gap-3">
-                  {uniqueSchools.length > 1 && (
-                    <Select value={schoolFilter} onValueChange={setSchoolFilter}>
-                      <SelectTrigger className="h-9 w-full md:w-[180px] bg-white gap-1.5">
-                        <SchoolIcon className="h-3.5 w-3.5 text-muted-foreground opacity-70" />
-                        <SelectValue placeholder="All Schools" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="all">All Schools</SelectItem>
-                        {uniqueSchools.map((school) => (
-                          <SelectItem key={school.id} value={school.id}>
-                            {school.name}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  )}
-                  <Select value={categoryFilter} onValueChange={(value) => setCategoryFilter(value as AssessmentCategory | "all")}>
-                    <SelectTrigger className="h-9 w-full md:w-[180px] bg-white">
-                      <SelectValue placeholder="All Categories" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="all">All Categories</SelectItem>
-                      {uniqueCategories.map((category) => (
-                        <SelectItem key={category} value={category}>
-                          {category}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
-            </CardHeader>
-            <CardContent className="px-5 pt-0 pb-5">
+            {renderHeader("Search completed assessments...", completedView, setCompletedView)}
+            <CardContent className={completedView === "cards" ? "px-5 pt-0 pb-5" : "p-0"}>
               {filteredAssessments.length === 0 ? (
-                <div className="flex flex-col items-center justify-center py-10 text-muted-foreground">
-                  <XCircle className="h-12 w-12 mb-3 opacity-20" />
-                  <p>No completed assessments found matching your filters.</p>
-                  <Button 
-                    variant="link" 
-                    className="mt-2"
-                    onClick={() => {
-                      setSearchTerm("");
-                      setCategoryFilter("all");
-                      setSchoolFilter("all");
-                    }}
-                  >
-                    Clear all filters
-                  </Button>
+                renderEmptyState()
+              ) : completedView === "cards" ? (
+                <div className="space-y-5">
+                  {filteredAssessments.map((assessment) => renderCardView(assessment, true))}
                 </div>
               ) : (
-                <div className="space-y-5">
-                  {filteredAssessments.map((assessment) => {
-                    const categoryAverages = calculateCategoryAverages(assessment);
-                    const overallAverage = calculateOverallAverage(assessment);
-                    
-                    return (
-                      <Accordion 
-                        type="single" 
-                        collapsible 
-                        key={assessment.id}
-                        className="border rounded-lg overflow-hidden shadow-sm hover:shadow transition-shadow"
-                      >
-                        <AccordionItem value="item-1" className="border-0">
-                          <AccordionTrigger className="px-5 py-4 hover:bg-slate-50 data-[state=open]:bg-slate-50">
-                            <div className="flex items-center justify-between w-full">
-                              <div className="flex items-center gap-4">
-                                <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-emerald-50 border border-emerald-100">
-                                  <SchoolIcon className="h-5 w-5 text-emerald-600" />
-                                </div>
-                                <div className="flex flex-col min-w-0">
-                                  <div className="font-medium text-base truncate">{assessment.school.name}</div>
-                                  <div className="flex items-center flex-wrap gap-2 text-xs text-slate-600 mt-0.5">
-                                    <Badge variant="outline" className="bg-slate-50 font-normal text-xs py-0 h-5">
-                                      {assessment.category}
-                                    </Badge>
-                                    <span>•</span>
-                                    <span className="flex items-center gap-1">
-                                      <Calendar className="h-3 w-3" />
-                                      Completed {assessment.lastUpdated}
-                                    </span>
-                                  </div>
-                                </div>
-                              </div>
-                              
-                              <div className="flex items-center gap-5">
-                                <div className="flex items-center gap-2.5">
-                                  <div className={`flex items-center justify-center h-9 w-9 rounded-full ${getRatingColor(overallAverage)} ring-4 ring-opacity-20 ${getRatingColor(overallAverage).replace('bg-', 'ring-')}`}>
-                                    <span className="text-white font-medium text-sm">{overallAverage.toFixed(1)}</span>
-                                  </div>
-                                  <div className="flex flex-col">
-                                    <span className="text-xs font-medium">Overall Score</span>
-                                    <span className="text-xs text-slate-500">
-                                      {assessment.completedStandards}/{assessment.totalStandards} Standards
-                                    </span>
-                                  </div>
-                                </div>
-                              </div>
-                            </div>
-                          </AccordionTrigger>
-                          <AccordionContent className="px-5 pb-5 pt-0 border-t">
-                            <div className="space-y-6">
-                              {/* Assessment metadata */}
-                              <div className="flex flex-wrap gap-5 text-sm pt-5 pb-1 text-slate-600">
-                                <div className="flex items-center gap-2">
-                                  <span className="text-muted-foreground">Assessment:</span>
-                                  <span className="font-medium text-slate-900">{assessment.name}</span>
-                                </div>
-                                <div className="flex items-center gap-2">
-                                  <span className="text-muted-foreground">Completed on:</span>
-                                  <span className="font-medium text-slate-900">{assessment.lastUpdated}</span>
-                                </div>
-                                <div className="flex items-center gap-2">
-                                  <span className="text-muted-foreground">Assigned to:</span>
-                                  <span className="font-medium text-slate-900">{getAssignedUsers(assessment)}</span>
-                                </div>
-                              </div>
-                              
-                              {/* Performance Summary */}
-                              <div>
-                                <h3 className="text-sm font-medium mb-3 text-slate-900">Performance by Area</h3>
-                                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
-                                  {Object.entries(categoryAverages).map(([key, { average, title }]) => (
-                                    <div key={key} className="flex items-center gap-3 p-3.5 border rounded-lg bg-slate-50 hover:bg-slate-100 transition-colors">
-                                      <div className={`flex items-center justify-center h-11 w-11 rounded-full ${getRatingColor(average)} ring-4 ring-opacity-20 ${getRatingColor(average).replace('bg-', 'ring-')}`}>
-                                        <span className="text-white font-medium">{average.toFixed(1)}</span>
-                                      </div>
-                                      <div className="flex flex-col">
-                                        <span className="font-medium text-sm text-slate-900">{title}</span>
-                                        <span className={`text-xs ${getRatingTextColor(average)}`}>
-                                          {average >= 3.5 ? "Outstanding" : 
-                                           average >= 2.5 ? "Good" : 
-                                           average >= 1.5 ? "Requires Improvement" : "Inadequate"}
-                                        </span>
-                                      </div>
-                                    </div>
-                                  ))}
-                                </div>
-                              </div>
-                              
-                              {/* Standards table */}
-                              <div>
-                                <h3 className="text-sm font-medium mb-3 text-slate-900">Standards Rating Summary</h3>
-                                <div className="rounded-lg overflow-hidden border">
-                                  <Table>
-                                    <TableHeader>
-                                      <TableRow className="bg-slate-50">
-                                        <TableHead className="w-[90px]">Standard</TableHead>
-                                        <TableHead>Title</TableHead>
-                                        <TableHead className="text-center w-[90px]">Rating</TableHead>
-                                      </TableRow>
-                                    </TableHeader>
-                                    <TableBody>
-                                      {assessment.standards && assessment.standards.map((standard) => (
-                                        <TableRow key={standard.id} className="group">
-                                          <TableCell className="font-medium">{standard.code}</TableCell>
-                                          <TableCell>
-                                            <div className="flex flex-col">
-                                              <span className="group-hover:text-primary transition-colors">{standard.title}</span>
-                                              <span className="text-xs text-muted-foreground line-clamp-1">
-                                                {standard.description}
-                                              </span>
-                                            </div>
-                                          </TableCell>
-                                          <TableCell className="text-center">
-                                            {standard.rating ? (
-                                              <div className="flex justify-center">
-                                                <div className={`flex items-center justify-center h-8 w-8 rounded-full ${getRatingColor(standard.rating)}`}>
-                                                  <span className="text-white font-medium">{standard.rating}</span>
-                                                </div>
-                                              </div>
-                                            ) : (
-                                              <span className="text-sm text-muted-foreground">-</span>
-                                            )}
-                                          </TableCell>
-                                        </TableRow>
-                                      ))}
-                                      {(!assessment.standards || assessment.standards.length === 0) && (
-                                        <TableRow>
-                                          <TableCell colSpan={3} className="h-24 text-center text-muted-foreground">
-                                            No standards data available
-                                          </TableCell>
-                                        </TableRow>
-                                      )}
-                                    </TableBody>
-                                  </Table>
-                                </div>
-                              </div>
-                              
-                              <div className="flex justify-end">
-                                <Button
-                                  size="sm"
-                                  className="gap-1.5"
-                                  asChild
-                                >
-                                  <Link to={`/assessments/${assessment.id}`}>
-                                    View Full Assessment
-                                    <ChevronRight className="h-4 w-4" />
-                                  </Link>
-                                </Button>
-                              </div>
-                            </div>
-                          </AccordionContent>
-                        </AccordionItem>
-                      </Accordion>
-                    );
-                  })}
-                </div>
+                renderTableView(true)
               )}
             </CardContent>
           </Card>
@@ -489,171 +762,17 @@ export function MatAdminAssessmentsView({ assessments }: AssessmentsViewProps) {
         {/* Ongoing Assessments Tab */}
         <TabsContent value="ongoing" className="mt-0">
           <Card className="border-slate-200">
-            <CardHeader className="p-5 pb-3">
-              <div className="flex flex-col space-y-4 md:flex-row md:items-center md:justify-between md:space-y-0">
-                <div className="flex flex-1 items-center space-x-2">
-                  <div className="relative flex-1 md:max-w-sm">
-                    <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-                    <Input
-                      type="search"
-                      placeholder="Search ongoing assessments..."
-                      className="pl-9"
-                      value={searchTerm}
-                      onChange={(e) => setSearchTerm(e.target.value)}
-                    />
-                  </div>
+            {renderHeader("Search ongoing assessments...", ongoingView, setOngoingView)}
+            <CardContent className={ongoingView === "cards" ? "px-5 pt-0 pb-5" : "p-0"}>
+              {filteredAssessments.length === 0 ? (
+                renderEmptyState()
+              ) : ongoingView === "cards" ? (
+                <div className="space-y-5">
+                  {filteredAssessments.map((assessment) => renderCardView(assessment, false))}
                 </div>
-                <div className="flex flex-wrap gap-3">
-                  {uniqueSchools.length > 1 && (
-                    <Select value={schoolFilter} onValueChange={setSchoolFilter}>
-                      <SelectTrigger className="h-9 w-full md:w-[180px] bg-white gap-1.5">
-                        <SchoolIcon className="h-3.5 w-3.5 text-muted-foreground opacity-70" />
-                        <SelectValue placeholder="All Schools" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="all">All Schools</SelectItem>
-                        {uniqueSchools.map((school) => (
-                          <SelectItem key={school.id} value={school.id}>
-                            {school.name}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  )}
-                  <Select value={categoryFilter} onValueChange={(value) => setCategoryFilter(value as AssessmentCategory | "all")}>
-                    <SelectTrigger className="h-9 w-full md:w-[180px] bg-white">
-                      <SelectValue placeholder="All Categories" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="all">All Categories</SelectItem>
-                      {uniqueCategories.map((category) => (
-                        <SelectItem key={category} value={category}>
-                          {category}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
-            </CardHeader>
-            <CardContent className="p-0">
-              <Table>
-                <TableHeader>
-                  <TableRow className="bg-slate-50">
-                    <TableHead className="py-3">Assessment</TableHead>
-                    <TableHead>School</TableHead>
-                    <TableHead>Category</TableHead>
-                    <TableHead>Progress</TableHead>
-                    <TableHead>Due Date</TableHead>
-                    <TableHead>Status</TableHead>
-                    <TableHead className="text-right">Actions</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {filteredAssessments.length === 0 ? (
-                    <TableRow>
-                      <TableCell
-                        colSpan={7}
-                        className="h-24 text-center"
-                      >
-                        <div className="flex flex-col items-center justify-center py-8 text-muted-foreground">
-                          <XCircle className="h-10 w-10 mb-2 opacity-20" />
-                          <p>No assessments found matching your filters.</p>
-                          <Button 
-                            variant="link" 
-                            className="mt-2"
-                            onClick={() => {
-                              setSearchTerm("");
-                              setCategoryFilter("all");
-                              setSchoolFilter("all");
-                            }}
-                          >
-                            Clear all filters
-                          </Button>
-                        </div>
-                      </TableCell>
-                    </TableRow>
-                  ) : (
-                    filteredAssessments.map((assessment) => (
-                      <TableRow key={assessment.id} className="group">
-                        <TableCell className="font-medium">
-                          <div className="flex flex-col">
-                            <span className="group-hover:text-primary transition-colors">
-                              {assessment.name}
-                            </span>
-                            <span className="text-xs text-muted-foreground">
-                              Last updated: {assessment.lastUpdated !== "-" ? assessment.lastUpdated : "Never"}
-                            </span>
-                          </div>
-                        </TableCell>
-                        <TableCell>
-                          <div className="flex items-center gap-2">
-                            <div className="flex h-7 w-7 items-center justify-center rounded-full bg-violet-50">
-                              <SchoolIcon className="h-3.5 w-3.5 text-violet-500" />
-                            </div>
-                            <span>{assessment.school.name}</span>
-                          </div>
-                        </TableCell>
-                        <TableCell>
-                          <Badge variant="outline" className="bg-slate-50 font-normal">
-                            {assessment.category}
-                          </Badge>
-                        </TableCell>
-                        <TableCell>
-                          <div className="flex items-center gap-2">
-                            <Progress 
-                              value={(assessment.completedStandards / assessment.totalStandards) * 100} 
-                              className="w-20 h-2"
-                              indicatorClassName={
-                                assessment.completedStandards === 0 ? "bg-slate-200" :
-                                assessment.completedStandards === assessment.totalStandards ? "bg-emerald-500" :
-                                assessment.status === "Overdue" ? "bg-rose-500" : "bg-indigo-500"
-                              }
-                            />
-                            <span className="text-sm whitespace-nowrap">
-                              {assessment.completedStandards}/{assessment.totalStandards}
-                            </span>
-                          </div>
-                        </TableCell>
-                        <TableCell>
-                          <div 
-                            className={cn(
-                              "inline-flex items-center gap-1.5 whitespace-nowrap rounded-md px-2 py-1 text-xs font-medium",
-                              assessment.status === "Overdue" ? "bg-rose-50 text-rose-700 border border-rose-100" : 
-                              assessment.dueDate ? "bg-amber-50 text-amber-700 border border-amber-100" : "bg-slate-50 text-slate-600 border border-slate-100"
-                            )}
-                          >
-                            <Calendar className="h-3.5 w-3.5" />
-                            <span>
-                              {assessment.dueDate || "No deadline"}
-                              {assessment.status === "Overdue" && " (Overdue)"}
-                            </span>
-                          </div>
-                        </TableCell>
-                        <TableCell>
-                          <Badge className={cn("gap-1 font-medium", getStatusColor(assessment.status))}>
-                            {getStatusIcon(assessment.status)}
-                            {assessment.status}
-                          </Badge>
-                        </TableCell>
-                        <TableCell className="text-right">
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            className="gap-1 group-hover:border-primary group-hover:text-primary transition-colors"
-                            asChild
-                          >
-                            <Link to={`/assessments/${assessment.id}`}>
-                              View
-                              <ChevronRight className="h-4 w-4" />
-                            </Link>
-                          </Button>
-                        </TableCell>
-                      </TableRow>
-                    ))
-                  )}
-                </TableBody>
-              </Table>
+              ) : (
+                renderTableView(false)
+              )}
             </CardContent>
           </Card>
         </TabsContent>
