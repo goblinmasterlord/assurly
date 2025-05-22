@@ -55,10 +55,15 @@ import {
   ClipboardList,
   CalendarCheck,
   UserCheck,
-  AlertCircle
+  AlertCircle,
+  Tag,
+  Check
 } from "lucide-react";
 import { mockSchools, mockUsers } from "@/lib/mock-data";
 import { AssessmentInvitationSheet } from "@/components/AssessmentInvitationSheet";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem } from "@/components/ui/command";
+import { Checkbox } from "@/components/ui/checkbox";
 
 type AssessmentsViewProps = {
   assessments: Assessment[];
@@ -72,6 +77,8 @@ export function MatAdminAssessmentsView({ assessments }: AssessmentsViewProps) {
   const [invitationSheetOpen, setInvitationSheetOpen] = useState(false);
   const [completedView, setCompletedView] = useState<"cards" | "table">("cards");
   const [ongoingView, setOngoingView] = useState<"cards" | "table">("table");
+  const [termFilter, setTermFilter] = useState<string[]>([]);
+  const [termFilterOpen, setTermFilterOpen] = useState(false);
 
   // Get unique schools from assessments
   const uniqueSchools = useMemo(() => {
@@ -82,7 +89,13 @@ export function MatAdminAssessmentsView({ assessments }: AssessmentsViewProps) {
   // Get unique categories from assessments
   const uniqueCategories = [...new Set(assessments.map(a => a.category))];
 
-  // Filter assessments based on search, category, and school
+  // Get unique terms from assessments
+  const uniqueTerms = useMemo(() => {
+    const terms = [...new Set(assessments.map(a => a.term).filter(Boolean))] as string[];
+    return terms.sort();
+  }, [assessments]);
+
+  // Filter assessments based on search, category, school, and term
   const filteredAssessments = useMemo(() => {
     return assessments.filter((assessment) => {
       // First filter by status based on active tab
@@ -101,9 +114,12 @@ export function MatAdminAssessmentsView({ assessments }: AssessmentsViewProps) {
       const matchesCategory = categoryFilter === "all" || assessment.category === categoryFilter;
       const matchesSchool = schoolFilter === "all" || assessment.school.id === schoolFilter;
       
-      return matchesSearch && matchesCategory && matchesSchool;
+      // New term filter logic
+      const matchesTerm = termFilter.length === 0 || (assessment.term && termFilter.includes(assessment.term));
+
+      return matchesSearch && matchesCategory && matchesSchool && matchesTerm;
     });
-  }, [assessments, activeTab, searchTerm, categoryFilter, schoolFilter]);
+  }, [assessments, activeTab, searchTerm, categoryFilter, schoolFilter, termFilter]);
 
   const getStatusColor = (status: string) => {
     switch (status) {
@@ -272,6 +288,12 @@ export function MatAdminAssessmentsView({ assessments }: AssessmentsViewProps) {
                     <Badge variant="outline" className="bg-slate-50 font-normal text-xs py-0 h-5">
                       {assessment.category}
                     </Badge>
+                    {assessment.term && assessment.academicYear && (
+                      <Badge variant="outline" className="bg-slate-50 font-normal text-xs py-0 h-5">
+                        <Tag className="h-3 w-3 mr-1" />
+                        {assessment.term} {assessment.academicYear}
+                      </Badge>
+                    )}
                     <span>•</span>
                     <span className="flex items-center gap-1">
                       <Calendar className="h-3 w-3" />
@@ -459,7 +481,7 @@ export function MatAdminAssessmentsView({ assessments }: AssessmentsViewProps) {
     );
   };
 
-  // Render header with view toggle
+  // Render header with view toggle and filters
   const renderHeader = (
     placeholder: string, 
     view: "cards" | "table", 
@@ -537,6 +559,80 @@ export function MatAdminAssessmentsView({ assessments }: AssessmentsViewProps) {
               ))}
             </SelectContent>
           </Select>
+
+          {/* Term Filter */}
+          {uniqueTerms.length > 0 && (
+            <Popover open={termFilterOpen} onOpenChange={setTermFilterOpen}>
+              <PopoverTrigger asChild>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="h-9 w-full md:w-[180px] bg-white gap-1.5"
+                >
+                  <Filter className="h-3.5 w-3.5 text-muted-foreground opacity-70" />
+                  Term
+                  {termFilter.length > 0 && (
+                    <Badge variant="secondary" className="ml-1 rounded-sm px-1 font-normal lg:hidden">
+                      {termFilter.length}
+                    </Badge>
+                  )}
+                  {termFilter.length > 0 && (
+                    <div className="hidden space-x-1 lg:flex">
+                      {termFilter.length > 2 ? (
+                        <Badge variant="secondary" className="rounded-sm px-1 font-normal">
+                          {termFilter.length} selected
+                        </Badge>
+                      ) : (
+                        uniqueTerms
+                          .filter((term) => termFilter.includes(term))
+                          .map((term) => (
+                            <Badge variant="secondary" key={term} className="rounded-sm px-1 font-normal">
+                              {term}
+                            </Badge>
+                          ))
+                      )}
+                    </div>
+                  )}
+                  
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-[200px] p-0" align="start">
+                <Command>
+                  <CommandInput placeholder="Filter terms..." />
+                  <CommandEmpty>No terms found.</CommandEmpty>
+                  <CommandGroup>
+                    {uniqueTerms.map((term) => {
+                      const isSelected = termFilter.includes(term);
+                      return (
+                        <CommandItem
+                          key={term}
+                          onSelect={() => {
+                            if (isSelected) {
+                              setTermFilter(prev => prev.filter(t => t !== term));
+                            } else {
+                              setTermFilter(prev => [...prev, term]);
+                            }
+                          }}
+                        >
+                          <div
+                            className={cn(
+                              "mr-2 flex h-4 w-4 items-center justify-center rounded-sm border border-primary",
+                              isSelected
+                                ? "bg-primary text-primary-foreground"
+                                : "opacity-50 [&_svg]:invisible"
+                            )}
+                          >
+                            <Check className={cn("h-4 w-4")} />
+                          </div>
+                          <span>{term}</span>
+                        </CommandItem>
+                      );
+                    })}
+                  </CommandGroup>
+                </Command>
+              </PopoverContent>
+            </Popover>
+          )}
         </div>
       </div>
     </CardHeader>
@@ -557,6 +653,7 @@ export function MatAdminAssessmentsView({ assessments }: AssessmentsViewProps) {
             <TableHead>Due Date</TableHead>
           )}
           <TableHead>Status</TableHead>
+          <TableHead>Term</TableHead>
           <TableHead className="text-right">Actions</TableHead>
         </TableRow>
       </TableHeader>
@@ -665,6 +762,7 @@ export function MatAdminAssessmentsView({ assessments }: AssessmentsViewProps) {
                   {assessment.status}
                 </Badge>
               </TableCell>
+              <TableCell>{assessment.term} {assessment.academicYear}</TableCell>
               <TableCell className="text-right">
                 <Button
                   variant="outline"
