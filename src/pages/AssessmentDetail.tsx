@@ -17,6 +17,14 @@ import { Textarea } from "@/components/ui/textarea";
 import { Progress } from "@/components/ui/progress";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
 import { useUser } from "@/contexts/UserContext";
 import {
   mockAssessmentsAdmin,
@@ -24,12 +32,16 @@ import {
 } from "@/lib/mock-data";
 import {
   AlertCircle,
+  AlertTriangle,
   ArrowLeft,
   ArrowRight,
   Calendar,
   Check,
   CheckCircle,
+  CheckCircle2,
   ChevronRight,
+  ClipboardCheck,
+  Clock,
   HelpCircle,
   Info,
   Loader2,
@@ -61,12 +73,18 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
+import { FileUpload } from "@/components/ui/file-upload";
+import type { FileAttachment } from "@/types/assessment";
 
 export function AssessmentDetailPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { role } = useUser();
   const { toast } = useToast();
+  
+  // Check for admin view mode from URL params
+  const searchParams = new URLSearchParams(window.location.search);
+  const isAdminView = searchParams.get('view') === 'admin' || role === 'mat-admin';
   
   // Get the assessment based on user role
   const isMatAdmin = role === "mat-admin";
@@ -100,6 +118,15 @@ export function AssessmentDetailPage() {
           acc[standard.id] = standard.evidence || "";
           return acc;
         }, {} as Record<string, string>)
+      : {}
+  );
+
+  const [attachments, setAttachments] = useState<Record<string, FileAttachment[]>>(
+    assessment?.standards
+      ? assessment.standards.reduce((acc, standard) => {
+          acc[standard.id] = standard.attachments || [];
+          return acc;
+        }, {} as Record<string, FileAttachment[]>)
       : {}
   );
 
@@ -214,6 +241,13 @@ export function AssessmentDetailPage() {
     setEvidence(prev => ({
       ...prev,
       [standardId]: value,
+    }));
+  };
+
+  const handleAttachmentsChange = (standardId: string, files: FileAttachment[]) => {
+    setAttachments(prev => ({
+      ...prev,
+      [standardId]: files,
     }));
   };
   
@@ -392,8 +426,8 @@ export function AssessmentDetailPage() {
         </CardContent>
       </Card>
       
-      {/* Only show assessment form for department heads or in-progress assessments */}
-      {(role === "department-head" || assessment.status !== "Completed") && assessment.standards && (
+      {/* Only show assessment form for department heads and non-admin view */}
+      {role === "department-head" && !isAdminView && assessment.standards && (
         <div className="grid grid-cols-1 md:grid-cols-12 gap-6">
           {/* Standards List - Sidebar */}
           <Card className="md:col-span-4 lg:col-span-3 h-fit">
@@ -576,6 +610,58 @@ export function AssessmentDetailPage() {
                         Please provide specific examples and relevant details to support your rating
                       </p>
                     </div>
+
+                    {/* File Upload Section */}
+                    {role === "department-head" && assessment.status !== "Completed" && (
+                      <div>
+                        <h3 className="text-base font-medium mb-3">Supporting Documents <span className="text-xs text-muted-foreground">(Optional)</span></h3>
+                        <FileUpload
+                          onFilesChange={(files) => handleAttachmentsChange(activeStandard.id, files)}
+                          existingFiles={attachments[activeStandard.id] || []}
+                          maxFiles={3}
+                          acceptedTypes={[".pdf", ".doc", ".docx", ".xls", ".xlsx", ".jpg", ".jpeg", ".png"]}
+                          maxSize={10}
+                        />
+                        <p className="mt-2 text-sm text-muted-foreground">
+                          <Info className="inline h-3.5 w-3.5 mr-1" />
+                          Upload supporting documents such as policies, reports, or evidence files
+                        </p>
+                      </div>
+                    )}
+
+                    {/* Show attachments in read-only mode for completed assessments or admin view */}
+                    {(isAdminView || assessment.status === "Completed") && 
+                     attachments[activeStandard.id] && 
+                     attachments[activeStandard.id].length > 0 && (
+                      <div>
+                        <h3 className="text-base font-medium mb-3">Supporting Documents</h3>
+                        <div className="space-y-2">
+                          {attachments[activeStandard.id].map((file) => (
+                            <div
+                              key={file.id}
+                              className="flex items-center justify-between p-3 bg-slate-50 border border-slate-200 rounded-lg"
+                            >
+                              <div className="flex items-center space-x-2">
+                                <div className="h-8 w-8 bg-indigo-100 rounded flex items-center justify-center">
+                                  <span className="text-xs font-medium text-indigo-600">
+                                    {file.name.split('.').pop()?.toUpperCase()}
+                                  </span>
+                                </div>
+                                <div>
+                                  <p className="text-sm font-medium text-slate-900">{file.name}</p>
+                                  <p className="text-xs text-slate-500">
+                                    {(file.size / 1024 / 1024).toFixed(2)} MB • {new Date(file.uploadedAt).toLocaleDateString()}
+                                  </p>
+                                </div>
+                              </div>
+                              <Button variant="ghost" size="sm" className="text-slate-500">
+                                <span className="text-xs">View</span>
+                              </Button>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
                   </div>
                 </CardContent>
                 
@@ -649,8 +735,252 @@ export function AssessmentDetailPage() {
         </div>
       )}
       
+      {/* MAT Admin Streamlined View */}
+      {isAdminView && assessment.standards && (
+        <div className="space-y-6">
+          {/* Performance Summary Cards */}
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+            <Card className="border-0 shadow-sm bg-gradient-to-br from-indigo-50 to-indigo-100">
+              <CardContent className="p-6">
+                <div className="flex items-center justify-between">
+                  <div className="space-y-2">
+                    <p className="text-sm font-medium text-indigo-600">Overall Score</p>
+                    <p className="text-3xl font-bold text-indigo-900">
+                      {(() => {
+                        const validStandards = assessment.standards?.filter(s => s.rating !== null) || [];
+                        if (validStandards.length === 0) return "—";
+                        const average = validStandards.reduce((sum, s) => sum + (s.rating || 0), 0) / validStandards.length;
+                        return average.toFixed(1);
+                      })()}
+                    </p>
+                    <p className="text-xs text-indigo-600">out of 4.0</p>
+                  </div>
+                  <div className="h-12 w-12 rounded-xl bg-indigo-500 flex items-center justify-center">
+                    <CheckCircle className="h-6 w-6 text-white" />
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+            
+            <Card className="border-0 shadow-sm bg-gradient-to-br from-emerald-50 to-emerald-100">
+              <CardContent className="p-6">
+                <div className="flex items-center justify-between">
+                  <div className="space-y-2">
+                    <p className="text-sm font-medium text-emerald-600">Completion Rate</p>
+                    <p className="text-3xl font-bold text-emerald-900">
+                      {Math.round((completedCount / totalCount) * 100)}%
+                    </p>
+                    <p className="text-xs text-emerald-600">{completedCount} of {totalCount} standards</p>
+                  </div>
+                  <div className="h-12 w-12 rounded-xl bg-emerald-500 flex items-center justify-center">
+                    <CheckCircle2 className="h-6 w-6 text-white" />
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+            
+            <Card className="border-0 shadow-sm bg-gradient-to-br from-rose-50 to-rose-100">
+              <CardContent className="p-6">
+                <div className="flex items-center justify-between">
+                  <div className="space-y-2">
+                    <p className="text-sm font-medium text-rose-600">Critical Issues</p>
+                    <p className="text-3xl font-bold text-rose-900">
+                      {assessment.standards?.filter(s => s.rating === 1 || s.rating === 2).length || 0}
+                    </p>
+                    <p className="text-xs text-rose-600">requiring attention</p>
+                  </div>
+                  <div className="h-12 w-12 rounded-xl bg-rose-500 flex items-center justify-center">
+                    <AlertTriangle className="h-6 w-6 text-white" />
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+            
+            <Card className="border-0 shadow-sm bg-gradient-to-br from-slate-50 to-slate-100">
+              <CardContent className="p-6">
+                <div className="flex items-center justify-between">
+                  <div className="space-y-2">
+                    <p className="text-sm font-medium text-slate-600">Last Updated</p>
+                    <p className="text-lg font-bold text-slate-900">
+                      {assessment.lastUpdated !== "-" ? new Date(assessment.lastUpdated).toLocaleDateString() : "Never"}
+                    </p>
+                    <p className="text-xs text-slate-600">assessment date</p>
+                  </div>
+                  <div className="h-12 w-12 rounded-xl bg-slate-500 flex items-center justify-center">
+                    <Clock className="h-6 w-6 text-white" />
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+
+          {/* Standards Overview Table */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center space-x-2">
+                <ClipboardCheck className="h-5 w-5" />
+                <span>Standards Assessment Overview</span>
+              </CardTitle>
+              <CardDescription>
+                Detailed breakdown of all standards with ratings and evidence
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="p-0">
+              <Table>
+                <TableHeader>
+                  <TableRow className="bg-slate-50">
+                    <TableHead>Standard</TableHead>
+                    <TableHead className="text-center">Rating</TableHead>
+                    <TableHead className="text-center">Status</TableHead>
+                    <TableHead>Evidence Summary</TableHead>
+                    <TableHead className="text-center">Files</TableHead>
+                    <TableHead className="text-center">Last Updated</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {assessment.standards.map((standard) => {
+                    const hasEvidence = standard.evidence && standard.evidence.length > 0;
+                    const hasFiles = attachments[standard.id] && attachments[standard.id].length > 0;
+                    const isComplete = standard.rating !== null;
+                    const isCritical = standard.rating === 1 || standard.rating === 2;
+                    
+                    return (
+                      <TableRow key={standard.id} className={cn(
+                        "hover:bg-slate-50",
+                        isCritical && "bg-rose-50 border-l-4 border-l-rose-500"
+                      )}>
+                        <TableCell>
+                          <div className="space-y-1">
+                            <div className="flex items-center space-x-2">
+                              <Badge variant="outline" className="text-xs">
+                                {standard.code}
+                              </Badge>
+                              {isCritical && (
+                                <AlertTriangle className="h-4 w-4 text-rose-600" />
+                              )}
+                            </div>
+                            <p className="font-medium text-sm">{standard.title}</p>
+                            <p className="text-xs text-slate-500 line-clamp-2">
+                              {standard.description}
+                            </p>
+                          </div>
+                        </TableCell>
+                        
+                        <TableCell className="text-center">
+                          {standard.rating ? (
+                            <Badge 
+                              variant="outline" 
+                              className={cn(
+                                "font-medium",
+                                standard.rating >= 3 
+                                  ? "bg-emerald-50 text-emerald-700 border-emerald-200"
+                                  : "bg-rose-50 text-rose-700 border-rose-200"
+                              )}
+                            >
+                              {standard.rating}: {RatingLabels[standard.rating]}
+                            </Badge>
+                          ) : (
+                            <span className="text-slate-400 text-sm">Not rated</span>
+                          )}
+                        </TableCell>
+                        
+                        <TableCell className="text-center">
+                          <div className="flex items-center justify-center">
+                            {isComplete ? (
+                              <CheckCircle className="h-4 w-4 text-emerald-600" />
+                            ) : hasEvidence ? (
+                              <Clock className="h-4 w-4 text-amber-600" />
+                            ) : (
+                              <XCircle className="h-4 w-4 text-slate-300" />
+                            )}
+                          </div>
+                        </TableCell>
+                        
+                        <TableCell>
+                          <div className="max-w-xs">
+                            {hasEvidence ? (
+                              <p className="text-sm text-slate-600 line-clamp-2">
+                                {standard.evidence}
+                              </p>
+                            ) : (
+                              <span className="text-slate-400 text-sm">No evidence provided</span>
+                            )}
+                          </div>
+                        </TableCell>
+                        
+                        <TableCell className="text-center">
+                          {hasFiles ? (
+                            <Badge variant="outline" className="bg-indigo-50 text-indigo-700 border-indigo-200">
+                              {attachments[standard.id].length} file{attachments[standard.id].length !== 1 ? 's' : ''}
+                            </Badge>
+                          ) : (
+                            <span className="text-slate-400 text-sm">—</span>
+                          )}
+                        </TableCell>
+                        
+                        <TableCell className="text-center text-sm text-slate-500">
+                          {standard.lastUpdated ? new Date(standard.lastUpdated).toLocaleDateString() : "—"}
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
+                </TableBody>
+              </Table>
+            </CardContent>
+          </Card>
+
+          {/* Critical Standards Summary */}
+          {assessment.standards.some(s => s.rating === 1 || s.rating === 2) && (
+            <Card className="border-rose-200 bg-rose-50">
+              <CardHeader>
+                <CardTitle className="flex items-center space-x-2 text-rose-800">
+                  <AlertTriangle className="h-5 w-5" />
+                  <span>Critical Standards Requiring Attention</span>
+                </CardTitle>
+                <CardDescription className="text-rose-700">
+                  Standards rated as Inadequate (1) or Requires Improvement (2) need immediate focus
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-3">
+                  {assessment.standards
+                    .filter(s => s.rating === 1 || s.rating === 2)
+                    .map((standard) => (
+                      <div key={standard.id} className="bg-white p-4 rounded-lg border border-rose-200">
+                        <div className="flex items-start space-x-3">
+                          <AlertTriangle className="h-5 w-5 text-rose-600 mt-0.5" />
+                          <div className="flex-1">
+                            <div className="flex items-center space-x-2 mb-2">
+                              <Badge variant="outline" className="text-xs">
+                                {standard.code}
+                              </Badge>
+                              <Badge 
+                                variant="outline" 
+                                className="bg-rose-50 text-rose-700 border-rose-200"
+                              >
+                                {standard.rating}: {RatingLabels[standard.rating!]}
+                              </Badge>
+                            </div>
+                            <h4 className="font-medium text-rose-900 mb-1">{standard.title}</h4>
+                            <p className="text-sm text-rose-700 mb-2">{standard.description}</p>
+                            {standard.evidence && (
+                              <div className="bg-rose-50 p-2 rounded text-sm text-rose-800">
+                                <strong>Evidence:</strong> {standard.evidence}
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                </div>
+              </CardContent>
+            </Card>
+          )}
+        </div>
+      )}
+      
       {/* Show read-only view for completed assessments for MAT admins */}
-      {role === "mat-admin" && assessment.status === "Completed" && assessment.standards && (
+      {isAdminView && assessment.status === "Completed" && assessment.standards && (
         <Card>
           <CardHeader>
             <CardTitle className="text-xl">Assessment Results</CardTitle>

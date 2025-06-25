@@ -43,6 +43,16 @@ export type AssessmentStatus =
   | "Completed"
   | "Overdue";
 
+// File attachment interface
+export interface FileAttachment {
+  id: string;
+  name: string;
+  size: number;
+  type: string;
+  uploadedAt: string;
+  url?: string; // For actual file URL in production
+}
+
 // Standard item within an assessment
 export interface Standard {
   id: string;
@@ -52,6 +62,7 @@ export interface Standard {
   rating: Rating;
   evidence?: string;
   lastUpdated?: string;
+  attachments?: FileAttachment[];
 }
 
 // Group of standards for a category
@@ -59,6 +70,20 @@ export interface StandardGroup {
   id: string;
   category: AssessmentCategory;
   standards: Standard[];
+}
+
+// School performance summary for the new school-centric view
+export interface SchoolPerformance {
+  school: School;
+  overallScore: number;
+  assessmentsByCategory: Array<{
+    category: AssessmentCategory;
+    assessment: Assessment;
+    averageScore: number;
+    criticalStandardsCount: number;
+  }>;
+  criticalStandardsTotal: number;
+  lastUpdated: string;
 }
 
 // Assessment model

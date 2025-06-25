@@ -1,0 +1,150 @@
+import type { Assessment, AssessmentCategory, Standard, User } from "@/types/assessment";
+import { cn } from "@/lib/utils";
+import { 
+  AlertTriangle, 
+  BookOpen, 
+  CheckCircle2, 
+  ClipboardCheck, 
+  Clock, 
+  FileText, 
+  ListChecks, 
+  Users 
+} from "lucide-react";
+
+// #region Status and Color Helpers
+
+export const getStatusColor = (status: string) => {
+  switch (status) {
+    case "Completed":
+      return "bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100";
+    case "In Progress":
+      return "bg-indigo-50 text-indigo-700 border-indigo-200 hover:bg-indigo-100";
+    case "Not Started":
+      return "bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100";
+    case "Overdue":
+      return "bg-rose-50 text-rose-700 border-rose-200 hover:bg-rose-100";
+    default:
+      return "bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100";
+  }
+};
+
+export const getStatusIcon = (status: string) => {
+  switch (status) {
+    case "Completed":
+      return <CheckCircle2 className="h-4 w-4" />;
+    case "In Progress":
+      return <Clock className="h-4 w-4" />;
+    case "Not Started":
+      return <ListChecks className="h-4 w-4" />;
+    case "Overdue":
+      return <AlertTriangle className="h-4 w-4" />;
+    default:
+      return null;
+  }
+};
+
+export const getRatingColor = (rating: number) => {
+  if (rating < 2) return "bg-rose-500";
+  if (rating < 3) return "bg-amber-500";
+  if (rating < 4) return "bg-emerald-500";
+  return "bg-indigo-600";
+};
+
+export const getRatingTextColor = (rating: number) => {
+  if (rating < 2) return "text-rose-700";
+  if (rating < 3) return "text-amber-700";
+  if (rating < 4) return "text-emerald-700";
+  return "text-indigo-700";
+};
+
+export const getRatingGradient = (rating: number) => {
+  if (rating < 2) return "bg-gradient-to-r from-rose-50 to-white";
+  if (rating < 3) return "bg-gradient-to-r from-amber-50 to-white";
+  if (rating < 4) return "bg-gradient-to-r from-emerald-50 to-white";
+  return "bg-gradient-to-r from-indigo-50 to-white";
+};
+
+// #endregion
+
+// #region Data Calculation and Formatting Helpers
+
+export const calculateCategoryAverages = (assessment: Assessment) => {
+  if (!assessment.standards || assessment.standards.length === 0) {
+    return {};
+  }
+
+  const standardsByCode: Record<string, Standard[]> = {};
+  
+  assessment.standards.forEach(standard => {
+    const prefix = standard.code.substring(0, 2);
+    if (!standardsByCode[prefix]) {
+      standardsByCode[prefix] = [];
+    }
+    standardsByCode[prefix].push(standard);
+  });
+
+  const averages: Record<string, { average: number, count: number, title: string }> = {};
+  
+  Object.entries(standardsByCode).forEach(([prefix, standards]) => {
+    const validStandards = standards.filter(s => s.rating !== null);
+    if (validStandards.length > 0) {
+      const sum = validStandards.reduce((acc, s) => acc + (s.rating || 0), 0);
+      averages[prefix] = {
+        average: sum / validStandards.length,
+        count: validStandards.length,
+        title: standards[0].title.split(' ')[0] + ' ' + standards[0].title.split(' ')[1]
+      };
+    }
+  });
+
+  return averages;
+};
+
+export const calculateOverallAverage = (assessment: Assessment) => {
+  if (!assessment.standards || assessment.standards.length === 0) {
+    return 0;
+  }
+
+  const validStandards = assessment.standards.filter(s => s.rating !== null);
+  if (validStandards.length === 0) return 0;
+  
+  const sum = validStandards.reduce((acc, s) => acc + (s.rating || 0), 0);
+  return sum / validStandards.length;
+};
+
+export const getAssignedUsers = (assessment: Assessment) => {
+  if (!assessment.assignedTo || assessment.assignedTo.length === 0) return "Unassigned";
+  
+  if (assessment.assignedTo.length === 1) {
+    return assessment.assignedTo[0].name;
+  }
+  
+  return `${assessment.assignedTo[0].name} + ${assessment.assignedTo.length - 1} more`;
+};
+
+export const hasCriticalStandards = (assessment: Assessment) => {
+  if (!assessment.standards) return false;
+  return assessment.standards.some(standard => standard.rating === 1);
+};
+
+export const countCriticalStandards = (assessment: Assessment) => {
+  if (!assessment.standards) return 0;
+  return assessment.standards.filter(standard => standard.rating === 1).length;
+};
+
+export const getCategoryIcon = (category: string) => {
+  switch (category) {
+    case "Education":
+      return <BookOpen className="h-4 w-4" />;
+    case "Human Resources":
+      return <Users className="h-4 w-4" />;
+    case "Finance & Procurement":
+      return <FileText className="h-4 w-4" />;
+    case "Governance":
+      return <ClipboardCheck className="h-4 w-4" />;
+    default:
+      return null;
+  }
+};
+
+// #endregion

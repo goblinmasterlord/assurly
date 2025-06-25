@@ -28,7 +28,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
 import { cn } from "@/lib/utils";
-import { mockSchools } from "@/lib/mock-data";
+import { mockSchools, assessmentCategories } from "@/lib/mock-data";
 import type { AssessmentCategory } from "@/types/assessment";
 
 type AssessmentInvitationSheetProps = {
@@ -246,24 +246,16 @@ export function AssessmentInvitationSheet({ open, onOpenChange }: AssessmentInvi
                 <SelectValue placeholder="Select category" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="Education">Education</SelectItem>
-                <SelectItem value="Human Resources">Human Resources</SelectItem>
-                <SelectItem value="Finance & Procurement">Finance & Procurement</SelectItem>
-                <SelectItem value="Estates">Estates</SelectItem>
-                <SelectItem value="Governance">Governance</SelectItem>
-                <SelectItem value="IT & Information Services">IT & Information Services</SelectItem>
-                <SelectItem value="IT Strategy & Support">IT Strategy & Support</SelectItem>
+                {assessmentCategories.map((cat) => (
+                  <SelectItem key={cat.value} value={cat.value}>
+                    {cat.value}
+                  </SelectItem>
+                ))}
               </SelectContent>
             </Select>
             {category && (
               <p className="text-xs text-muted-foreground mt-1">
-                {category === "Education" && "Quality of education, behavior, leadership & management, etc."}
-                {category === "Human Resources" && "Recruitment, absence management, staff retention, etc."}
-                {category === "Finance & Procurement" && "Financial governance, planning, monitoring, etc."}
-                {category === "Estates" && "Health & safety, estate management, asset planning, etc."}
-                {category === "Governance" && "Strategic leadership, accountability, governance structures, etc."}
-                {category === "IT & Information Services" && "Data security, breach management, GDPR compliance, etc."}
-                {category === "IT Strategy & Support" && "IT strategy, service management, asset management, etc."}
+                {assessmentCategories.find(cat => cat.value === category)?.description}
               </p>
             )}
           </div>

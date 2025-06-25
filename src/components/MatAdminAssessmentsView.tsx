@@ -7,7 +7,6 @@ import { Badge } from "@/components/ui/badge";
 import {
   Card,
   CardContent,
-  CardDescription,
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
@@ -27,43 +26,31 @@ import {
   AccordionTrigger,
 } from "@/components/ui/accordion";
 import { Progress } from "@/components/ui/progress";
-import type { Assessment, AssessmentCategory, Standard } from "@/types/assessment";
-import { RatingLabels } from "@/types/assessment";
+import type { Assessment, AssessmentCategory } from "@/types/assessment";
 import { cn } from "@/lib/utils";
 import { 
-  AlertTriangle, 
   Calendar, 
-  CheckCircle2, 
   ChevronRight, 
-  Clock,
   Filter,
-  Layers,
-  ListChecks,
-  PlusCircle, 
   School as SchoolIcon, 
   Search,
-  XCircle,
   Clock3,
   CheckSquare,
-  Users,
-  FileText,
-  BookOpen,
-  ClipboardCheck,
   SendHorizonal,
   TableIcon,
   LayoutGrid,
   ClipboardList,
   CalendarCheck,
   UserCheck,
-  AlertCircle,
   Tag,
   Check
 } from "lucide-react";
-import { mockSchools, mockUsers } from "@/lib/mock-data";
+import { mockSchools } from "@/lib/mock-data";
 import { AssessmentInvitationSheet } from "@/components/AssessmentInvitationSheet";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem } from "@/components/ui/command";
 import { Checkbox } from "@/components/ui/checkbox";
+import * as AssessmentUtils from "@/lib/assessment-utils";
 
 type AssessmentsViewProps = {
   assessments: Assessment[];
@@ -121,152 +108,10 @@ export function MatAdminAssessmentsView({ assessments }: AssessmentsViewProps) {
     });
   }, [assessments, activeTab, searchTerm, categoryFilter, schoolFilter, termFilter]);
 
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case "Completed":
-        return "bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100";
-      case "In Progress":
-        return "bg-indigo-50 text-indigo-700 border-indigo-200 hover:bg-indigo-100";
-      case "Not Started":
-        return "bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100";
-      case "Overdue":
-        return "bg-rose-50 text-rose-700 border-rose-200 hover:bg-rose-100";
-      default:
-        return "bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100";
-    }
-  };
-  
-  const getStatusIcon = (status: string) => {
-    switch (status) {
-      case "Completed":
-        return <CheckCircle2 className="h-4 w-4" />;
-      case "In Progress":
-        return <Clock className="h-4 w-4" />;
-      case "Not Started":
-        return <ListChecks className="h-4 w-4" />;
-      case "Overdue":
-        return <AlertTriangle className="h-4 w-4" />;
-      default:
-        return null;
-    }
-  };
-
-  // Calculate average rating for each standard category in a specific assessment
-  const calculateCategoryAverages = (assessment: Assessment) => {
-    if (!assessment.standards || assessment.standards.length === 0) {
-      return {};
-    }
-
-    const standardsByCode: Record<string, Standard[]> = {};
-    
-    // Group standards by their code prefix (e.g., ES1, ES2 into ES)
-    assessment.standards.forEach(standard => {
-      const prefix = standard.code.substring(0, 2);
-      if (!standardsByCode[prefix]) {
-        standardsByCode[prefix] = [];
-      }
-      standardsByCode[prefix].push(standard);
-    });
-
-    // Calculate average for each group
-    const averages: Record<string, { average: number, count: number, title: string }> = {};
-    
-    Object.entries(standardsByCode).forEach(([prefix, standards]) => {
-      const validStandards = standards.filter(s => s.rating !== null);
-      if (validStandards.length > 0) {
-        const sum = validStandards.reduce((acc, s) => acc + (s.rating || 0), 0);
-        averages[prefix] = {
-          average: sum / validStandards.length,
-          count: validStandards.length,
-          // Use the title from the first standard as the category title
-          title: standards[0].title.split(' ')[0] + ' ' + standards[0].title.split(' ')[1]
-        };
-      }
-    });
-
-    return averages;
-  };
-
-  // Calculate overall average rating for an assessment
-  const calculateOverallAverage = (assessment: Assessment) => {
-    if (!assessment.standards || assessment.standards.length === 0) {
-      return 0;
-    }
-
-    const validStandards = assessment.standards.filter(s => s.rating !== null);
-    if (validStandards.length === 0) return 0;
-    
-    const sum = validStandards.reduce((acc, s) => acc + (s.rating || 0), 0);
-    return sum / validStandards.length;
-  };
-
-  // Helper function to get the color for a rating
-  const getRatingColor = (rating: number) => {
-    if (rating < 2) return "bg-rose-500";
-    if (rating < 3) return "bg-amber-500";
-    if (rating < 4) return "bg-emerald-500";
-    return "bg-indigo-600";
-  };
-
-  // Helper function to get the text color for a rating
-  const getRatingTextColor = (rating: number) => {
-    if (rating < 2) return "text-rose-700";
-    if (rating < 3) return "text-amber-700";
-    if (rating < 4) return "text-emerald-700";
-    return "text-indigo-700";
-  };
-  
-  // Helper to get the category icon
-  const getCategoryIcon = (category: string) => {
-    switch (category) {
-      case "Education":
-        return <BookOpen className="h-4 w-4" />;
-      case "Human Resources":
-        return <Users className="h-4 w-4" />;
-      case "Finance & Procurement":
-        return <FileText className="h-4 w-4" />;
-      case "Governance":
-        return <ClipboardCheck className="h-4 w-4" />;
-      default:
-        return null;
-    }
-  };
-
-  // Helper to get assigned users for display
-  const getAssignedUsers = (assessment: Assessment) => {
-    if (!assessment.assignedTo || assessment.assignedTo.length === 0) return "Unassigned";
-    
-    if (assessment.assignedTo.length === 1) {
-      return assessment.assignedTo[0].name;
-    }
-    
-    return `${assessment.assignedTo[0].name} + ${assessment.assignedTo.length - 1} more`;
-  };
-
-  // Helper to check if an assessment has any critical standards (rating = 1)
-  const hasCriticalStandards = (assessment: Assessment) => {
-    if (!assessment.standards) return false;
-    return assessment.standards.some(standard => standard.rating === 1);
-  };
-
-  // Helper to count critical standards in an assessment
-  const countCriticalStandards = (assessment: Assessment) => {
-    if (!assessment.standards) return 0;
-    return assessment.standards.filter(standard => standard.rating === 1).length;
-  };
-
-  // Helper function to get the background gradient for a rating card
-  const getRatingGradient = (rating: number) => {
-    if (rating < 2) return "bg-gradient-to-r from-rose-50 to-white";
-    if (rating < 3) return "bg-gradient-to-r from-amber-50 to-white";
-    if (rating < 4) return "bg-gradient-to-r from-emerald-50 to-white";
-    return "bg-gradient-to-r from-indigo-50 to-white";
-  };
-
   // Card view for assessments
   const renderCardView = (assessment: Assessment, isCompleted: boolean) => {
-    const categoryAverages = calculateCategoryAverages(assessment);
-    const overallAverage = calculateOverallAverage(assessment);
+    const categoryAverages = AssessmentUtils.calculateCategoryAverages(assessment);
+    const overallAverage = AssessmentUtils.calculateOverallAverage(assessment);
     
     return (
       <Accordion 
@@ -306,7 +151,7 @@ export function MatAdminAssessmentsView({ assessments }: AssessmentsViewProps) {
               <div className="flex items-center gap-5">
                 {isCompleted ? (
                   <div className="flex items-center gap-2.5">
-                    <div className={`flex items-center justify-center h-9 w-9 rounded-md ${getRatingColor(overallAverage)} border border-white/20`}>
+                    <div className={`flex items-center justify-center h-9 w-9 rounded-md ${AssessmentUtils.getRatingColor(overallAverage)} border border-white/20`}>
                       <span className="text-white font-medium text-sm">{overallAverage.toFixed(1)}</span>
                     </div>
                     <div className="flex flex-col">
@@ -318,8 +163,8 @@ export function MatAdminAssessmentsView({ assessments }: AssessmentsViewProps) {
                   </div>
                 ) : (
                   <div className="flex items-center gap-2.5">
-                    <Badge className={cn("gap-1 font-medium", getStatusColor(assessment.status))}>
-                      {getStatusIcon(assessment.status)}
+                    <Badge className={cn("gap-1 font-medium", AssessmentUtils.getStatusColor(assessment.status))}>
+                      {AssessmentUtils.getStatusIcon(assessment.status)}
                       {assessment.status}
                     </Badge>
                   </div>
@@ -345,7 +190,7 @@ export function MatAdminAssessmentsView({ assessments }: AssessmentsViewProps) {
                   <div className="flex items-center gap-2">
                     <UserCheck className="h-4 w-4 text-muted-foreground" />
                     <span className="text-muted-foreground">Assigned to:</span>
-                    <span className="font-medium text-slate-900">{getAssignedUsers(assessment)}</span>
+                    <span className="font-medium text-slate-900">{AssessmentUtils.getAssignedUsers(assessment)}</span>
                   </div>
                 </div>
                 
@@ -356,13 +201,13 @@ export function MatAdminAssessmentsView({ assessments }: AssessmentsViewProps) {
                   </div>
                   <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
                     {Object.entries(categoryAverages).map(([key, { average, title }]) => (
-                      <div key={key} className={`flex items-center gap-3 p-3.5 border rounded-lg ${getRatingGradient(average)} hover:border-primary transition-colors`}>
-                        <div className={`flex items-center justify-center h-9 w-9 rounded-md ${getRatingColor(average)}`}>
+                      <div key={key} className={`flex items-center gap-3 p-3.5 border rounded-lg ${AssessmentUtils.getRatingGradient(average)} hover:border-primary transition-colors`}>
+                        <div className={`flex items-center justify-center h-9 w-9 rounded-md ${AssessmentUtils.getRatingColor(average)}`}>
                           <span className="text-white font-medium">{average.toFixed(1)}</span>
                         </div>
                         <div className="flex flex-col">
                           <span className="font-medium text-sm text-slate-900">{title}</span>
-                          <span className={`text-xs ${getRatingTextColor(average)}`}>
+                          <span className={`text-xs ${AssessmentUtils.getRatingTextColor(average)}`}>
                             {average >= 3.5 ? "Outstanding" : 
                              average >= 2.5 ? "Good" : 
                              average >= 1.5 ? "Requires Improvement" : "Inadequate"}
@@ -374,7 +219,7 @@ export function MatAdminAssessmentsView({ assessments }: AssessmentsViewProps) {
                 </div>
                 
                 {/* Show Problematic Standards */}
-                {hasCriticalStandards(assessment) && (
+                {AssessmentUtils.hasCriticalStandards(assessment) && (
                   <div>
                     <h3 className="text-sm font-medium text-slate-900 mb-3">Critical Standards</h3>
                     <div className="border rounded-lg overflow-hidden">
@@ -426,14 +271,14 @@ export function MatAdminAssessmentsView({ assessments }: AssessmentsViewProps) {
                   </div>
                   <div className="flex items-center gap-2">
                     <span className="text-muted-foreground">Status:</span>
-                    <Badge className={cn("gap-1 font-medium", getStatusColor(assessment.status))}>
-                      {getStatusIcon(assessment.status)}
+                    <Badge className={cn("gap-1 font-medium", AssessmentUtils.getStatusColor(assessment.status))}>
+                      {AssessmentUtils.getStatusIcon(assessment.status)}
                       {assessment.status}
                     </Badge>
                   </div>
                   <div className="flex items-center gap-2">
                     <span className="text-muted-foreground">Assigned to:</span>
-                    <span className="font-medium text-slate-900">{getAssignedUsers(assessment)}</span>
+                    <span className="font-medium text-slate-900">{AssessmentUtils.getAssignedUsers(assessment)}</span>
                   </div>
                 </div>
                 
@@ -661,24 +506,10 @@ export function MatAdminAssessmentsView({ assessments }: AssessmentsViewProps) {
         {filteredAssessments.length === 0 ? (
           <TableRow>
             <TableCell
-              colSpan={7}
+              colSpan={8}
               className="h-24 text-center"
             >
-              <div className="flex flex-col items-center justify-center py-8 text-muted-foreground">
-                <XCircle className="h-10 w-10 mb-2 opacity-20" />
-                <p>No assessments found matching your filters.</p>
-                <Button 
-                  variant="link" 
-                  className="mt-2"
-                  onClick={() => {
-                    setSearchTerm("");
-                    setCategoryFilter("all");
-                    setSchoolFilter("all");
-                  }}
-                >
-                  Clear all filters
-                </Button>
-              </div>
+              No assessments found.
             </TableCell>
           </TableRow>
         ) : (
@@ -710,8 +541,8 @@ export function MatAdminAssessmentsView({ assessments }: AssessmentsViewProps) {
               <TableCell>
                 {isCompleted ? (
                   <div className="flex items-center gap-2">
-                    <div className={`flex items-center justify-center h-7 w-7 rounded-full ${getRatingColor(calculateOverallAverage(assessment))}`}>
-                      <span className="text-white font-medium text-xs">{calculateOverallAverage(assessment).toFixed(1)}</span>
+                    <div className={`flex items-center justify-center h-7 w-7 rounded-full ${AssessmentUtils.getRatingColor(AssessmentUtils.calculateOverallAverage(assessment))}`}>
+                      <span className="text-white font-medium text-xs">{AssessmentUtils.calculateOverallAverage(assessment).toFixed(1)}</span>
                     </div>
                     <span className="text-sm whitespace-nowrap">
                       {assessment.completedStandards}/{assessment.totalStandards}
@@ -757,8 +588,8 @@ export function MatAdminAssessmentsView({ assessments }: AssessmentsViewProps) {
                 )}
               </TableCell>
               <TableCell>
-                <Badge className={cn("gap-1 font-medium", getStatusColor(assessment.status))}>
-                  {getStatusIcon(assessment.status)}
+                <Badge className={cn("gap-1 font-medium", AssessmentUtils.getStatusColor(assessment.status))}>
+                  {AssessmentUtils.getStatusIcon(assessment.status)}
                   {assessment.status}
                 </Badge>
               </TableCell>
@@ -786,7 +617,6 @@ export function MatAdminAssessmentsView({ assessments }: AssessmentsViewProps) {
   // Empty state component
   const renderEmptyState = () => (
     <div className="flex flex-col items-center justify-center py-10 text-muted-foreground">
-      <XCircle className="h-12 w-12 mb-3 opacity-20" />
       <p>No assessments found matching your filters.</p>
       <Button 
         variant="link" 

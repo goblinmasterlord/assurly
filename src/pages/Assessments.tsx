@@ -43,6 +43,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import type { Assessment, AssessmentCategory } from "@/types/assessment";
 import { cn } from "@/lib/utils";
 import { MatAdminAssessmentsView } from "@/components/MatAdminAssessmentsView";
+import { SchoolPerformanceView } from "@/components/SchoolPerformanceView";
 
 export function AssessmentsPage() {
   const { role } = useUser();
@@ -135,16 +136,7 @@ export function AssessmentsPage() {
   if (isMatAdmin) {
     return (
       <div className="container py-10">
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
-          <div>
-            <h1 className="text-3xl font-bold tracking-tight">All Assessments</h1>
-            <p className="text-muted-foreground">
-              View and manage assessments across all schools.
-            </p>
-          </div>
-        </div>
-        
-        <MatAdminAssessmentsView assessments={assessments} />
+        <SchoolPerformanceView assessments={assessments} />
       </div>
     );
   }

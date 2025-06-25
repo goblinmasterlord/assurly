@@ -1,13 +1,13 @@
 import type { 
   Assessment, 
   AssessmentCategory, 
-  AssessmentStatus, 
   School, 
   Standard, 
   User
 } from "@/types/assessment";
 
-// Mock Schools
+// #region Core Mock Data
+
 export const mockSchools: School[] = [
   { id: "1", name: "Oak Hill Academy", code: "OHA" },
   { id: "2", name: "Maple Grove School", code: "MGS" },
@@ -16,7 +16,6 @@ export const mockSchools: School[] = [
   { id: "5", name: "Birch Tree College", code: "BTC" }
 ];
 
-// Mock Users
 export const mockUsers: User[] = [
   { id: "1", name: "Alex Johnson", email: "alex.johnson@oakhill.edu", role: "Head of Education" },
   { id: "2", name: "Sam Williams", email: "sam.williams@maplegroveschool.edu", role: "Finance Director" },
@@ -25,451 +24,157 @@ export const mockUsers: User[] = [
   { id: "5", name: "Casey Jones", email: "casey.jones@birchtree.edu", role: "Estates Manager" }
 ];
 
-// Mock Education Standards
+export const assessmentCategories: { value: AssessmentCategory; description: string }[] = [
+  { value: "Education", description: "Quality of education, behavior, leadership & management, etc." },
+  { value: "Human Resources", description: "Recruitment, absence management, staff retention, etc." },
+  { value: "Finance & Procurement", description: "Financial governance, planning, monitoring, etc." },
+  { value: "Estates", description: "Health & safety, estate management, asset planning, etc." },
+  { value: "Governance", description: "Strategic leadership, accountability, governance structures, etc." },
+  { value: "IT & Information Services", description: "Data security, breach management, GDPR compliance, etc." },
+  { value: "IT Strategy & Support", description: "IT strategy, service management, asset management, etc." },
+];
+
+// #endregion
+
+// #region Standards Definitions
+
 export const educationStandards: Standard[] = [
-  {
-    id: "es1",
-    code: "ES1",
-    title: "Quality of Education",
-    description: "Curriculum intent, implementation, and impact. Focus on sequencing, ambition, progression, and outcomes across all key stages.",
-    rating: null,
-  },
-  {
-    id: "es2",
-    code: "ES2",
-    title: "Behaviour & Attitudes",
-    description: "Standards of behaviour, attendance, punctuality, and attitudes to learning. Evidence of a safe and respectful learning environment.",
-    rating: null,
-  },
-  {
-    id: "es3",
-    code: "ES3",
-    title: "Personal Development",
-    description: "Opportunities for spiritual, moral, social, and cultural development. Focus on character, citizenship, enrichment, and pupil wellbeing.",
-    rating: null,
-  },
-  {
-    id: "es4",
-    code: "ES4",
-    title: "Leadership & Management",
-    description: "Visionary and ethical leadership at all levels. Effective governance, safeguarding, staff development, and accountability structures.",
-    rating: null,
-  },
-  {
-    id: "es5",
-    code: "ES5",
-    title: "Early Years Education",
-    description: "High-quality early education provision. Emphasis on communication, physical development, literacy, and preparing children for Year 1.",
-    rating: null,
-  },
-  {
-    id: "es6",
-    code: "ES6",
-    title: "Sixth Form Provision",
-    description: "Quality, ambition, and impact of post-16 education. Focus on destinations, progression pathways, curriculum breadth, and outcomes.",
-    rating: null,
-  },
+  { id: "es1", code: "ES1", title: "Quality of Education", description: "Curriculum intent, implementation, and impact. Focus on sequencing, ambition, progression, and outcomes across all key stages.", rating: null },
+  { id: "es2", code: "ES2", title: "Behaviour & Attitudes", description: "Standards of behaviour, attendance, punctuality, and attitudes to learning. Evidence of a safe and respectful learning environment.", rating: null },
+  { id: "es3", code: "ES3", title: "Personal Development", description: "Opportunities for spiritual, moral, social, and cultural development. Focus on character, citizenship, enrichment, and pupil wellbeing.", rating: null },
+  { id: "es4", code: "ES4", title: "Leadership & Management", description: "Visionary and ethical leadership at all levels. Effective governance, safeguarding, staff development, and accountability structures.", rating: null },
+  { id: "es5", code: "ES5", title: "Early Years Education", description: "High-quality early education provision. Emphasis on communication, physical development, literacy, and preparing children for Year 1.", rating: null },
+  { id: "es6", code: "ES6", title: "Sixth Form Provision", description: "Quality, ambition, and impact of post-16 education. Focus on destinations, progression pathways, curriculum breadth, and outcomes.", rating: null },
 ];
 
-// Mock Human Resources Standards
 export const hrStandards: Standard[] = [
-  {
-    id: "hr1",
-    code: "HR1",
-    title: "Safer Recruitment Practice",
-    description: "Compliance with safer recruitment policies, including pre-employment checks, DBS clearances, and reference validation. Evidence of policy implementation and audit trails.",
-    rating: null,
-  },
-  {
-    id: "hr2",
-    code: "HR2",
-    title: "Sickness Absence Management",
-    description: "Monitoring of short- and long-term absence trends, with evidence of interventions, return-to-work processes, and supportive occupational health access.",
-    rating: null,
-  },
-  {
-    id: "hr3",
-    code: "HR3",
-    title: "People Conduct & Case Management",
-    description: "Oversight of disciplinary, grievance, and capability procedures. Assurance of timely, fair, and legally compliant case handling.",
-    rating: null,
-  },
-  {
-    id: "hr4",
-    code: "HR4",
-    title: "Staff Retention & Engagement",
-    description: "Annual turnover rates, pulse surveys, exit interview themes, and evidence of actions taken to improve employee satisfaction and retention.",
-    rating: null,
-  },
-  {
-    id: "hr5",
-    code: "HR5",
-    title: "Vacancy Rates & Recruitment Efficiency",
-    description: "Vacancy levels by role and site, time-to-fill metrics, and the impact on service delivery. Evaluation of recruitment campaign success and strategic workforce planning.",
-    rating: null,
-  },
+  { id: "hr1", code: "HR1", title: "Safer Recruitment Practice", description: "Compliance with safer recruitment policies, including pre-employment checks, DBS clearances, and reference validation. Evidence of policy implementation and audit trails.", rating: null },
+  { id: "hr2", code: "HR2", title: "Sickness Absence Management", description: "Monitoring of short- and long-term absence trends, with evidence of interventions, return-to-work processes, and supportive occupational health access.", rating: null },
+  { id: "hr3", code: "HR3", title: "People Conduct & Case Management", description: "Oversight of disciplinary, grievance, and capability procedures. Assurance of timely, fair, and legally compliant case handling.", rating: null },
+  { id: "hr4", code: "HR4", title: "Staff Retention & Engagement", description: "Annual turnover rates, pulse surveys, exit interview themes, and evidence of actions taken to improve employee satisfaction and retention.", rating: null },
+  { id: "hr5", code: "HR5", title: "Vacancy Rates & Recruitment Efficiency", description: "Vacancy levels by role and site, time-to-fill metrics, and the impact on service delivery. Evaluation of recruitment campaign success and strategic workforce planning.", rating: null },
 ];
 
-// Mock Finance Standards
 export const financeStandards: Standard[] = [
-  {
-    id: "fm1",
-    code: "FM1",
-    title: "Financial Governance & Management",
-    description: "Robust financial leadership, compliance with statutory duties, oversight by the board and audit committee, and alignment with the Academies Financial Handbook.",
-    rating: null,
-  },
-  {
-    id: "fm2",
-    code: "FM2",
-    title: "Strategic Financial Planning",
-    description: "Multi-year budgeting aligned to organisational priorities. Evidence of sensitivity analysis, scenario planning, and sustainability modelling.",
-    rating: null,
-  },
-  {
-    id: "fm3",
-    code: "FM3",
-    title: "In-Year Financial Monitoring",
-    description: "Monthly reporting to leaders and trustees, including forecast outturns, variance analysis, and corrective actions. Timeliness and accuracy of information.",
-    rating: null,
-  },
+  { id: "fm1", code: "FM1", title: "Financial Governance & Management", description: "Robust financial leadership, compliance with statutory duties, oversight by the board and audit committee, and alignment with the Academies Financial Handbook.", rating: null },
+  { id: "fm2", code: "FM2", title: "Strategic Financial Planning", description: "Multi-year budgeting aligned to organisational priorities. Evidence of sensitivity analysis, scenario planning, and sustainability modelling.", rating: null },
+  { id: "fm3", code: "FM3", title: "In-Year Financial Monitoring", description: "Monthly reporting to leaders and trustees, including forecast outturns, variance analysis, and corrective actions. Timeliness and accuracy of information.", rating: null },
+  { id: "fm4", code: "FM4", title: "Financial Processing & Internal Controls", description: "Compliance with procurement policy, authorisation limits, segregation of duties, bank reconciliations, and fraud prevention measures.", rating: null },
+  { id: "fm5", code: "FM5", title: "Value for Money (VfM) Assurance", description: "Evidence of cost-effectiveness, benchmarking, procurement efficiencies, and review of contracts to ensure outcomes justify expenditure.", rating: null },
+  { id: "fm6", code: "FM6", title: "Asset & Estate Strategy", description: "Asset management plans aligned to strategic priorities, including lifecycle planning, capital projects oversight, and statutory compliance.", rating: null },
+  { id: "fm7", code: "FM7", title: "Payroll Management", description: "Accuracy, timeliness, and reconciliation of payroll. Compliance with PAYE, pensions, and statutory reporting. Integration with HR systems.", rating: null },
+  { id: "fm8", code: "FM8", title: "Insurance & Risk Mitigation", description: "Adequacy of cover, alignment with risk profile, and annual review of insurance policies. Evidence of claims management and cost control.", rating: null },
 ];
 
-// IT Standards
-export const itStandards: Standard[] = [
-  {
-    id: "it1",
-    code: "IT1",
-    title: "IT & Digital Strategy",
-    description: "A trust-wide strategy that aligns IT investment with educational, operational, and transformation priorities. Reviewed regularly and board-approved.",
-    rating: null,
-  },
-  {
-    id: "it2",
-    code: "IT2",
-    title: "IT Service Management & Support",
-    description: "Reliable, efficient IT support that meets user needs. Includes helpdesk data, uptime reporting, SLAs, and continuous service improvement.",
-    rating: null,
-  },
-  {
-    id: "it3",
-    code: "IT3",
-    title: "Compliance with DfE Technology Standards",
-    description: "Systems and infrastructure aligned with Department for Education standards for broadband, devices, cybersecurity, and cloud services.",
-    rating: null,
-  },
-];
-
-// Governance Standards
-export const governanceStandards: Standard[] = [
-  {
-    id: "eg1",
-    code: "EG1",
-    title: "Strategic Leadership",
-    description: "Clear vision, ethos, and strategic direction set and monitored by the board. Evidence of alignment to trust-wide priorities and improvement plans.",
-    rating: null,
-  },
-  {
-    id: "eg2",
-    code: "EG2",
-    title: "Accountability for Educational and Financial Performance",
-    description: "Robust oversight of educational outcomes, safeguarding, and financial performance. Challenge and support provided to executive leaders.",
-    rating: null,
-  },
-  {
-    id: "eg3",
-    code: "EG3",
-    title: "Governance Capacity & Skills",
-    description: "Effective recruitment, induction, and development of trustees and governors. Skills audit and succession planning in place.",
-    rating: null,
-  },
-];
-
-// Estates Standards
 export const estatesStandards: Standard[] = [
-  {
-    id: "bo1",
-    code: "BO1",
-    title: "Health & Safety Compliance",
-    description: "Compliance with statutory Health & Safety legislation and regulations, including fire safety, risk assessments, COSHH, and training.",
-    rating: null,
-  },
-  {
-    id: "bo2",
-    code: "BO2",
-    title: "Estate Statutory Compliance",
-    description: "Assurance that buildings meet all statutory requirements (e.g., asbestos, water hygiene, gas, electrical, accessibility).",
-    rating: null,
-  },
-  {
-    id: "bo3",
-    code: "BO3",
-    title: "Estate Management & Maintenance",
-    description: "Planned and reactive maintenance schedules in place and monitored. Assessment of estate condition, site security, and effective use of facilities.",
-    rating: null,
-  },
+  { id: "bo1", code: "BO1", title: "Health & Safety Compliance", description: "Compliance with statutory Health & Safety legislation and regulations, including fire safety, risk assessments, COSHH, and training. Evidence of regular audits and incident reporting.", rating: null },
+  { id: "bo2", code: "BO2", title: "Estate Statutory Compliance", description: "Assurance that buildings meet all statutory requirements (e.g., asbestos, water hygiene, gas, electrical, accessibility). Documented compliance checks and remedial action tracking.", rating: null },
+  { id: "bo3", code: "BO3", title: "Estate Management & Maintenance", description: "Planned and reactive maintenance schedules in place and monitored. Assessment of estate condition, site security, and effective use of facilities.", rating: null },
+  { id: "bo4", code: "BO4", title: "Strategic Asset & Estate Planning", description: "Long-term strategy for asset use, condition improvement, energy efficiency, and sustainability. Integration with educational and organisational planning.", rating: null },
+  { id: "bo5", code: "BO5", title: "Estates Procurement & Contract Management", description: "Compliance with procurement policy, including tendering, contract monitoring, and supplier performance. Focus on risk, quality, and value.", rating: null },
+  { id: "bo6", code: "BO6", title: "Catering & Cleaning Service Quality", description: "Monitoring of quality, safety, and value of outsourced or in-house catering and cleaning services. Includes satisfaction feedback and compliance with food safety and hygiene standards.", rating: null },
 ];
 
-// Mock Assessments for MAT Admin view
-export const mockAssessmentsAdmin: Assessment[] = [
-  {
-    id: "1",
-    name: "Education Assessment",
-    category: "Education",
-    school: mockSchools[0],
-    completedStandards: 4,
-    totalStandards: 6,
-    lastUpdated: "2024-07-15",
-    status: "In Progress",
-    dueDate: "2024-08-30",
-    assignedTo: [mockUsers[0]],
-    standards: educationStandards.map((std, idx) => 
-      idx < 4 ? { ...std, rating: (idx % 3) + 1 as 1 | 2 | 3 | 4, lastUpdated: "2024-07-15" } : std
-    ),
-    term: "Summer",
-    academicYear: "2023-2024"
-  },
-  {
-    id: "2",
-    name: "Human Resources Assessment",
-    category: "Human Resources",
-    school: mockSchools[0],
-    completedStandards: 5,
-    totalStandards: 5,
-    lastUpdated: "2024-07-10",
-    status: "Completed",
-    dueDate: "2024-07-31",
-    assignedTo: [mockUsers[3]],
-    standards: hrStandards.map(std => 
-      ({ ...std, rating: (Math.floor(Math.random() * 4) + 1) as 1 | 2 | 3 | 4, lastUpdated: "2024-07-10", evidence: "Comprehensive HR policy review conducted and updated. All staff training on new procedures completed." })
-    ),
-    term: "Summer",
-    academicYear: "2023-2024"
-  },
-  {
-    id: "3",
-    name: "Finance Assessment",
-    category: "Finance & Procurement",
-    school: mockSchools[1],
-    completedStandards: 2,
-    totalStandards: 8,
-    lastUpdated: "2024-07-05",
-    status: "In Progress",
-    dueDate: "2024-08-15",
-    assignedTo: [mockUsers[1]],
-    term: "Spring",
-    academicYear: "2023-2024"
-  },
-  {
-    id: "4",
-    name: "Estates Assessment",
-    category: "Estates",
-    school: mockSchools[2],
-    completedStandards: 0,
-    totalStandards: 6,
-    lastUpdated: "-",
-    status: "Not Started",
-    dueDate: "2024-09-01",
-    assignedTo: [mockUsers[4]],
-    term: "Autumn",
-    academicYear: "2024-2025"
-  },
-  {
-    id: "5",
-    name: "Education Assessment",
-    category: "Education",
-    school: mockSchools[1],
-    completedStandards: 3,
-    totalStandards: 6,
-    lastUpdated: "2024-07-12",
-    status: "In Progress",
-    dueDate: "2024-08-20",
-    assignedTo: [mockUsers[0]],
-    term: "Spring",
-    academicYear: "2023-2024"
-  },
-  {
-    id: "6",
-    name: "IT & Information Services Assessment",
-    category: "IT & Information Services",
-    school: mockSchools[3],
-    completedStandards: 0,
-    totalStandards: 6,
-    lastUpdated: "-",
-    status: "Not Started",
-    dueDate: "2024-08-25",
-    assignedTo: [mockUsers[2]],
-    term: "Autumn",
-    academicYear: "2024-2025"
-  },
-  {
-    id: "7",
-    name: "Human Resources Assessment",
-    category: "Human Resources",
-    school: mockSchools[3],
-    completedStandards: 2,
-    totalStandards: 5,
-    lastUpdated: "2024-07-16",
-    status: "Overdue",
-    dueDate: "2024-07-15",
-    assignedTo: [mockUsers[3]],
-    term: "Summer",
-    academicYear: "2023-2024"
-  },
-  {
-    id: "12",
-    name: "IT Strategy & Support Assessment",
-    category: "IT Strategy & Support",
-    school: mockSchools[2],
-    completedStandards: 3,
-    totalStandards: 3,
-    lastUpdated: "2024-07-14",
-    status: "Completed",
-    dueDate: "2024-07-20",
-    assignedTo: [mockUsers[2]],
-    standards: itStandards.map(std => 
-      ({ ...std, rating: (Math.floor(Math.random() * 2) + 3) as 3 | 4, lastUpdated: "2024-07-14", evidence: "All IT systems have been thoroughly assessed and documented. Security protocols are in place and regularly tested." })
-    ),
-    term: "Spring",
-    academicYear: "2023-2024"
-  },
-  {
-    id: "13",
-    name: "Governance Assessment",
-    category: "Governance",
-    school: mockSchools[4],
-    completedStandards: 3,
-    totalStandards: 3,
-    lastUpdated: "2024-07-05",
-    status: "Completed",
-    dueDate: "2024-07-10",
-    assignedTo: [mockUsers[0]],
-    standards: governanceStandards.map(std => 
-      ({ ...std, rating: (Math.floor(Math.random() * 2) + 2) as 2 | 3, lastUpdated: "2024-07-05", evidence: "Governance structures have been reviewed and documented. Board meetings are regular with full attendance and engagement." })
-    ),
-    term: "Spring",
-    academicYear: "2023-2024"
-  },
-  {
-    id: "14",
-    name: "Estates Assessment with Critical Issues",
-    category: "Estates",
-    school: mockSchools[4],
-    completedStandards: 3,
-    totalStandards: 3,
-    lastUpdated: "2024-07-18",
-    status: "Completed",
-    dueDate: "2024-07-15",
-    assignedTo: [mockUsers[4]],
-    standards: estatesStandards.map((std, idx) => {
-      if (idx === 0) {
-        return { 
-          ...std, 
-          rating: 1, 
-          lastUpdated: "2024-07-18", 
-          evidence: "Critical issues found with fire safety compliance. Multiple exit routes blocked and fire extinguishers missing or expired. Immediate action required." 
-        };
-      } else if (idx === 1) {
-        return { 
-          ...std, 
-          rating: 1, 
-          lastUpdated: "2024-07-18", 
-          evidence: "Asbestos management plan not in place. Water hygiene testing overdue by 6 months. Electrical testing certificates expired. Urgent attention needed." 
-        };
-      } else {
-        return { 
-          ...std, 
-          rating: 2, 
-          lastUpdated: "2024-07-18", 
-          evidence: "Basic maintenance schedule exists but is not consistently followed. Site security needs improvement with multiple access points unsecured." 
-        };
-      }
+export const governanceStandards: Standard[] = [
+  { id: "eg1", code: "EG1", title: "Strategic Leadership", description: "Clear vision, ethos, and strategic direction set and monitored by the board. Evidence of alignment to trust-wide priorities and improvement plans.", rating: null },
+  { id: "eg2", code: "EG2", title: "Accountability for Educational and Financial Performance", description: "Robust oversight of educational outcomes, safeguarding, and financial performance. Challenge and support provided to executive leaders.", rating: null },
+  { id: "eg3", code: "EG3", title: "Governance Capacity & Skills", description: "Effective recruitment, induction, and development of trustees and governors. Skills audit and succession planning in place.", rating: null },
+  { id: "eg4", code: "EG4", title: "Governance Structures", description: "Appropriate and compliant governance structures established at trust and school level. Clarity of roles, responsibilities, and delegation.", rating: null },
+  { id: "eg5", code: "EG5", title: "Legal & Regulatory Compliance", description: "Compliance with statutory and regulatory duties, including safeguarding, data protection, financial reporting, and charitable obligations.", rating: null },
+  { id: "eg6", code: "EG6", title: "Evaluation & Continuous Improvement", description: "Regular self-evaluation of governance effectiveness, including external reviews. Evidence of learning, improvement actions, and impact.", rating: null },
+];
+
+export const itInformationStandards: Standard[] = [
+  { id: "is1", code: "IS1", title: "Data Security & Protection", description: "Compliance with GDPR, UK Data Protection Act, and trust policies. Includes data minimisation, encryption, access control, and secure storage.", rating: null },
+  { id: "is2", code: "IS2", title: "Data Breach Management", description: "Robust breach response process, including reporting, investigation, containment, and ICO notification (where required). Evidence of learning and mitigation.", rating: null },
+  { id: "is3", code: "IS3", title: "Freedom of Information (FOI)", description: "Compliance with FOI legislation. Timely and accurate handling of public information requests, with central oversight and record-keeping.", rating: null },
+  { id: "is4", code: "IS4", title: "Subject Access Requests (SARs)", description: "Effective and compliant management of SARs. Evidence of process adherence, redaction practices, and response timeliness.", rating: null },
+  { id: "is5", code: "IS5", title: "Data Quality & Integrity", description: "Assurance that data is accurate, complete, consistent, and fit for purpose. Processes in place for regular validation, reconciliation, and cleansing.", rating: null },
+  { id: "is6", code: "IS6", title: "Information Systems Management", description: "Effective oversight of MIS, data platforms, and digital tools. Focus on integration, user access, licensing, and alignment to operational needs.", rating: null },
+];
+
+export const itStrategyStandards: Standard[] = [
+  { id: "it1", code: "IT1", title: "IT & Digital Strategy", description: "A trust-wide strategy that aligns IT investment with educational, operational, and transformation priorities. Reviewed regularly and board-approved.", rating: null },
+  { id: "it2", code: "IT2", title: "IT Service Management & Support", description: "Reliable, efficient IT support that meets user needs. Includes helpdesk data, uptime reporting, SLAs, and continuous service improvement.", rating: null },
+  { id: "it3", code: "IT3", title: "Compliance with DfE Technology Standards", description: "Systems and infrastructure aligned with Department for Education standards for broadband, devices, cybersecurity, and cloud services.", rating: null },
+  { id: "it4", code: "IT4", title: "IT Asset & Lifecycle Management", description: "Central register of IT assets, with lifecycle planning, secure disposal, and cost-effective procurement and maintenance processes.", rating: null },
+];
+
+const allStandards = {
+  "Education": educationStandards,
+  "Human Resources": hrStandards,
+  "Finance & Procurement": financeStandards,
+  "Estates": estatesStandards,
+  "Governance": governanceStandards,
+  "IT & Information Services": itInformationStandards,
+  "IT Strategy & Support": itStrategyStandards,
+};
+
+// #endregion
+
+// #region Generated Mock Assessments
+
+const generateAssessmentsForSchool = (school: School): Assessment[] => {
+  const assessments: Assessment[] = [];
+  let idCounter = parseInt(school.id) * 100;
+
+  assessmentCategories.forEach(categoryInfo => {
+    const standards = allStandards[categoryInfo.value];
+    const totalStandards = standards.length;
+    const statusChance = Math.random();
+    let status: "Completed" | "In Progress" | "Not Started" | "Overdue";
+    let completedStandards = 0;
+
+    if (school.name === "Birch Tree College") { // This school has no assessments
+      return;
+    }
+
+    if (statusChance < 0.6) { // 60% chance of being Completed
+      status = "Completed";
+      completedStandards = totalStandards;
+    } else if (statusChance < 0.85) { // 25% chance of being In Progress
+      status = "In Progress";
+      completedStandards = Math.floor(Math.random() * (totalStandards - 1)) + 1;
+    } else { // 15% chance of being Not Started
+      status = "Not Started";
+      completedStandards = 0;
+    }
+
+    // 10% chance of being Overdue if not completed
+    if (status !== "Completed" && Math.random() < 0.1) {
+      status = "Overdue";
+    }
+
+    const assessment: Assessment = {
+      id: `${idCounter++}`,
+      name: `${categoryInfo.value} Assessment`,
+      category: categoryInfo.value,
+      school,
+      completedStandards,
+      totalStandards,
+      lastUpdated: status !== "Not Started" ? `2024-0${Math.floor(Math.random() * 6) + 1}-${Math.floor(Math.random() * 28) + 1}` : "-",
+      status,
+      dueDate: status !== "Completed" ? `2024-08-${Math.floor(Math.random() * 30) + 1}` : undefined,
+      assignedTo: [mockUsers[Math.floor(Math.random() * mockUsers.length)]],
+      standards: standards.map((std, idx) => {
+        if (idx < completedStandards) {
+          return { ...std, rating: (Math.floor(Math.random() * 4) + 1) as 1 | 2 | 3 | 4, evidence: "Evidence for " + std.title };
+        }
+        return std;
     }),
     term: "Summer",
     academicYear: "2023-2024"
-  },
-];
+    };
+    assessments.push(assessment);
+  });
 
-// Mock Assessments for Department Head view (user 0 - Education Head)
-export const mockAssessmentsForDeptHead: Assessment[] = [
-  {
-    id: "1",
-    name: "Education Assessment",
-    category: "Education",
-    school: mockSchools[0],
-    completedStandards: 4,
-    totalStandards: 6,
-    lastUpdated: "2024-07-15",
-    status: "In Progress",
-    dueDate: "2024-08-30",
-    assignedTo: [mockUsers[0]],
-    standards: educationStandards.map((std, idx) => 
-      idx < 4 ? { ...std, rating: (idx % 3) + 2 as 2 | 3 | 4, lastUpdated: "2024-07-15" } : std
-    ),
-    term: "Summer",
-    academicYear: "2023-2024"
-  },
-  {
-    id: "5",
-    name: "Education Assessment",
-    category: "Education",
-    school: mockSchools[1],
-    completedStandards: 3,
-    totalStandards: 6,
-    lastUpdated: "2024-07-12",
-    status: "In Progress",
-    dueDate: "2024-08-20",
-    assignedTo: [mockUsers[0]],
-    standards: educationStandards.map((std, idx) => 
-      idx < 3 ? { ...std, rating: (idx % 2) + 2 as 2 | 3, lastUpdated: "2024-07-12" } : std
-    ),
-    term: "Spring",
-    academicYear: "2023-2024"
-  },
-  {
-    id: "8",
-    name: "Education Assessment",
-    category: "Education",
-    school: mockSchools[2],
-    completedStandards: 0,
-    totalStandards: 6,
-    lastUpdated: "-",
-    status: "Not Started",
-    dueDate: "2024-09-15",
-    assignedTo: [mockUsers[0]],
-    standards: educationStandards,
-    term: "Autumn",
-    academicYear: "2024-2025"
-  },
-  {
-    id: "15",
-    name: "Education Assessment",
-    category: "Education",
-    school: mockSchools[3],
-    completedStandards: 6,
-    totalStandards: 6,
-    lastUpdated: "2024-07-17",
-    status: "Completed",
-    dueDate: "2024-07-15",
-    assignedTo: [mockUsers[0]],
-    standards: educationStandards.map((std, idx) => {
-      if (idx === 2) {
-        return {
-          ...std,
-          rating: 1,
-          lastUpdated: "2024-07-17",
-          evidence: "Critical gaps in personal development provision. No evidence of SMSC activities. Character development program absent. Urgent improvements needed."
-        };
-      } else {
-        return {
-          ...std,
-          rating: idx % 2 === 0 ? 3 : 2,
-          lastUpdated: "2024-07-17",
-          evidence: "Standard meets basic requirements but opportunities for enhancement identified."
-        };
-      }
-    }),
-    term: "Summer",
-    academicYear: "2023-2024"
-  },
-]; 
+  return assessments;
+};
+
+export const mockAssessmentsAdmin: Assessment[] = mockSchools.flatMap(generateAssessmentsForSchool);
+
+export const mockAssessmentsForDeptHead: Assessment[] = mockAssessmentsAdmin.filter(
+  assessment => assessment.assignedTo?.some(user => user.id === "1")
+);
+
+// #endregion

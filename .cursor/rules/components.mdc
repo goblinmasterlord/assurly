@@ -1,0 +1,421 @@
+---
+description: 
+globs: 
+alwaysApply: false
+---
+# Frontend Component Reference
+
+This document provides a functional description of the frontend components in the Assurly application.
+
+## Core Application Components
+
+### `src/App.tsx`
+- **Description:** The main application component that sets up client-side routing using `react-router-dom`. It defines the overall page structure, including a `RootLayout` and routes for different pages like `HomePage`, `AssessmentsPage`, and `AssessmentDetailPage`. It also incorporates the `Toaster` component for displaying notifications.
+- **Key Properties/Functionality:**
+    - Uses `BrowserRouter` for routing.
+    - Defines `Routes` and individual `Route` components.
+    - Integrates `RootLayout` for consistent page structure.
+    - Includes `Toaster` for global notifications.
+
+## Layouts
+
+### `src/layouts/RootLayout.tsx`
+- **Description:** This component defines the primary layout structure for most pages in the application. It includes a consistent header with navigation and a footer. The main page content is dynamically rendered via `Outlet` from `react-router-dom`.
+- **Key Properties/Functionality:**
+    - Structure: Provides a `header`, `main`, and `footer` structure.
+    - Header:
+        - Contains the application title/logo ("Assurly") linking to the home page.
+        - A navigation link to "All Assessments" or "My Assessments" based on the user's role.
+        - Integrates the `RoleSwitcher` component.
+    - Main Content: Uses `<Outlet />` to render the content of the currently active route.
+    - Footer: Displays copyright information.
+    - Context: It's implied that this layout is used within the `UserProvider` context (as seen in `App.tsx` which uses this layout).
+    - Styling: Uses Tailwind CSS for layout and styling, ensuring responsive behavior.
+
+## Pages
+
+### `src/pages/Home.tsx`
+- **Description:** The main landing page of the "Assurly" application. It provides a welcome message, a brief explanation of the platform, and allows users to select their role to explore different functionalities.
+- **Key Properties/Functionality:**
+    - Content:
+        - Hero section with the application name and tagline.
+        - Role selection section: Allows users to click on "MAT Administrator" or "Department Head" cards to set their current role using `useUser` context. The selected role's card is highlighted.
+        - "About Assurly" section explaining the platform's purpose and key features.
+        - Call to Action (CTA) button linking to the `/assessments` page.
+    - Role Switching: Directly interacts with `UserContext` to change the active role.
+    - UI Components: `Button`, `Card`.
+    - Informational: Aims to give new users an overview and entry points into the application.
+
+### `src/pages/Assessments.tsx`
+- **Description:** This page serves as the main dashboard for viewing and accessing assessments. The content and functionality differ significantly based on the user's role.
+- **Key Properties/Functionality:**
+    - Role-Based Views:
+        - **MAT Administrator (`mat-admin`):**
+            - Displays the `MatAdminAssessmentsView` component.
+            - This sub-component provides a comprehensive overview of all assessments across all schools, with features like filtering, search, switching between card/table views, and initiating new assessment requests. (See `MatAdminAssessmentsView.tsx` for its detailed description).
+        - **School Department Head (`department-head`):**
+            - Displays a tailored view for the department head.
+            - Shows a summary of overdue and in-progress assessments.
+            - Provides a filterable table view of their assessments.
+            - Filtering: By search term, category, status, and school (if they are associated with multiple).
+            - Table Display: Shows assessment name, school, category, progress, due date, status, and action buttons (View/Continue).
+            - Status indicators and colors are used for clarity.
+    - State Management (for Department Head view): `searchTerm`, `categoryFilter`, `statusFilter`, `schoolFilter`, `view` (though `view` state for cards/table seems to be primarily for `MatAdminAssessmentsView`).
+    - Data: Uses `mockAssessmentsAdmin` or `mockAssessmentsForDeptHead` based on role.
+    - UI Components: `Badge`, `Button`, `Card`, `Table`, `Input`, `Select`.
+    - Helper Functions: `getStatusColor`, `getStatusIcon` for styling based on assessment status.
+
+### `src/pages/AssessmentDetail.tsx`
+- **Description:** This page displays the detailed view of a specific assessment. Its content and functionality adapt based on the user's role (MAT Administrator vs. School Department Head) and the assessment's status. Department heads can interact with the assessment to provide ratings and evidence for standards, while MAT admins typically see a read-only view of completed assessments.
+- **Key Properties/Functionality:**
+    - Routing: Uses `useParams` to get the assessment `id` from the URL.
+    - Data Fetching: Retrieves assessment data from `mockAssessmentsAdmin` or `mockAssessmentsForDeptHead` based on the user's role and the `id`.
+    - State Management:
+        - `activeStandard`: The currently selected standard for viewing/editing.
+        - `ratings`: An object storing the selected rating for each standard.
+        - `evidence`: An object storing the textual evidence for each standard.
+        - `saving`: Boolean to indicate if a save operation is in progress.
+        - `showSuccessDialog`: Boolean to control the visibility of the submission success dialog.
+        - `activeStandardIndex`: The index of the currently active standard.
+    - Role-Specific Behavior:
+        - **Department Head:**
+            - Can input/change ratings for standards.
+            - Can input/edit evidence for standards.
+            - Can save progress or submit the completed assessment.
+            - Can navigate between standards using "Previous"/"Next" buttons or keyboard shortcuts (J/K, ←/→ for navigation, 1-4 for rating, ⌘S/Ctrl+S for save).
+            - Can switch to view related assessments for the same category in other schools (if applicable) via a dropdown.
+        - **MAT Administrator:**
+            - Typically views completed assessment details in a read-only format (ratings and evidence are displayed but not editable).
+    - UI Components:
+        - `Button`, `Card` (and its sub-components), `RadioGroup`, `Textarea`, `Progress`, `Badge`, `Tabs`, `Tooltip`, `Accordion`, `Dialog`, `Select`.
+    - Features:
+        - Displays assessment metadata (name, school, category, status, assigned to, due date, progress).
+        - Lists all standards for the assessment, allowing selection to view details.
+        - For each standard: displays code, title, description.
+        - Rating input (for Department Heads): Uses a custom 4-option selector with descriptions.
+        - Evidence input (for Department Heads): Uses a `Textarea`.
+        - Progress calculation and display.
+        - "Save Progress" and "Submit Assessment" functionality.
+        - Submission success dialog with a summary of ratings.
+        - Keyboard navigation for efficiency.
+        - Read-only display of completed assessment results using an accordion for MAT Admins.
+    - Error Handling: Shows a "Not Found" message if the assessment doesn't exist or isn't accessible.
+    - Navigation: "Back to Assessments" button.
+
+### `src/pages/Reports.tsx`
+- **Description:** This page is intended for viewing and generating reports based on assessment data. Currently, it displays a static list of mock reports.
+- **Key Properties/Functionality:**
+    - Mock Data: Uses a `mockReports` array to display a table of reports.
+    - Display:
+        - Page title "Reports" and a subtitle.
+        - A "Generate Report" button (currently likely non-functional or placeholder).
+        - A table listing reports with columns for Name, Category, Schools Included, Generated Date, Author, and Actions (View/Download buttons).
+    - State: `reports` state initialized with `mockReports`.
+    - UI Components: `Button`.
+    - Current Status: Appears to be a placeholder or early version of the reports feature.
+
+## Custom Components
+
+### `src/components/AssessmentInvitationSheet.tsx`
+- **Description:** A UI component that renders a "sheet" (a slide-in panel) for inviting schools to complete an assessment. It includes a form to select an assessment category, set an optional due date (using a custom `SimpleDatePicker`), and choose multiple schools from a searchable list.
+- **Key Properties/Functionality:**
+    - Props: `open` (boolean to control visibility), `onOpenChange` (callback for when the sheet's open state changes).
+    - State: Manages selected category, search term for schools, selected schools, due date, and visibility of sub-components like the date picker and "select all" options.
+    - Features:
+        - Assessment category selection (dropdown).
+        - Due date selection (popover with `SimpleDatePicker`).
+        - School selection (searchable list with checkboxes, select/deselect all).
+        - Handles invitation sending (currently logs to console).
+    - Internal `SimpleDatePicker`: A custom calendar component for selecting dates, avoiding external dependencies. It handles month navigation, highlighting the current day, disabling past dates, and selecting a date.
+
+### `src/components/MatAdminAssessmentsView.tsx`
+- **Description:** A comprehensive component for Multi-Academy Trust (MAT) administrators to view and manage assessments across multiple schools. It features tabbed navigation for "Completed" and "Ongoing" assessments, robust filtering (search, category, school, term), and toggleable card/table views for displaying assessment data.
+- **Key Properties/Functionality:**
+    - Props: `assessments` (array of `Assessment` objects).
+    - State: Manages active tab, search term, filter values (category, school, term), open state for the `AssessmentInvitationSheet`, and view preferences (cards/table) for each tab.
+    - Features:
+        - Displays assessments in two main categories: "Completed" and "Ongoing".
+        - Filtering: By text search (assessment name, school, category), assessment category, school, and academic term.
+        - View Modes: Users can switch between a "cards" view (using `Accordion` for details) and a "table" view for both completed and ongoing assessments.
+        - Data Display (Cards View):
+            - School name, assessment category, term, due/completion date.
+            - Overall score and standard completion for completed assessments.
+            - Status badge for ongoing assessments.
+            - Accordion reveals more details: assessment name, assigned users, performance by area (average ratings), critical standards (if any), and a link to the full assessment.
+        - Data Display (Table View):
+            - Columns: Assessment name, school, category, progress/overall score, due/completed date, status, term, and an action button to view details.
+        - Calculations: Average ratings per standard category, overall assessment average.
+        - Helper functions: For determining status colors/icons, category icons, formatting assigned user lists, identifying critical standards.
+        - Integration: Uses `AssessmentInvitationSheet` to allow admins to request new assessments.
+        - Empty States: Provides messages when no assessments match filters.
+
+### `src/components/RoleSwitcher.tsx`
+- **Description:** A dropdown menu component that allows users to switch between predefined roles (e.g., "MAT Administrator", "School Dept. Head"). The selected role is managed via the `UserContext`.
+- **Key Properties/Functionality:**
+    - Uses `useUser` hook from `UserContext` to get and set the current role.
+    - Displays the currently active role with an associated icon.
+    - Provides a dropdown list of available roles, each with an icon and label.
+    - Updates the global user role upon selection.
+
+## UI Library (`src/components/ui/`)
+
+This section details the reusable UI components, many of which are based on Radix UI primitives and styled with Tailwind CSS.
+
+### `src/components/ui/accordion.tsx`
+- **Description:** A set of styled accordion components based on Radix UI's Accordion primitive. It allows for creating collapsible sections of content.
+- **Key Properties/Functionality:**
+    - Exports: `Accordion` (root container), `AccordionItem` (individual collapsible section), `AccordionTrigger` (clickable header to toggle section), `AccordionContent` (content area of a section).
+    - Styling: Uses `cn` utility for Tailwind CSS class merging.
+    - Behavior: `AccordionTrigger` includes a ChevronDown icon that rotates when a section is open. Content animates (accordion-up/down) when shown/hidden.
+
+### `src/components/ui/avatar.tsx`
+- **Description:** Provides styled avatar components based on Radix UI's Avatar primitive. Used for displaying user profile pictures or placeholders.
+- **Key Properties/Functionality:**
+    - Exports: `Avatar` (root container), `AvatarImage` (for the actual image), `AvatarFallback` (displays if the image fails to load or isn't provided, often showing initials).
+    - Styling: Rounded, fixed-size container. `AvatarFallback` has a muted background.
+
+### `src/components/ui/badge.tsx`
+- **Description:** A component for rendering styled badges, typically used for displaying statuses, tags, or short pieces of information.
+- **Key Properties/Functionality:**
+    - Props: `variant` (string: "default", "secondary", "destructive", "outline") to control the badge's appearance.
+    - Styling: Uses `cva` (class-variance-authority) for managing variant styles. Includes border, padding, font size, and color variations.
+
+### `src/components/ui/button.tsx`
+- **Description:** A versatile and styled button component based on Radix UI's `Slot` component, allowing it to wrap other components (e.g., `Link`) while inheriting button styling.
+- **Key Properties/Functionality:**
+    - Props:
+        - `variant` (string: "default", "destructive", "outline", "secondary", "ghost", "link") for different visual styles.
+        - `size` (string: "default", "sm", "lg", "icon") for different button sizes.
+        - `asChild` (boolean): If true, renders its child component with button props.
+    - Styling: Uses `cva` for variant and size styles. Includes styles for focus, disabled states, and incorporates icons effectively.
+
+### `src/components/ui/calendar.tsx`
+- **Description:** A calendar component for date selection, built using the `react-day-picker` library and styled with Tailwind CSS.
+- **Key Properties/Functionality:**
+    - Props: Inherits props from `DayPicker`, such as `mode` ("single", "range", etc.), `selected`, `onSelect`. `showOutsideDays` (boolean, defaults to true).
+    - Features: Month navigation (previous/next buttons), displays days of the week, highlights the current day, selected day(s), and days outside the current month. Supports range selection styling.
+    - Styling: Uses `buttonVariants` for navigation buttons and custom styles for calendar elements (cells, rows, day states).
+
+### `src/components/ui/card.tsx`
+- **Description:** A set of components for creating styled content containers with a card-like appearance.
+- **Key Properties/Functionality:**
+    - Exports:
+        - `Card`: The main wrapper with border, background, and shadow.
+        - `CardHeader`: Section for title and description, typically at the top.
+        - `CardTitle`: Styled text for the card's title.
+        - `CardDescription`: Styled text for a subtitle or description.
+        - `CardContent`: Main content area of the card.
+        - `CardFooter`: Section for actions or supplementary information, typically at the bottom.
+    - Styling: Provides consistent padding and structure for card elements.
+
+### `src/components/ui/checkbox.tsx`
+- **Description:** A styled checkbox component based on Radix UI's Checkbox primitive.
+- **Key Properties/Functionality:**
+    - Props: Inherits from Radix Checkbox, including `checked` and `onCheckedChange`.
+    - Behavior: Displays a checkmark (using `lucide-react` Check icon) when in a checked state.
+    - Styling: Includes styles for default, checked, focused, and disabled states.
+
+### `src/components/ui/collapsible.tsx`
+- **Description:** Components for creating collapsible sections of content, using Radix UI's Collapsible primitive. Allows content to be shown or hidden with a trigger.
+- **Key Properties/Functionality:**
+    - Exports:
+        - `Collapsible`: The root component that manages the open/closed state.
+        - `CollapsibleTrigger`: The clickable element that toggles the collapsible content.
+        - `CollapsibleContent`: The wrapper for the content that is shown or hidden.
+    - Behavior: Manages the animation/transition of content visibility.
+
+### `src/components/ui/command.tsx`
+- **Description:** A sophisticated command menu component (often used for search bars with suggestions or command palettes like in VS Code) built using the `cmdk` library. It's designed to be highly interactive and keyboard-navigable.
+- **Key Properties/Functionality:**
+    - Exports:
+        - `Command`: The main wrapper for the command menu.
+        - `CommandDialog`: A variant that presents the command menu within a `Dialog`.
+        - `CommandInput`: The search input field.
+        - `CommandList`: The scrollable list that contains command items.
+        - `CommandEmpty`: Content to display when no items match the search.
+        - `CommandGroup`: Used to group related command items.
+        - `CommandItem`: An individual selectable item in the list.
+        - `CommandShortcut`: For displaying keyboard shortcuts next to an item.
+        - `CommandSeparator`: A visual separator between groups or items.
+    - Styling: Styled for use as a popover or dialog, with clear visual hierarchy for input, list, items, and groups.
+
+### `src/components/ui/dialog.tsx`
+- **Description:** A set of components for creating modal dialogs, based on Radix UI's Dialog primitive. Modals overlay the page content and are typically used for focused tasks or important messages.
+- **Key Properties/Functionality:**
+    - Exports:
+        - `Dialog`: The root component.
+        - `DialogTrigger`: The element that opens the dialog.
+        - `DialogPortal`: Renders the dialog into a different part of the DOM (useful for z-index management).
+        - `DialogOverlay`: The semi-transparent background that covers the page content.
+        - `DialogContent`: The main container for the dialog's content, centered on screen. Includes a close button (X icon).
+        - `DialogHeader`: Section for the dialog's title and description.
+        - `DialogFooter`: Section for action buttons (e.g., Save, Cancel).
+        - `DialogTitle`: Styled text for the dialog's title.
+        - `DialogDescription`: Styled text for a subtitle or description within the dialog.
+        - `DialogClose`: A button to close the dialog.
+    - Behavior: Manages open/closed state, focus trapping, and animations.
+
+### `src/components/ui/dropdown-menu.tsx`
+- **Description:** A comprehensive set of components for creating dropdown menus, built upon Radix UI's Dropdown Menu primitive. Used for actions or navigation that appear when a trigger is clicked.
+- **Key Properties/Functionality:**
+    - Exports:
+        - `DropdownMenu`: Root component.
+        - `DropdownMenuTrigger`: The element that opens the menu.
+        - `DropdownMenuContent`: The container for menu items.
+        - `DropdownMenuItem`: A standard clickable item.
+        - `DropdownMenuCheckboxItem`: A menu item with a checkbox state.
+        - `DropdownMenuRadioGroup` & `DropdownMenuRadioItem`: For groups of mutually exclusive choices.
+        - `DropdownMenuLabel`: A non-interactive label within the menu.
+        - `DropdownMenuSeparator`: A visual divider.
+        - `DropdownMenuShortcut`: Displays keyboard shortcuts for an item.
+        - `DropdownMenuGroup`: Groups related items.
+        - `DropdownMenuPortal`: Renders content into a different DOM location.
+        - `DropdownMenuSub`, `DropdownMenuSubTrigger`, `DropdownMenuSubContent`: For creating nested sub-menus.
+    - Styling: Styled for popover appearance, with animations and support for icons within items.
+
+### `src/components/ui/form.tsx`
+- **Description:** A collection of components and hooks designed to simplify form creation and validation in conjunction with the `react-hook-form` library. It provides a structured way to build accessible and manageable forms.
+- **Key Properties/Functionality:**
+    - Exports:
+        - `Form`: Alias for `FormProvider` from `react-hook-form`, used to wrap the entire form.
+        - `FormField`: A wrapper component that uses `Controller` from `react-hook-form` to connect individual form inputs to the form state.
+        - `useFormField`: A custom hook to access field-specific context (like `id`, `name`, `error`, `formItemId`, `formDescriptionId`, `formMessageId`) within form elements.
+        - `FormItem`: A wrapper for a single form field, including its label, input, description, and error message. Provides context for `useFormField`.
+        - `FormLabel`: A styled label component that automatically connects to the form field via `htmlFor` and can change style based on error state.
+        - `FormControl`: A slot component that passes down ARIA attributes (`aria-describedby`, `aria-invalid`) and `id` to the actual input component.
+        - `FormDescription`: A component to display additional information or help text for a form field.
+        - `FormMessage`: A component to display validation error messages for a form field.
+    - Integration: Deeply integrated with `react-hook-form` for state management and validation.
+    - Accessibility: Helps generate necessary `id`s and ARIA attributes for better accessibility.
+
+### `src/components/ui/input.tsx`
+- **Description:** A basic, styled single-line text input component.
+- **Key Properties/Functionality:**
+    - Props: Standard HTML `input` attributes like `type`, `className`, `value`, `onChange`, etc.
+    - Styling: Provides a consistent look and feel for input fields, including border, padding, focus-visible outline, and disabled states. Supports different text sizes for mobile and desktop.
+
+### `src/components/ui/label.tsx`
+- **Description:** A styled label component, based on Radix UI's Label primitive. Typically used in conjunction with form inputs.
+- **Key Properties/Functionality:**
+    - Props: Inherits from Radix Label, including `htmlFor`.
+    - Styling: Provides default styling for labels and supports variants (e.g., for error states, though not explicitly defined in `labelVariants` in this file, it's used in `FormLabel`). Ensures consistent typography and spacing.
+
+### `src/components/ui/popover.tsx`
+- **Description:** Components for creating popovers, which are floating content elements that appear when a trigger element is interacted with. Based on Radix UI's Popover primitive.
+- **Key Properties/Functionality:**
+    - Exports:
+        - `Popover`: The root component that manages the popover's state.
+        - `PopoverTrigger`: The clickable element that opens or closes the popover.
+        - `PopoverContent`: The container for the content that appears in the popover.
+    - Props: `align` (for `PopoverContent`, default "center") and `sideOffset` (default 4) control positioning.
+    - Behavior: Manages open/closed state, positioning relative to the trigger, and animations.
+
+### `src/components/ui/progress.tsx`
+- **Description:** A component for displaying a progress bar, indicating the completion status of a task. Based on Radix UI's Progress primitive.
+- **Key Properties/Functionality:**
+    - Props:
+        - `value` (number): The current progress percentage (0-100).
+        - `indicatorClassName` (string, optional): Allows custom styling for the progress indicator bar.
+    - Behavior: Visually represents the `value` as a filled portion of the bar.
+    - Styling: The track has a default background, and the indicator's fill is animated.
+
+### `src/components/ui/radio-group.tsx`
+- **Description:** Components for creating a set of radio buttons, where only one option can be selected from a group. Based on Radix UI's Radio Group primitive.
+- **Key Properties/Functionality:**
+    - Exports:
+        - `RadioGroup`: The wrapper component for a set of radio items. Manages the selected value.
+        - `RadioGroupItem`: An individual radio button. Includes an `Indicator` (a filled circle) to show selection.
+    - Props: `RadioGroup` takes `value` and `onValueChange`. `RadioGroupItem` takes `value` to identify itself.
+    - Styling: Radio items are styled as circles with borders, and the selected item shows a filled inner circle.
+
+### `src/components/ui/select.tsx`
+- **Description:** A comprehensive set of components for creating highly customizable and accessible dropdown select menus. Built upon Radix UI's Select primitive.
+- **Key Properties/Functionality:**
+    - Exports:
+        - `Select`: The root component.
+        - `SelectGroup`: For grouping related `SelectItem`s.
+        - `SelectValue`: Displays the currently selected value within the `SelectTrigger`. Can show a placeholder.
+        - `SelectTrigger`: The clickable element that opens the select dropdown. Displays the selected value and a chevron icon.
+        - `SelectContent`: The dropdown panel that contains the list of options.
+        - `SelectLabel`: A label for a `SelectGroup`.
+        - `SelectItem`: An individual option within the select dropdown. Shows a checkmark when selected.
+        - `SelectSeparator`: A visual divider between items or groups.
+        - `SelectScrollUpButton` & `SelectScrollDownButton`: Buttons for scrolling within the `SelectContent` if there are many items.
+    - Behavior: Manages selection state, keyboard navigation, and accessibility features. The content position can be adjusted (default "popper").
+
+### `src/components/ui/sheet.tsx`
+- **Description:** Components for creating "sheets" – side panels that slide in from the edge of the screen. This is an alternative presentation for dialog-like content, built using Radix UI's Dialog primitive but styled for a sheet appearance.
+- **Key Properties/Functionality:**
+    - Exports:
+        - `Sheet`: The root component.
+        - `SheetTrigger`: Element to open the sheet.
+        - `SheetClose`: Element to close the sheet.
+        - `SheetPortal`: Renders content into a different DOM location.
+        - `SheetOverlay`: The background overlay.
+        - `SheetContent`: The main container for the sheet's content. Includes a close button (X icon).
+        - `SheetHeader`, `SheetFooter`, `SheetTitle`, `SheetDescription`: For structuring content within the sheet.
+    - Props: `SheetContent` takes a `side` prop ("top", "bottom", "left", "right", default "right") to determine which edge it slides from.
+    - Styling: Uses `cva` for side variants, controlling slide-in/out animations and positioning.
+
+### `src/components/ui/table.tsx`
+- **Description:** A set of components for rendering styled HTML tables.
+- **Key Properties/Functionality:**
+    - Exports:
+        - `Table`: The `<table>` element wrapper, typically within a `div` for overflow handling.
+        - `TableHeader`: The `<thead>` element.
+        - `TableBody`: The `<tbody>` element.
+        - `TableFooter`: The `<tfoot>` element.
+        - `TableRow`: The `<tr>` element.
+        - `TableHead`: The `<th>` element (for header cells).
+        - `TableCell`: The `<td>` element (for body/footer cells).
+        - `TableCaption`: The `<caption>` element.
+    - Styling: Provides consistent padding, borders, and hover states for table elements.
+
+### `src/components/ui/tabs.tsx`
+- **Description:** Components for creating tabbed interfaces, allowing users to switch between different views or sections of content. Based on Radix UI's Tabs primitive.
+- **Key Properties/Functionality:**
+    - Exports:
+        - `Tabs`: The root component that manages the active tab state.
+        - `TabsList`: The container for the tab trigger buttons.
+        - `TabsTrigger`: A clickable button that activates a specific tab.
+        - `TabsContent`: The container for the content associated with a tab. Only the content of the active tab is visible.
+    - Behavior: Manages which tab is active and displays the corresponding content.
+    - Styling: `TabsList` styles the group of triggers, and `TabsTrigger` styles individual tab buttons, including an active state.
+
+### `src/components/ui/textarea.tsx`
+- **Description:** A styled multi-line text input component.
+- **Key Properties/Functionality:**
+    - Props: Standard HTML `textarea` attributes like `className`, `value`, `onChange`, `placeholder`, etc.
+    - Styling: Provides a consistent appearance for text areas, including border, padding, focus-visible outline, and disabled states. It has a minimum height and allows vertical resizing.
+
+### `src/components/ui/toast.tsx`
+- **Description:** Components for creating and displaying "toast" notifications – small, non-modal messages that typically appear temporarily to provide feedback or alerts. Based on Radix UI's Toast primitive.
+- **Key Properties/Functionality:**
+    - Exports:
+        - `ToastProvider`: Wraps the application region where toasts can appear.
+        - `ToastViewport`: Defines the area where toasts are rendered (e.g., top-right, bottom-center).
+        - `Toast`: The main container for an individual toast message.
+        - `ToastTitle`: For the title of the toast.
+        - `ToastDescription`: For the main body/message of the toast.
+        - `ToastClose`: A button to dismiss the toast.
+        - `ToastAction`: An optional button within the toast for user actions (e.g., "Undo").
+    - Props: `Toast` component accepts a `variant` prop ("default", "destructive") for different visual styles.
+    - Behavior: Manages the appearance, disappearance, and swipe-to-dismiss behavior of toasts.
+
+### `src/components/ui/toaster.tsx`
+- **Description:** A component that renders the actual toast notifications based on the state managed by the `useToast` hook. It iterates through active toasts and displays them using the `Toast` component and its parts.
+- **Key Properties/Functionality:**
+    - Uses `useToast` hook (presumably from `src/hooks/use-toast.ts`) to get the list of current toasts.
+    - Renders each toast within a `ToastProvider` and `ToastViewport`.
+    - Dynamically displays `ToastTitle`, `ToastDescription`, and any associated `action` for each toast.
+
+### `src/components/ui/tooltip.tsx`
+- **Description:** Components for creating tooltips – small informational popups that appear when a user hovers over or focuses on an element. Based on Radix UI's Tooltip primitive.
+- **Key Properties/Functionality:**
+    - Exports:
+        - `TooltipProvider`: Should wrap a major part of the application (or the whole app) to enable tooltips.
+        - `Tooltip`: The root component that groups a trigger and its content.
+        - `TooltipTrigger`: The element that, when interacted with (hover/focus), shows the tooltip.
+        - `TooltipContent`: The actual content of the tooltip message.
+    - Behavior: Manages the appearance and disappearance of the tooltip content based on interaction with the trigger.
+    - Props: `TooltipContent` has `sideOffset` to control distance from the trigger.
