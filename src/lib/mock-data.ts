@@ -118,31 +118,129 @@ const generateAssessmentsForSchool = (school: School): Assessment[] => {
   const assessments: Assessment[] = [];
   let idCounter = parseInt(school.id) * 100;
 
+  // Define school performance profiles to generate more realistic, varied data.
+  const schoolProfiles: { [key: string]: { performance: 'high' | 'average' | 'low' | 'new' } } = {
+    "1": { performance: "high" },   // Oak Hill Academy: High performer
+    "2": { performance: "average" },// Maple Grove School: Average performer
+    "3": { performance: "average" },// Cedar Park Primary: Average performer
+    "4": { performance: "low" },    // Willow High School: Low performer, some issues
+    "5": { performance: "new" }     // Birch Tree College: New, mostly not started
+  };
+
+  const profile = schoolProfiles[school.id];
+
   assessmentCategories.forEach(categoryInfo => {
     const standards = allStandards[categoryInfo.value];
     const totalStandards = standards.length;
-    const statusChance = Math.random();
     let status: "Completed" | "In Progress" | "Not Started" | "Overdue";
     let completedStandards = 0;
+    let ratings: (1 | 2 | 3 | 4)[] = [];
 
-    if (school.name === "Birch Tree College") { // This school has no assessments
-      return;
+    // --- Profile-based generation logic ---
+    switch (profile.performance) {
+      case "high": // High performer: Mostly completed, high scores
+        const highPerfChance = Math.random();
+        if (highPerfChance < 0.8) { // 80% completed
+          status = "Completed";
+          completedStandards = totalStandards;
+          ratings = Array(totalStandards).fill(0).map(() => (Math.random() < 0.85 ? 4 : 3)); // More consistently high scores
+        } else if (highPerfChance < 0.95) { // 15% in progress
+          status = "In Progress";
+          completedStandards = Math.floor(totalStandards * (Math.random() * 0.5 + 0.4));
+          ratings = Array(completedStandards).fill(0).map(() => (Math.random() < 0.75 ? 4 : 3)); // Also high scores for in-progress
+        } else { // 5% not started
+          status = "Not Started";
+          completedStandards = 0;
+        }
+        break;
+
+      case "low": // Low performer: Low scores, but fewer critical issues
+        const lowPerfChance = Math.random();
+        if (lowPerfChance < 0.2) { // 20% completed
+          status = "Completed";
+          completedStandards = totalStandards;
+          // Scores are lower, but not always critical. Mix of 1s and 2s, favouring 2s.
+          ratings = Array(totalStandards).fill(0).map(() => (Math.random() < 0.7 ? 2 : 1));
+        } else if (lowPerfChance < 0.6) { // 40% in progress
+          status = "In Progress";
+          completedStandards = Math.floor(totalStandards * (Math.random() * 0.4));
+          ratings = Array(completedStandards).fill(0).map(() => (Math.random() < 0.8 ? 2 : 1));
+        } else { // 40% not started
+          status = "Not Started";
+          completedStandards = 0;
+        }
+        // Lower chance of being overdue to reduce "critical" alerts
+        if (status === "In Progress" && Math.random() < 0.25) {
+          status = "Overdue";
+        }
+        break;
+
+      case "new": // New school: Mostly not started
+        if (Math.random() < 0.1) { // 10% in progress
+          status = "In Progress";
+          completedStandards = Math.floor(totalStandards * (Math.random() * 0.3));
+          ratings = Array(completedStandards).fill(0).map(() => 3); // Doing okay on the one they started
+        } else { // 90% not started
+          status = "Not Started";
+          completedStandards = 0;
+        }
+        break;
+
+      default: // Average performer
+        const avgPerfChance = Math.random();
+        if (avgPerfChance < 0.6) { // 60% completed
+          status = "Completed";
+          completedStandards = totalStandards;
+          ratings = Array(totalStandards).fill(0).map(() => (Math.floor(Math.random() * 2) + 2) as 2 | 3);
+        } else if (avgPerfChance < 0.9) { // 30% in progress
+          status = "In Progress";
+          completedStandards = Math.floor(totalStandards * (Math.random() * 0.6 + 0.2));
+          ratings = Array(completedStandards).fill(0).map(() => (Math.floor(Math.random() * 2) + 2) as 2 | 3);
+        } else { // 10% not started
+          status = "Not Started";
+          completedStandards = 0;
+        }
+        if (status === "In Progress" && Math.random() < 0.15) {
+          status = "Overdue";
+        }
+        break;
     }
 
-    if (statusChance < 0.6) { // 60% chance of being Completed
-      status = "Completed";
-      completedStandards = totalStandards;
-    } else if (statusChance < 0.85) { // 25% chance of being In Progress
-      status = "In Progress";
-      completedStandards = Math.floor(Math.random() * (totalStandards - 1)) + 1;
-    } else { // 15% chance of being Not Started
-      status = "Not Started";
-      completedStandards = 0;
-    }
+    // --- Dynamic Date Generation ---
+    const now = new Date();
+    const formatDate = (date: Date) => date.toISOString().split('T')[0];
 
-    // 10% chance of being Overdue if not completed
-    if (status !== "Completed" && Math.random() < 0.1) {
-      status = "Overdue";
+    const randomPastDate = (months: number) => {
+      const d = new Date(now);
+      d.setMonth(d.getMonth() - (Math.random() * months));
+      d.setDate(Math.floor(Math.random() * 28) + 1);
+      return d;
+    };
+    const randomFutureDate = (months: number) => {
+      const d = new Date(now);
+      d.setMonth(d.getMonth() + (Math.random() * months) + 1);
+      d.setDate(Math.floor(Math.random() * 28) + 1);
+      return d;
+    };
+
+    let lastUpdated = "-";
+    let dueDate: string | undefined = undefined;
+
+    switch (status) {
+      case "Completed":
+        lastUpdated = formatDate(randomPastDate(5));
+        break;
+      case "In Progress":
+        lastUpdated = formatDate(randomPastDate(2));
+        dueDate = formatDate(randomFutureDate(3));
+        break;
+      case "Overdue":
+        lastUpdated = formatDate(randomPastDate(3));
+        dueDate = formatDate(randomPastDate(1));
+        break;
+      case "Not Started":
+        dueDate = formatDate(randomFutureDate(4));
+        break;
     }
 
     const assessment: Assessment = {
@@ -152,18 +250,22 @@ const generateAssessmentsForSchool = (school: School): Assessment[] => {
       school,
       completedStandards,
       totalStandards,
-      lastUpdated: status !== "Not Started" ? `2024-0${Math.floor(Math.random() * 6) + 1}-${Math.floor(Math.random() * 28) + 1}` : "-",
+      lastUpdated,
       status,
-      dueDate: status !== "Completed" ? `2024-08-${Math.floor(Math.random() * 30) + 1}` : undefined,
+      dueDate,
       assignedTo: [mockUsers[Math.floor(Math.random() * mockUsers.length)]],
       standards: standards.map((std, idx) => {
         if (idx < completedStandards) {
-          return { ...std, rating: (Math.floor(Math.random() * 4) + 1) as 1 | 2 | 3 | 4, evidence: "Evidence for " + std.title };
+          return {
+            ...std,
+            rating: ratings[idx],
+            evidence: `Evidence for ${std.title} has been documented and reviewed.`,
+          };
         }
-        return std;
-    }),
-    term: "Summer",
-    academicYear: "2023-2024"
+        return { ...std, rating: null, evidence: "" }; // Ensure non-completed have null rating and empty evidence
+      }),
+      term: "Summer",
+      academicYear: "2023-2024"
     };
     assessments.push(assessment);
   });
