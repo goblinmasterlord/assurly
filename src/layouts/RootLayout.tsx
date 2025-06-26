@@ -2,7 +2,7 @@ import { Link, Outlet } from "react-router-dom";
 import { RoleSwitcher } from "@/components/RoleSwitcher";
 import { Button } from "@/components/ui/button";
 import { useUser } from "@/contexts/UserContext";
-import { ClipboardList, ExternalLink } from "lucide-react";
+import { ClipboardList, LogIn } from "lucide-react";
 
 export function RootLayout() {
   const { role } = useUser();
@@ -24,23 +24,19 @@ export function RootLayout() {
               </Button>
             </nav>
           </div>
-          <div className="flex items-center space-x-6">
-            {/* Partnership Logo */}
-            <a 
-              href="https://www.goconfigur.com/" 
-              target="_blank" 
-              rel="noopener noreferrer"
-              className="hidden md:flex items-center space-x-2 text-sm text-muted-foreground hover:text-foreground transition-colors group"
-            >
-              <span className="text-xs font-medium">in partnership with</span>
-              <img 
-                src="/src/assets/configur.png" 
-                alt="Configur" 
-                className="h-6 w-auto object-contain" 
-              />
-              <ExternalLink className="h-3 w-3 opacity-50 group-hover:opacity-70 transition-opacity" />
-            </a>
+          <div className="flex items-center space-x-4">
             <RoleSwitcher />
+            <Button size="sm" asChild>
+              <a 
+                href="https://app.goconfigur.com" 
+                target="_blank" 
+                rel="noopener noreferrer"
+                className="flex items-center gap-2"
+              >
+                <LogIn className="h-4 w-4" />
+                Data Management Portal
+              </a>
+            </Button>
           </div>
         </div>
       </header>
