@@ -102,8 +102,8 @@ export function SchoolPerformanceView({ assessments }: SchoolPerformanceViewProp
           averageScore = sum / validStandards.length;
         }
         
-        // Count critical standards (rating of 1 or 2)
-        criticalStandardsCount = assessment.standards.filter(s => s.rating === 1 || s.rating === 2).length;
+        // Count critical standards (rating of 1 only - Inadequate)
+        criticalStandardsCount = assessment.standards.filter(s => s.rating === 1).length;
       }
 
       schoolData.assessmentsByCategory.push({
@@ -329,7 +329,7 @@ export function SchoolPerformanceView({ assessments }: SchoolPerformanceViewProp
                   <SelectValue placeholder="Category" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="all">All Categories</SelectItem>
+                                      <SelectItem value="all">All Strategies</SelectItem>
                   <SelectItem value="Education">Education</SelectItem>
                   <SelectItem value="Human Resources">Human Resources</SelectItem>
                   <SelectItem value="Finance & Procurement">Finance & Procurement</SelectItem>
@@ -349,7 +349,7 @@ export function SchoolPerformanceView({ assessments }: SchoolPerformanceViewProp
                   className="rounded border-slate-300 text-rose-600 focus:ring-rose-500"
                 />
                 <label htmlFor="critical-filter" className="text-sm font-medium text-slate-700">
-                  Critical Issues Only
+                                          Intervention Required Only
                 </label>
               </div>
             </div>
@@ -375,7 +375,7 @@ export function SchoolPerformanceView({ assessments }: SchoolPerformanceViewProp
                 <TableHead>School</TableHead>
                 <TableHead className="text-center">Overall Score</TableHead>
                 <TableHead className="text-center">Assessments</TableHead>
-                <TableHead className="text-center">Critical Issues</TableHead>
+                                  <TableHead className="text-center">Intervention Required</TableHead>
                 <TableHead className="text-center">Performance</TableHead>
                 <TableHead className="text-center">Last Updated</TableHead>
               </TableRow>
@@ -458,7 +458,7 @@ export function SchoolPerformanceView({ assessments }: SchoolPerformanceViewProp
                       <TableRow>
                         <TableCell colSpan={7} className="bg-slate-50 p-0">
                           <div className="p-6 border-t">
-                            <h4 className="text-sm font-medium text-slate-900 mb-4">Assessment Categories</h4>
+                            <h4 className="text-sm font-medium text-slate-900 mb-4">Assessment Strategies</h4>
                             <div className="bg-white rounded-lg border">
                               <Table>
                                 <TableHeader>
@@ -530,7 +530,7 @@ export function SchoolPerformanceView({ assessments }: SchoolPerformanceViewProp
                                                <div className="space-y-1">
                                                  <p className="font-medium text-rose-800">Critical Standards:</p>
                                                  {categoryData.assessment.standards
-                                                   ?.filter(s => s.rating === 1 || s.rating === 2)
+                                                   ?.filter(s => s.rating === 1)
                                                    .slice(0, 3)
                                                    .map(standard => (
                                                      <div key={standard.id} className="text-xs">

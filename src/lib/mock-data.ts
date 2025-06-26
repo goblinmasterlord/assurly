@@ -154,7 +154,7 @@ const generateAssessmentsForSchool = (school: School): Assessment[] => {
         }
         break;
 
-      case "low": // Low performer: Low scores, but fewer critical issues
+      case "low": // Low performer: Low scores, but fewer intervention required issues
         const lowPerfChance = Math.random();
         if (lowPerfChance < 0.2) { // 20% completed
           status = "Completed";
@@ -275,8 +275,12 @@ const generateAssessmentsForSchool = (school: School): Assessment[] => {
 
 export const mockAssessmentsAdmin: Assessment[] = mockSchools.flatMap(generateAssessmentsForSchool);
 
-export const mockAssessmentsForDeptHead: Assessment[] = mockAssessmentsAdmin.filter(
-  assessment => assessment.assignedTo?.some(user => user.id === "1")
-);
+// Department Head now sees ALL assessments across all schools and departments for unified oversight
+// This provides a comprehensive view of the entire trust's assessment landscape
+export const mockAssessmentsForDeptHead: Assessment[] = mockAssessmentsAdmin.map(assessment => ({
+  ...assessment,
+  // Ensure all assessments are assigned to Alex Johnson for the unified view
+  assignedTo: [mockUsers[0]] // Alex Johnson
+}));
 
 // #endregion

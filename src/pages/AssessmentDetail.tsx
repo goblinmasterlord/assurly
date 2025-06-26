@@ -740,12 +740,12 @@ export function AssessmentDetailPage() {
         <div className="space-y-6">
           {/* Performance Summary Cards */}
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-            <Card className="border-0 shadow-sm bg-gradient-to-br from-indigo-50 to-indigo-100">
-              <CardContent className="p-6">
+            <Card className="border border-slate-200">
+              <CardContent className="p-4">
                 <div className="flex items-center justify-between">
-                  <div className="space-y-2">
-                    <p className="text-sm font-medium text-indigo-600">Overall Score</p>
-                    <p className="text-3xl font-bold text-indigo-900">
+                  <div className="space-y-1">
+                    <p className="text-sm font-medium text-slate-600">Overall Score</p>
+                    <p className="text-2xl font-bold text-slate-900">
                       {(() => {
                         const validStandards = assessment.standards?.filter(s => s.rating !== null) || [];
                         if (validStandards.length === 0) return "—";
@@ -753,61 +753,61 @@ export function AssessmentDetailPage() {
                         return average.toFixed(1);
                       })()}
                     </p>
-                    <p className="text-xs text-indigo-600">out of 4.0</p>
+                    <p className="text-xs text-slate-500">out of 4.0</p>
                   </div>
-                  <div className="h-12 w-12 rounded-xl bg-indigo-500 flex items-center justify-center">
-                    <CheckCircle className="h-6 w-6 text-white" />
+                  <div className="h-10 w-10 rounded-lg bg-slate-100 flex items-center justify-center">
+                    <CheckCircle className="h-5 w-5 text-slate-600" />
                   </div>
                 </div>
               </CardContent>
             </Card>
             
-            <Card className="border-0 shadow-sm bg-gradient-to-br from-emerald-50 to-emerald-100">
-              <CardContent className="p-6">
+            <Card className="border border-slate-200">
+              <CardContent className="p-4">
                 <div className="flex items-center justify-between">
-                  <div className="space-y-2">
-                    <p className="text-sm font-medium text-emerald-600">Completion Rate</p>
-                    <p className="text-3xl font-bold text-emerald-900">
+                  <div className="space-y-1">
+                    <p className="text-sm font-medium text-slate-600">Completion Rate</p>
+                    <p className="text-2xl font-bold text-slate-900">
                       {Math.round((completedCount / totalCount) * 100)}%
                     </p>
-                    <p className="text-xs text-emerald-600">{completedCount} of {totalCount} standards</p>
+                    <p className="text-xs text-slate-500">{completedCount} of {totalCount} standards</p>
                   </div>
-                  <div className="h-12 w-12 rounded-xl bg-emerald-500 flex items-center justify-center">
-                    <CheckCircle2 className="h-6 w-6 text-white" />
+                  <div className="h-10 w-10 rounded-lg bg-slate-100 flex items-center justify-center">
+                    <CheckCircle2 className="h-5 w-5 text-slate-600" />
                   </div>
                 </div>
               </CardContent>
             </Card>
             
-            <Card className="border-0 shadow-sm bg-gradient-to-br from-rose-50 to-rose-100">
-              <CardContent className="p-6">
+            <Card className="border border-slate-200">
+              <CardContent className="p-4">
                 <div className="flex items-center justify-between">
-                  <div className="space-y-2">
-                    <p className="text-sm font-medium text-rose-600">Critical Issues</p>
-                    <p className="text-3xl font-bold text-rose-900">
-                      {assessment.standards?.filter(s => s.rating === 1 || s.rating === 2).length || 0}
+                  <div className="space-y-1">
+                    <p className="text-sm font-medium text-slate-600">Intervention Required</p>
+                    <p className="text-2xl font-bold text-rose-600">
+                      {assessment.standards?.filter(s => s.rating === 1).length || 0}
                     </p>
-                    <p className="text-xs text-rose-600">requiring attention</p>
+                    <p className="text-xs text-slate-500">requiring attention</p>
                   </div>
-                  <div className="h-12 w-12 rounded-xl bg-rose-500 flex items-center justify-center">
-                    <AlertTriangle className="h-6 w-6 text-white" />
+                  <div className="h-10 w-10 rounded-lg bg-rose-50 flex items-center justify-center">
+                    <AlertTriangle className="h-5 w-5 text-rose-500" />
                   </div>
                 </div>
               </CardContent>
             </Card>
             
-            <Card className="border-0 shadow-sm bg-gradient-to-br from-slate-50 to-slate-100">
-              <CardContent className="p-6">
+            <Card className="border border-slate-200">
+              <CardContent className="p-4">
                 <div className="flex items-center justify-between">
-                  <div className="space-y-2">
+                  <div className="space-y-1">
                     <p className="text-sm font-medium text-slate-600">Last Updated</p>
                     <p className="text-lg font-bold text-slate-900">
-                      {assessment.lastUpdated !== "-" ? new Date(assessment.lastUpdated).toLocaleDateString() : "Never"}
+                      {assessment.lastUpdated !== "-" ? assessment.lastUpdated : "Never"}
                     </p>
-                    <p className="text-xs text-slate-600">assessment date</p>
+                    <p className="text-xs text-slate-500">assessment date</p>
                   </div>
-                  <div className="h-12 w-12 rounded-xl bg-slate-500 flex items-center justify-center">
-                    <Clock className="h-6 w-6 text-white" />
+                  <div className="h-10 w-10 rounded-lg bg-slate-100 flex items-center justify-center">
+                    <Clock className="h-5 w-5 text-slate-600" />
                   </div>
                 </div>
               </CardContent>
@@ -842,12 +842,12 @@ export function AssessmentDetailPage() {
                     const hasEvidence = standard.evidence && standard.evidence.length > 0;
                     const hasFiles = attachments[standard.id] && attachments[standard.id].length > 0;
                     const isComplete = standard.rating !== null;
-                    const isCritical = standard.rating === 1 || standard.rating === 2;
+                    const isCritical = standard.rating === 1; // Only rating 1 is critical
                     
                     return (
                       <TableRow key={standard.id} className={cn(
                         "hover:bg-slate-50",
-                        isCritical && "bg-rose-50 border-l-4 border-l-rose-500"
+                        isCritical && "bg-rose-50 border-l-4 border-l-rose-400"
                       )}>
                         <TableCell>
                           <div className="space-y-1">
@@ -856,7 +856,9 @@ export function AssessmentDetailPage() {
                                 {standard.code}
                               </Badge>
                               {isCritical && (
-                                <AlertTriangle className="h-4 w-4 text-rose-600" />
+                                <Badge variant="outline" className="text-xs bg-rose-50 text-rose-700 border-rose-200">
+                                  Critical
+                                </Badge>
                               )}
                             </div>
                             <p className="font-medium text-sm">{standard.title}</p>
@@ -872,9 +874,10 @@ export function AssessmentDetailPage() {
                               variant="outline" 
                               className={cn(
                                 "font-medium",
-                                standard.rating >= 3 
-                                  ? "bg-emerald-50 text-emerald-700 border-emerald-200"
-                                  : "bg-rose-50 text-rose-700 border-rose-200"
+                                standard.rating === 4 && "bg-emerald-50 text-emerald-700 border-emerald-200",
+                                standard.rating === 3 && "bg-blue-50 text-blue-700 border-blue-200",
+                                standard.rating === 2 && "bg-amber-50 text-amber-700 border-amber-200",
+                                standard.rating === 1 && "bg-rose-50 text-rose-700 border-rose-200"
                               )}
                             >
                               {standard.rating}: {RatingLabels[standard.rating]}
@@ -910,7 +913,7 @@ export function AssessmentDetailPage() {
                         
                         <TableCell className="text-center">
                           {hasFiles ? (
-                            <Badge variant="outline" className="bg-indigo-50 text-indigo-700 border-indigo-200">
+                            <Badge variant="outline" className="bg-slate-50 text-slate-700 border-slate-200">
                               {attachments[standard.id].length} file{attachments[standard.id].length !== 1 ? 's' : ''}
                             </Badge>
                           ) : (
@@ -929,100 +932,11 @@ export function AssessmentDetailPage() {
             </CardContent>
           </Card>
 
-          {/* Critical Standards Summary */}
-          {assessment.standards.some(s => s.rating === 1 || s.rating === 2) && (
-            <Card className="border-rose-200 bg-rose-50">
-              <CardHeader>
-                <CardTitle className="flex items-center space-x-2 text-rose-800">
-                  <AlertTriangle className="h-5 w-5" />
-                  <span>Critical Standards Requiring Attention</span>
-                </CardTitle>
-                <CardDescription className="text-rose-700">
-                  Standards rated as Inadequate (1) or Requires Improvement (2) need immediate focus
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-3">
-                  {assessment.standards
-                    .filter(s => s.rating === 1 || s.rating === 2)
-                    .map((standard) => (
-                      <div key={standard.id} className="bg-white p-4 rounded-lg border border-rose-200">
-                        <div className="flex items-start space-x-3">
-                          <AlertTriangle className="h-5 w-5 text-rose-600 mt-0.5" />
-                          <div className="flex-1">
-                            <div className="flex items-center space-x-2 mb-2">
-                              <Badge variant="outline" className="text-xs">
-                                {standard.code}
-                              </Badge>
-                              <Badge 
-                                variant="outline" 
-                                className="bg-rose-50 text-rose-700 border-rose-200"
-                              >
-                                {standard.rating}: {RatingLabels[standard.rating!]}
-                              </Badge>
-                            </div>
-                            <h4 className="font-medium text-rose-900 mb-1">{standard.title}</h4>
-                            <p className="text-sm text-rose-700 mb-2">{standard.description}</p>
-                            {standard.evidence && (
-                              <div className="bg-rose-50 p-2 rounded text-sm text-rose-800">
-                                <strong>Evidence:</strong> {standard.evidence}
-                              </div>
-                            )}
-                          </div>
-                        </div>
-                      </div>
-                    ))}
-                </div>
-              </CardContent>
-            </Card>
-          )}
+
         </div>
       )}
       
-      {/* Show read-only view for completed assessments for MAT admins */}
-      {isAdminView && assessment.status === "Completed" && assessment.standards && (
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-xl">Assessment Results</CardTitle>
-            <CardDescription>
-              Completed on {assessment.lastUpdated} by {assessment.assignedTo?.[0]?.name || "Unknown"}
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <Accordion type="multiple" className="space-y-4">
-              {assessment.standards.map((standard) => (
-                <AccordionItem 
-                  key={standard.id} 
-                  value={standard.id}
-                  className="border rounded-lg px-0 overflow-hidden"
-                >
-                  <AccordionTrigger className="px-4 py-3 hover:bg-slate-50 [&>svg]:h-4 [&>svg]:w-4 [&[data-state=open]>svg]:rotate-180">
-                    <div className="flex items-center gap-4">
-                      <Badge variant={standard.rating ? "default" : "outline"} className="h-7 px-2">
-                        {standard.rating ? `${standard.rating}: ${RatingLabels[standard.rating]}` : "Not Rated"}
-                      </Badge>
-                      <span className="font-medium">
-                        {standard.code}: {standard.title}
-                      </span>
-                    </div>
-                  </AccordionTrigger>
-                  <AccordionContent className="px-4 pb-4 pt-0">
-                    <div className="space-y-3">
-                      <p className="text-muted-foreground">{standard.description}</p>
-                      {standard.evidence && (
-                        <div className="bg-slate-50 p-3 rounded border">
-                          <h4 className="text-sm font-medium mb-1">Evidence / Comments:</h4>
-                          <p className="text-sm">{standard.evidence}</p>
-                        </div>
-                      )}
-                    </div>
-                  </AccordionContent>
-                </AccordionItem>
-              ))}
-            </Accordion>
-          </CardContent>
-        </Card>
-      )}
+
 
       {/* Submission Success Dialog */}
       <Dialog open={showSuccessDialog} onOpenChange={setShowSuccessDialog}>

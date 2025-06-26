@@ -42,7 +42,6 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import type { Assessment, AssessmentCategory } from "@/types/assessment";
 import { cn } from "@/lib/utils";
-import { MatAdminAssessmentsView } from "@/components/MatAdminAssessmentsView";
 import { SchoolPerformanceView } from "@/components/SchoolPerformanceView";
 
 export function AssessmentsPage() {
@@ -56,6 +55,10 @@ export function AssessmentsPage() {
   const [statusFilter, setStatusFilter] = useState<"all" | "completed" | "in-progress" | "not-started" | "overdue">("all");
   const [schoolFilter, setSchoolFilter] = useState<string>("all");
   const [view, setView] = useState<"table" | "cards">("table");
+  
+  // Pagination state
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 10; // Optimal for table view UX
   
   const uniqueSchools = useMemo(() => {
     const schools = [...new Set(assessments.map(a => a.school.id))];
@@ -92,6 +95,17 @@ export function AssessmentsPage() {
     }
     return [];
   }, [isMatAdmin, assessments, searchTerm, categoryFilter, statusFilter, schoolFilter]);
+
+  // Pagination calculations
+  const totalPages = Math.ceil(filteredAssessments.length / itemsPerPage);
+  const startIndex = (currentPage - 1) * itemsPerPage;
+  const endIndex = startIndex + itemsPerPage;
+  const paginatedAssessments = filteredAssessments.slice(startIndex, endIndex);
+
+  // Reset to first page when filters change
+  useMemo(() => {
+    setCurrentPage(1);
+  }, [searchTerm, categoryFilter, statusFilter, schoolFilter]);
   
   // Calculate how many assessments are overdue or in-progress
   const overdueCount = useMemo(() => {
@@ -202,10 +216,10 @@ export function AssessmentsPage() {
                 )}
                 <Select value={categoryFilter} onValueChange={(value) => setCategoryFilter(value as AssessmentCategory | "all")}>
                   <SelectTrigger className="h-9 w-full md:w-[180px] bg-white">
-                    <SelectValue placeholder="All Categories" />
+                                          <SelectValue placeholder="All Strategies" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="all">All Categories</SelectItem>
+                                          <SelectItem value="all">All Strategies</SelectItem>
                     {uniqueCategories.map((category) => (
                       <SelectItem key={category} value={category}>
                         {category}
@@ -234,7 +248,7 @@ export function AssessmentsPage() {
                 <TableRow className="bg-slate-50">
                   <TableHead className="py-3">Assessment</TableHead>
                   <TableHead>School</TableHead>
-                  <TableHead>Category</TableHead>
+                  <TableHead>Strategy</TableHead>
                   <TableHead>Progress</TableHead>
                   <TableHead>Due Date</TableHead>
                   <TableHead>Status</TableHead>
@@ -242,7 +256,7 @@ export function AssessmentsPage() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {filteredAssessments.length === 0 ? (
+                {paginatedAssessments.length === 0 ? (
                   <TableRow>
                     <TableCell
                       colSpan={7}
@@ -267,7 +281,7 @@ export function AssessmentsPage() {
                     </TableCell>
                   </TableRow>
                 ) : (
-                  filteredAssessments.map((assessment) => (
+                  paginatedAssessments.map((assessment) => (
                     <TableRow key={assessment.id} className="group">
                       <TableCell className="font-medium">
                         <div className="flex flex-col">
@@ -373,6 +387,82 @@ export function AssessmentsPage() {
               </TableBody>
             </Table>
           </CardContent>
+          {/* Modern Pagination Component */}
+          {totalPages > 1 && (
+            <div className="border-t bg-slate-50/50">
+              <div className="flex items-center justify-between px-6 py-4">
+                <div className="flex items-center text-sm text-muted-foreground">
+                  <span>
+                    Showing {startIndex + 1} to {Math.min(endIndex, filteredAssessments.length)} of{" "}
+                    {filteredAssessments.length} results
+                  </span>
+                </div>
+                <div className="flex items-center space-x-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setCurrentPage(Math.max(1, currentPage - 1))}
+                    disabled={currentPage === 1}
+                    className="h-8 w-8 p-0"
+                  >
+                    <ChevronRight className="h-4 w-4 rotate-180" />
+                  </Button>
+                  
+                  {/* Page numbers */}
+                  <div className="flex items-center space-x-1">
+                    {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
+                      let pageNum;
+                      if (totalPages <= 5) {
+                        pageNum = i + 1;
+                      } else if (currentPage <= 3) {
+                        pageNum = i + 1;
+                      } else if (currentPage >= totalPages - 2) {
+                        pageNum = totalPages - 4 + i;
+                      } else {
+                        pageNum = currentPage - 2 + i;
+                      }
+                      
+                      return (
+                        <Button
+                          key={pageNum}
+                          variant={currentPage === pageNum ? "default" : "outline"}
+                          size="sm"
+                          onClick={() => setCurrentPage(pageNum)}
+                          className="h-8 w-8 p-0"
+                        >
+                          {pageNum}
+                        </Button>
+                      );
+                    })}
+                    
+                    {totalPages > 5 && currentPage < totalPages - 2 && (
+                      <>
+                        <span className="text-muted-foreground">...</span>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => setCurrentPage(totalPages)}
+                          className="h-8 w-8 p-0"
+                        >
+                          {totalPages}
+                        </Button>
+                      </>
+                    )}
+                  </div>
+
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setCurrentPage(Math.min(totalPages, currentPage + 1))}
+                    disabled={currentPage === totalPages}
+                    className="h-8 w-8 p-0"
+                  >
+                    <ChevronRight className="h-4 w-4" />
+                  </Button>
+                </div>
+              </div>
+            </div>
+          )}
         </Card>
       </div>
     </div>
