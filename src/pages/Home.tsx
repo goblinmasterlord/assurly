@@ -40,7 +40,7 @@ export function HomePage() {
                     <Building2 className="h-6 w-6 text-indigo-600" />
                   </div>
                   <div>
-                    <CardTitle>MAT Administrator</CardTitle>
+                    <CardTitle>MAT Management</CardTitle>
                     <CardDescription>Trust-level assessment management</CardDescription>
                   </div>
                 </div>

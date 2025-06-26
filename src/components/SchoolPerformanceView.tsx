@@ -31,7 +31,7 @@ import {
   CollapsibleTrigger,
 } from "@/components/ui/collapsible";
 import { Progress } from "@/components/ui/progress";
-import type { Assessment, AssessmentCategory, SchoolPerformance } from "@/types/assessment";
+import type { Assessment, AssessmentCategory, SchoolPerformance, AcademicTerm } from "@/types/assessment";
 import { cn } from "@/lib/utils";
 import { 
   AlertTriangle, 
@@ -55,7 +55,10 @@ import {
   Settings,
   TrendingUp,
   TrendingDown,
-  AlertCircle
+  AlertCircle,
+  ArrowUp,
+  ArrowDown,
+  Minus
 } from "lucide-react";
 import { AssessmentInvitationSheet } from "@/components/AssessmentInvitationSheet";
 
@@ -71,12 +74,71 @@ export function SchoolPerformanceView({ assessments }: SchoolPerformanceViewProp
   const [criticalFilter, setCriticalFilter] = useState<boolean>(false);
   const [invitationSheetOpen, setInvitationSheetOpen] = useState(false);
   const [expandedSchools, setExpandedSchools] = useState<Set<string>>(new Set());
+  const [selectedTerm, setSelectedTerm] = useState<string>("Summer 2024-2025"); // Default to current term
+
+  // Get available terms from assessments
+  const availableTerms = useMemo(() => {
+    const termSet = new Set<string>();
+    assessments.forEach(assessment => {
+      if (assessment.term && assessment.academicYear) {
+        termSet.add(`${assessment.term} ${assessment.academicYear}`);
+      }
+    });
+    return Array.from(termSet).sort().reverse(); // Latest terms first
+  }, [assessments]);
+
+  // Filter assessments by selected term
+  const filteredByTermAssessments = useMemo(() => {
+    const [term, academicYear] = selectedTerm.split(" ");
+    return assessments.filter(assessment => 
+      assessment.term === term && assessment.academicYear === academicYear
+    );
+  }, [assessments, selectedTerm]);
+
+  // Get previous term assessments for comparison
+  const previousTermAssessments = useMemo(() => {
+    const currentTermIndex = availableTerms.indexOf(selectedTerm);
+    if (currentTermIndex === -1 || currentTermIndex === availableTerms.length - 1) {
+      return [];
+    }
+    const previousTerm = availableTerms[currentTermIndex + 1];
+    const [term, academicYear] = previousTerm.split(" ");
+    return assessments.filter(assessment => 
+      assessment.term === term && assessment.academicYear === academicYear
+    );
+  }, [assessments, availableTerms, selectedTerm]);
+
+  // Calculate change indicators
+  const calculateChange = (currentScore: number, previousScore: number) => {
+    if (previousScore === 0) return null;
+    const change = currentScore - previousScore;
+    const percentChange = Math.abs(change / previousScore) * 100;
+    
+    if (Math.abs(change) < 0.1) {
+      return { type: "neutral", value: 0, icon: <Minus className="h-3 w-3" /> };
+    } else if (change > 0) {
+      return { 
+        type: "positive", 
+        value: change, 
+        percentChange,
+        icon: <ArrowUp className="h-3 w-3 text-emerald-600" /> 
+      };
+    } else {
+      return { 
+        type: "negative", 
+        value: Math.abs(change), 
+        percentChange,
+        icon: <ArrowDown className="h-3 w-3 text-rose-600" /> 
+      };
+    }
+  };
 
   // Group assessments by school and calculate performance metrics
   const schoolPerformanceData = useMemo(() => {
-    const schoolMap = new Map<string, SchoolPerformance>();
+    const schoolMap = new Map<string, SchoolPerformance & { previousOverallScore?: number; changesByCategory?: Map<string, any> }>();
 
-    assessments.forEach(assessment => {
+    // Process current term assessments
+    filteredByTermAssessments.forEach(assessment => {
       const schoolId = assessment.school.id;
       
       if (!schoolMap.has(schoolId)) {
@@ -85,7 +147,9 @@ export function SchoolPerformanceView({ assessments }: SchoolPerformanceViewProp
           overallScore: 0,
           assessmentsByCategory: [],
           criticalStandardsTotal: 0,
-          lastUpdated: assessment.lastUpdated
+          lastUpdated: assessment.lastUpdated,
+          previousOverallScore: 0,
+          changesByCategory: new Map()
         });
       }
 
@@ -121,7 +185,7 @@ export function SchoolPerformanceView({ assessments }: SchoolPerformanceViewProp
       }
     });
 
-    // Calculate overall school scores
+    // Calculate current term overall scores
     schoolMap.forEach((schoolData) => {
       const completedAssessments = schoolData.assessmentsByCategory.filter(
         cat => cat.assessment.status === "Completed" && cat.averageScore > 0
@@ -133,8 +197,33 @@ export function SchoolPerformanceView({ assessments }: SchoolPerformanceViewProp
       }
     });
 
+    // Process previous term assessments for comparison
+    previousTermAssessments.forEach(assessment => {
+      const schoolId = assessment.school.id;
+      const schoolData = schoolMap.get(schoolId);
+      
+      if (schoolData && assessment.standards && assessment.standards.length > 0) {
+        const validStandards = assessment.standards.filter(s => s.rating !== null);
+        if (validStandards.length > 0) {
+          const sum = validStandards.reduce((acc, s) => acc + (s.rating || 0), 0);
+          const previousCategoryScore = sum / validStandards.length;
+          
+          // Store previous category score for comparison
+          schoolData.changesByCategory!.set(assessment.category, previousCategoryScore);
+        }
+      }
+    });
+
+    // Calculate previous overall scores
+    schoolMap.forEach((schoolData) => {
+      const categoryScores = Array.from(schoolData.changesByCategory!.values());
+      if (categoryScores.length > 0) {
+        schoolData.previousOverallScore = categoryScores.reduce((sum, score) => sum + score, 0) / categoryScores.length;
+      }
+    });
+
     return Array.from(schoolMap.values());
-  }, [assessments]);
+  }, [filteredByTermAssessments, previousTermAssessments]);
 
   // Filter schools based on search and multiple criteria
   const filteredSchools = useMemo(() => {
@@ -252,13 +341,28 @@ export function SchoolPerformanceView({ assessments }: SchoolPerformanceViewProp
               Monitor assessment progress and performance across all schools in your trust
             </p>
           </div>
-          <Button 
-            onClick={() => setInvitationSheetOpen(true)}
-            className="w-full md:w-auto"
-          >
-            <CheckCircle2 className="mr-2 h-4 w-4" />
-            Request Assessment
-          </Button>
+          <div className="flex flex-col space-y-2 md:flex-row md:space-y-0 md:space-x-3">
+            <Select value={selectedTerm} onValueChange={setSelectedTerm}>
+              <SelectTrigger className="w-full md:w-48">
+                <Calendar className="mr-2 h-4 w-4" />
+                <SelectValue placeholder="Select Term" />
+              </SelectTrigger>
+              <SelectContent>
+                {availableTerms.map((term) => (
+                  <SelectItem key={term} value={term}>
+                    {term}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <Button 
+              onClick={() => setInvitationSheetOpen(true)}
+              className="w-full md:w-auto"
+            >
+              <CheckCircle2 className="mr-2 h-4 w-4" />
+              Request Assessment
+            </Button>
+          </div>
         </div>
 
         {/* Enhanced Filters */}
@@ -375,7 +479,7 @@ export function SchoolPerformanceView({ assessments }: SchoolPerformanceViewProp
                 <TableHead>School</TableHead>
                 <TableHead className="text-center">Overall Score</TableHead>
                 <TableHead className="text-center">Assessments</TableHead>
-                                  <TableHead className="text-center">Intervention Required</TableHead>
+                <TableHead className="text-center">Intervention Required</TableHead>
                 <TableHead className="text-center">Performance</TableHead>
                 <TableHead className="text-center">Last Updated</TableHead>
               </TableRow>
@@ -418,9 +522,41 @@ export function SchoolPerformanceView({ assessments }: SchoolPerformanceViewProp
                       </TableCell>
                       <TableCell className="text-center">
                         {school.overallScore > 0 ? (
-                          <Badge variant="outline" className={getScoreBadgeColor(school.overallScore)}>
-                            {school.overallScore.toFixed(1)}
-                          </Badge>
+                          <div className="flex items-center justify-center space-x-2">
+                            <Badge variant="outline" className={getScoreBadgeColor(school.overallScore)}>
+                              {school.overallScore.toFixed(1)}
+                            </Badge>
+                            {/* Change indicator */}
+                            {school.previousOverallScore && school.previousOverallScore > 0 && (() => {
+                              const change = calculateChange(school.overallScore, school.previousOverallScore);
+                              if (!change) return null;
+                              return (
+                                <Tooltip>
+                                  <TooltipTrigger asChild>
+                                    <div className={cn(
+                                      "flex items-center space-x-1 px-1.5 py-0.5 rounded text-xs font-medium",
+                                      change.type === "positive" && "bg-emerald-50 text-emerald-700",
+                                      change.type === "negative" && "bg-rose-50 text-rose-700",
+                                      change.type === "neutral" && "bg-slate-50 text-slate-500"
+                                    )}>
+                                      {change.icon}
+                                      {change.type !== "neutral" && (
+                                        <span>{change.value.toFixed(1)}</span>
+                                      )}
+                                    </div>
+                                  </TooltipTrigger>
+                                  <TooltipContent>
+                                    <p>
+                                      {change.type === "positive" ? "Improved" : change.type === "negative" ? "Declined" : "No change"} from previous term
+                                      {change.type !== "neutral" && (
+                                        <> ({change.value.toFixed(1)} points)</>
+                                      )}
+                                    </p>
+                                  </TooltipContent>
+                                </Tooltip>
+                              );
+                            })()}
+                          </div>
                         ) : (
                           <span className="text-slate-400">—</span>
                         )}
@@ -497,9 +633,43 @@ export function SchoolPerformanceView({ assessments }: SchoolPerformanceViewProp
                                       </TableCell>
                                       <TableCell className="text-center">
                                         {categoryData.averageScore > 0 ? (
-                                          <Badge variant="outline" className={getScoreBadgeColor(categoryData.averageScore)}>
-                                            {categoryData.averageScore.toFixed(1)}
-                                          </Badge>
+                                          <div className="flex items-center justify-center space-x-2">
+                                            <Badge variant="outline" className={getScoreBadgeColor(categoryData.averageScore)}>
+                                              {categoryData.averageScore.toFixed(1)}
+                                            </Badge>
+                                            {/* Category change indicator */}
+                                            {school.changesByCategory && school.changesByCategory.has(categoryData.category) && (() => {
+                                              const previousScore = school.changesByCategory.get(categoryData.category);
+                                              if (!previousScore || previousScore === 0) return null;
+                                              const change = calculateChange(categoryData.averageScore, previousScore);
+                                              if (!change) return null;
+                                              return (
+                                                <Tooltip>
+                                                  <TooltipTrigger asChild>
+                                                    <div className={cn(
+                                                      "flex items-center space-x-1 px-1 py-0.5 rounded text-xs font-medium",
+                                                      change.type === "positive" && "bg-emerald-50 text-emerald-700",
+                                                      change.type === "negative" && "bg-rose-50 text-rose-700",
+                                                      change.type === "neutral" && "bg-slate-50 text-slate-500"
+                                                    )}>
+                                                      {change.icon}
+                                                      {change.type !== "neutral" && (
+                                                        <span className="text-xs">{change.value.toFixed(1)}</span>
+                                                      )}
+                                                    </div>
+                                                  </TooltipTrigger>
+                                                  <TooltipContent>
+                                                    <p>
+                                                      {change.type === "positive" ? "Improved" : change.type === "negative" ? "Declined" : "No change"} from previous term
+                                                      {change.type !== "neutral" && (
+                                                        <> ({change.value.toFixed(1)} points)</>
+                                                      )}
+                                                    </p>
+                                                  </TooltipContent>
+                                                </Tooltip>
+                                              );
+                                            })()}
+                                          </div>
                                         ) : (
                                           <span className="text-slate-400 text-sm">—</span>
                                         )}

@@ -1,6 +1,7 @@
 import type { 
   Assessment, 
   AssessmentCategory, 
+  AcademicTerm,
   School, 
   Standard, 
   User
@@ -114,9 +115,9 @@ const allStandards = {
 
 // #region Generated Mock Assessments
 
-const generateAssessmentsForSchool = (school: School): Assessment[] => {
+const generateAssessmentsForSchool = (school: School, term: AcademicTerm = "Summer", academicYear: string = "2024-2025"): Assessment[] => {
   const assessments: Assessment[] = [];
-  let idCounter = parseInt(school.id) * 100;
+  let idCounter = parseInt(school.id) * 100 + (term === "Spring" ? 1000 : 0); // Offset historical assessments
 
   // Define school performance profiles to generate more realistic, varied data.
   const schoolProfiles: { [key: string]: { performance: 'high' | 'average' | 'low' | 'new' } } = {
@@ -128,6 +129,7 @@ const generateAssessmentsForSchool = (school: School): Assessment[] => {
   };
 
   const profile = schoolProfiles[school.id];
+  const isHistorical = term === "Spring"; // Previous term data
 
   assessmentCategories.forEach(categoryInfo => {
     const standards = allStandards[categoryInfo.value];
@@ -136,74 +138,123 @@ const generateAssessmentsForSchool = (school: School): Assessment[] => {
     let completedStandards = 0;
     let ratings: (1 | 2 | 3 | 4)[] = [];
 
-    // --- Profile-based generation logic ---
-    switch (profile.performance) {
-      case "high": // High performer: Mostly completed, high scores
-        const highPerfChance = Math.random();
-        if (highPerfChance < 0.8) { // 80% completed
-          status = "Completed";
-          completedStandards = totalStandards;
-          ratings = Array(totalStandards).fill(0).map(() => (Math.random() < 0.85 ? 4 : 3)); // More consistently high scores
-        } else if (highPerfChance < 0.95) { // 15% in progress
-          status = "In Progress";
-          completedStandards = Math.floor(totalStandards * (Math.random() * 0.5 + 0.4));
-          ratings = Array(completedStandards).fill(0).map(() => (Math.random() < 0.75 ? 4 : 3)); // Also high scores for in-progress
-        } else { // 5% not started
-          status = "Not Started";
-          completedStandards = 0;
-        }
-        break;
+    if (isHistorical) {
+      // Historical assessments are all completed
+      status = "Completed";
+      completedStandards = totalStandards;
 
-      case "low": // Low performer: Low scores, but fewer intervention required issues
-        const lowPerfChance = Math.random();
-        if (lowPerfChance < 0.2) { // 20% completed
-          status = "Completed";
-          completedStandards = totalStandards;
-          // Scores are lower, but not always critical. Mix of 1s and 2s, favouring 2s.
-          ratings = Array(totalStandards).fill(0).map(() => (Math.random() < 0.7 ? 2 : 1));
-        } else if (lowPerfChance < 0.6) { // 40% in progress
-          status = "In Progress";
-          completedStandards = Math.floor(totalStandards * (Math.random() * 0.4));
-          ratings = Array(completedStandards).fill(0).map(() => (Math.random() < 0.8 ? 2 : 1));
-        } else { // 40% not started
-          status = "Not Started";
-          completedStandards = 0;
-        }
-        // Lower chance of being overdue to reduce "critical" alerts
-        if (status === "In Progress" && Math.random() < 0.25) {
-          status = "Overdue";
-        }
-        break;
+      // Generate historical scores with some variation from current scores
+      switch (profile.performance) {
+        case "high": // High performer: Slightly lower scores than current
+          ratings = Array(totalStandards).fill(0).map(() => {
+            const rand = Math.random();
+            if (rand < 0.7) return 4;
+            if (rand < 0.95) return 3;
+            return 2;
+          });
+          break;
 
-      case "new": // New school: Mostly not started
-        if (Math.random() < 0.1) { // 10% in progress
-          status = "In Progress";
-          completedStandards = Math.floor(totalStandards * (Math.random() * 0.3));
-          ratings = Array(completedStandards).fill(0).map(() => 3); // Doing okay on the one they started
-        } else { // 90% not started
-          status = "Not Started";
-          completedStandards = 0;
-        }
-        break;
+        case "low": // Low performer: Slightly higher scores than current (showing improvement)
+          ratings = Array(totalStandards).fill(0).map(() => {
+            const rand = Math.random();
+            if (rand < 0.6) return 2;
+            if (rand < 0.85) return 1;
+            return 3;
+          });
+          // Add a few critical issues for Willow High School only
+          if (school.id === "4" && ["Education", "Governance"].includes(categoryInfo.value)) {
+            ratings = ratings.map((rating, idx) => idx < 2 ? 1 : rating); // First 2 standards are critical
+          }
+          break;
 
-      default: // Average performer
-        const avgPerfChance = Math.random();
-        if (avgPerfChance < 0.6) { // 60% completed
-          status = "Completed";
-          completedStandards = totalStandards;
-          ratings = Array(totalStandards).fill(0).map(() => (Math.floor(Math.random() * 2) + 2) as 2 | 3);
-        } else if (avgPerfChance < 0.9) { // 30% in progress
-          status = "In Progress";
-          completedStandards = Math.floor(totalStandards * (Math.random() * 0.6 + 0.2));
-          ratings = Array(completedStandards).fill(0).map(() => (Math.floor(Math.random() * 2) + 2) as 2 | 3);
-        } else { // 10% not started
-          status = "Not Started";
-          completedStandards = 0;
-        }
-        if (status === "In Progress" && Math.random() < 0.15) {
-          status = "Overdue";
-        }
-        break;
+        case "new": // New school: Lower scores (they were still developing)
+          ratings = Array(totalStandards).fill(0).map(() => {
+            const rand = Math.random();
+            if (rand < 0.5) return 2;
+            if (rand < 0.8) return 3;
+            return 1;
+          });
+          break;
+
+        default: // Average performer: Similar to current with slight variation
+          ratings = Array(totalStandards).fill(0).map(() => {
+            const rand = Math.random();
+            if (rand < 0.4) return 2;
+            if (rand < 0.8) return 3;
+            return Math.random() < 0.7 ? 3 : 2;
+          });
+          break;
+      }
+    } else {
+      // Current term logic (unchanged from original)
+      switch (profile.performance) {
+        case "high": // High performer: Mostly completed, high scores
+          const highPerfChance = Math.random();
+          if (highPerfChance < 0.8) { // 80% completed
+            status = "Completed";
+            completedStandards = totalStandards;
+            ratings = Array(totalStandards).fill(0).map(() => (Math.random() < 0.85 ? 4 : 3)); // More consistently high scores
+          } else if (highPerfChance < 0.95) { // 15% in progress
+            status = "In Progress";
+            completedStandards = Math.floor(totalStandards * (Math.random() * 0.5 + 0.4));
+            ratings = Array(completedStandards).fill(0).map(() => (Math.random() < 0.75 ? 4 : 3)); // Also high scores for in-progress
+          } else { // 5% not started
+            status = "Not Started";
+            completedStandards = 0;
+          }
+          break;
+
+        case "low": // Low performer: Low scores, but fewer intervention required issues
+          const lowPerfChance = Math.random();
+          if (lowPerfChance < 0.2) { // 20% completed
+            status = "Completed";
+            completedStandards = totalStandards;
+            // Scores are lower, but not always critical. Mix of 1s and 2s, favouring 2s.
+            ratings = Array(totalStandards).fill(0).map(() => (Math.random() < 0.7 ? 2 : 1));
+          } else if (lowPerfChance < 0.6) { // 40% in progress
+            status = "In Progress";
+            completedStandards = Math.floor(totalStandards * (Math.random() * 0.4));
+            ratings = Array(completedStandards).fill(0).map(() => (Math.random() < 0.8 ? 2 : 1));
+          } else { // 40% not started
+            status = "Not Started";
+            completedStandards = 0;
+          }
+          // Lower chance of being overdue to reduce "critical" alerts
+          if (status === "In Progress" && Math.random() < 0.25) {
+            status = "Overdue";
+          }
+          break;
+
+        case "new": // New school: Mostly not started
+          if (Math.random() < 0.1) { // 10% in progress
+            status = "In Progress";
+            completedStandards = Math.floor(totalStandards * (Math.random() * 0.3));
+            ratings = Array(completedStandards).fill(0).map(() => 3); // Doing okay on the one they started
+          } else { // 90% not started
+            status = "Not Started";
+            completedStandards = 0;
+          }
+          break;
+
+        default: // Average performer
+          const avgPerfChance = Math.random();
+          if (avgPerfChance < 0.6) { // 60% completed
+            status = "Completed";
+            completedStandards = totalStandards;
+            ratings = Array(totalStandards).fill(0).map(() => (Math.floor(Math.random() * 2) + 2) as 2 | 3);
+          } else if (avgPerfChance < 0.9) { // 30% in progress
+            status = "In Progress";
+            completedStandards = Math.floor(totalStandards * (Math.random() * 0.6 + 0.2));
+            ratings = Array(completedStandards).fill(0).map(() => (Math.floor(Math.random() * 2) + 2) as 2 | 3);
+          } else { // 10% not started
+            status = "Not Started";
+            completedStandards = 0;
+          }
+          if (status === "In Progress" && Math.random() < 0.15) {
+            status = "Overdue";
+          }
+          break;
+      }
     }
 
     // --- Dynamic Date Generation ---
@@ -223,24 +274,37 @@ const generateAssessmentsForSchool = (school: School): Assessment[] => {
       return d;
     };
 
+    // Historical date adjustment
+    const randomHistoricalDate = () => {
+      const d = new Date('2025-04-01'); // Spring term completion
+      d.setDate(d.getDate() + Math.floor(Math.random() * 30) - 15); // ±15 days variation
+      return d;
+    };
+
     let lastUpdated = "-";
     let dueDate: string | undefined = undefined;
 
-    switch (status) {
-      case "Completed":
-        lastUpdated = formatDate(randomPastDate(5));
-        break;
-      case "In Progress":
-        lastUpdated = formatDate(randomPastDate(2));
-        dueDate = formatDate(randomFutureDate(3));
-        break;
-      case "Overdue":
-        lastUpdated = formatDate(randomPastDate(3));
-        dueDate = formatDate(randomPastDate(1));
-        break;
-      case "Not Started":
-        dueDate = formatDate(randomFutureDate(4));
-        break;
+    if (isHistorical) {
+      // All historical assessments are completed
+      lastUpdated = formatDate(randomHistoricalDate());
+    } else {
+      // Current term date logic
+      switch (status) {
+        case "Completed":
+          lastUpdated = formatDate(randomPastDate(5));
+          break;
+        case "In Progress":
+          lastUpdated = formatDate(randomPastDate(2));
+          dueDate = formatDate(randomFutureDate(3));
+          break;
+        case "Overdue":
+          lastUpdated = formatDate(randomPastDate(3));
+          dueDate = formatDate(randomPastDate(1));
+          break;
+        case "Not Started":
+          dueDate = formatDate(randomFutureDate(4));
+          break;
+      }
     }
 
     const assessment: Assessment = {
@@ -264,8 +328,8 @@ const generateAssessmentsForSchool = (school: School): Assessment[] => {
         }
         return { ...std, rating: null, evidence: "" }; // Ensure non-completed have null rating and empty evidence
       }),
-      term: "Summer",
-      academicYear: "2023-2024"
+      term,
+      academicYear
     };
     assessments.push(assessment);
   });
@@ -273,7 +337,18 @@ const generateAssessmentsForSchool = (school: School): Assessment[] => {
   return assessments;
 };
 
-export const mockAssessmentsAdmin: Assessment[] = mockSchools.flatMap(generateAssessmentsForSchool);
+// Generate current term assessments (unchanged)
+const currentTermAssessments = mockSchools.flatMap(school => 
+  generateAssessmentsForSchool(school, "Summer", "2024-2025")
+);
+
+// Generate historical assessments for previous term
+const historicalAssessments = mockSchools.flatMap(school => 
+  generateAssessmentsForSchool(school, "Spring", "2024-2025")
+);
+
+// Combine all assessments
+export const mockAssessmentsAdmin: Assessment[] = [...currentTermAssessments, ...historicalAssessments];
 
 // Department Head now sees ALL assessments across all schools and departments for unified oversight
 // This provides a comprehensive view of the entire trust's assessment landscape

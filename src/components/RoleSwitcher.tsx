@@ -16,7 +16,7 @@ export function RoleSwitcher() {
   const roles: { value: UserRole; label: string; icon: ReactNode }[] = [
     {
       value: "mat-admin",
-      label: "MAT Administrator",
+      label: "MAT Management",
       icon: <Building2 className="mr-2 h-4 w-4" />,
     },
     {
