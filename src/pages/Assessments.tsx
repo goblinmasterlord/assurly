@@ -55,21 +55,43 @@ export function AssessmentsPage() {
   const [statusFilter, setStatusFilter] = useState<"all" | "completed" | "in-progress" | "not-started" | "overdue">("all");
   const [schoolFilter, setSchoolFilter] = useState<string>("all");
   const [view, setView] = useState<"table" | "cards">("table");
+  const [selectedTerm, setSelectedTerm] = useState<string>("Summer 2024-2025"); // Default to current term
   
   // Pagination state
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 10; // Optimal for table view UX
+
+  // Get available terms from assessments (for department head view)
+  const availableTerms = useMemo(() => {
+    if (isMatAdmin) return [];
+    const termSet = new Set<string>();
+    assessments.forEach(assessment => {
+      if (assessment.term && assessment.academicYear) {
+        termSet.add(`${assessment.term} ${assessment.academicYear}`);
+      }
+    });
+    return Array.from(termSet).sort().reverse(); // Latest terms first
+  }, [assessments, isMatAdmin]);
+
+  // Filter assessments by selected term first (for department head view)
+  const termFilteredAssessments = useMemo(() => {
+    if (isMatAdmin) return assessments;
+    const [term, academicYear] = selectedTerm.split(" ");
+    return assessments.filter(assessment => 
+      assessment.term === term && assessment.academicYear === academicYear
+    );
+  }, [assessments, selectedTerm, isMatAdmin]);
   
   const uniqueSchools = useMemo(() => {
-    const schools = [...new Set(assessments.map(a => a.school.id))];
+    const schools = [...new Set(termFilteredAssessments.map(a => a.school.id))];
     return mockSchools.filter(school => schools.includes(school.id));
-  }, [assessments]);
+  }, [termFilteredAssessments]);
   
-  const uniqueCategories = [...new Set(assessments.map(a => a.category))];
+  const uniqueCategories = [...new Set(termFilteredAssessments.map(a => a.category))];
   
   const filteredAssessments = useMemo(() => {
     if (!isMatAdmin) {
-      return assessments.filter((assessment) => {
+      return termFilteredAssessments.filter((assessment) => {
         // Search term filter
         const matchesSearch = 
           assessment.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -94,7 +116,7 @@ export function AssessmentsPage() {
       });
     }
     return [];
-  }, [isMatAdmin, assessments, searchTerm, categoryFilter, statusFilter, schoolFilter]);
+  }, [isMatAdmin, termFilteredAssessments, searchTerm, categoryFilter, statusFilter, schoolFilter]);
 
   // Pagination calculations
   const totalPages = Math.ceil(filteredAssessments.length / itemsPerPage);
@@ -105,16 +127,16 @@ export function AssessmentsPage() {
   // Reset to first page when filters change
   useMemo(() => {
     setCurrentPage(1);
-  }, [searchTerm, categoryFilter, statusFilter, schoolFilter]);
+  }, [searchTerm, categoryFilter, statusFilter, schoolFilter, selectedTerm]);
   
-  // Calculate how many assessments are overdue or in-progress
+  // Calculate how many assessments are overdue or in-progress (based on term-filtered assessments)
   const overdueCount = useMemo(() => {
-    return assessments.filter(a => a.status === "Overdue").length;
-  }, [assessments]);
+    return termFilteredAssessments.filter(a => a.status === "Overdue").length;
+  }, [termFilteredAssessments]);
   
   const inProgressCount = useMemo(() => {
-    return assessments.filter(a => a.status === "In Progress").length;
-  }, [assessments]);
+    return termFilteredAssessments.filter(a => a.status === "In Progress").length;
+  }, [termFilteredAssessments]);
   
   const getStatusColor = (status: string) => {
     switch (status) {
@@ -165,6 +187,25 @@ export function AssessmentsPage() {
             You have {overdueCount} overdue and {inProgressCount} in-progress assessments.
           </p>
         </div>
+        {/* Academic Term Selector */}
+        {availableTerms.length > 1 && (
+          <div className="flex items-center gap-2">
+            <span className="text-sm font-medium text-muted-foreground">Academic Term:</span>
+            <Select value={selectedTerm} onValueChange={setSelectedTerm}>
+              <SelectTrigger className="w-[200px] bg-white">
+                <Calendar className="h-4 w-4 mr-2 opacity-50" />
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {availableTerms.map((term) => (
+                  <SelectItem key={term} value={term}>
+                    {term}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        )}
       </div>
 
       <div className="space-y-5">
@@ -216,10 +257,10 @@ export function AssessmentsPage() {
                 )}
                 <Select value={categoryFilter} onValueChange={(value) => setCategoryFilter(value as AssessmentCategory | "all")}>
                   <SelectTrigger className="h-9 w-full md:w-[180px] bg-white">
-                                          <SelectValue placeholder="All Strategies" />
+                    <SelectValue placeholder="All Strategies" />
                   </SelectTrigger>
                   <SelectContent>
-                                          <SelectItem value="all">All Strategies</SelectItem>
+                    <SelectItem value="all">All Strategies</SelectItem>
                     {uniqueCategories.map((category) => (
                       <SelectItem key={category} value={category}>
                         {category}

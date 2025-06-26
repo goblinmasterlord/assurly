@@ -51,8 +51,8 @@ This document provides a functional description of the frontend components in th
 - **Key Properties/Functionality:**
     - Role-Based Views:
         - **MAT Administrator (`mat-admin`):**
-            - Displays the `MatAdminAssessmentsView` component.
-            - This sub-component provides a comprehensive overview of all assessments across all schools, with features like filtering, search, switching between card/table views, and initiating new assessment requests. (See `MatAdminAssessmentsView.tsx` for its detailed description).
+            - Displays the `SchoolPerformanceView` component.
+            - This component provides a school-centric dashboard for MAT administrators to monitor assessment progress and performance across all schools. It features an academic term selector to view current and historical data, with change indicators comparing performance against the previous term. It supports filtering by school name, overall performance, assessment status, strategy category, and critical issues. (See `SchoolPerformanceView.tsx` for its detailed description).
         - **School Department Head (`department-head`):**
             - Displays a tailored view for the department head.
             - Shows a summary of overdue and in-progress assessments.
@@ -128,26 +128,38 @@ This document provides a functional description of the frontend components in th
         - Handles invitation sending (currently logs to console).
     - Internal `SimpleDatePicker`: A custom calendar component for selecting dates, avoiding external dependencies. It handles month navigation, highlighting the current day, disabling past dates, and selecting a date.
 
-### `src/components/MatAdminAssessmentsView.tsx`
-- **Description:** A comprehensive component for Multi-Academy Trust (MAT) administrators to view and manage assessments across multiple schools. It features tabbed navigation for "Completed" and "Ongoing" assessments, robust filtering (search, category, school, term), and toggleable card/table views for displaying assessment data.
+### `src/components/SchoolPerformanceView.tsx`
+- **Description:** The primary dashboard component for Multi-Academy Trust (MAT) administrators to gain a school-centric overview of assessment performance and progress across the trust. It allows for viewing both current and historical data, with clear indicators of performance changes over time.
 - **Key Properties/Functionality:**
-    - Props: `assessments` (array of `Assessment` objects).
-    - State: Manages active tab, search term, filter values (category, school, term), open state for the `AssessmentInvitationSheet`, and view preferences (cards/table) for each tab.
-    - Features:
-        - Displays assessments in two main categories: "Completed" and "Ongoing".
-        - Filtering: By text search (assessment name, school, category), assessment category, school, and academic term.
-        - View Modes: Users can switch between a "cards" view (using `Accordion` for details) and a "table" view for both completed and ongoing assessments.
-        - Data Display (Cards View):
-            - School name, assessment category, term, due/completion date.
-            - Overall score and standard completion for completed assessments.
-            - Status badge for ongoing assessments.
-            - Accordion reveals more details: assessment name, assigned users, performance by area (average ratings), critical standards (if any), and a link to the full assessment.
-        - Data Display (Table View):
-            - Columns: Assessment name, school, category, progress/overall score, due/completed date, status, term, and an action button to view details.
-        - Calculations: Average ratings per standard category, overall assessment average.
-        - Helper functions: For determining status colors/icons, category icons, formatting assigned user lists, identifying critical standards.
-        - Integration: Uses `AssessmentInvitationSheet` to allow admins to request new assessments.
-        - Empty States: Provides messages when no assessments match filters.
+    - Props: `assessments` (array of `Assessment` objects, including data from multiple terms).
+    - State: Manages `searchTerm`, `performanceFilter`, `statusFilter`, `categoryFilter`, `criticalFilter`, `selectedTerm` (e.g., "Summer 2024-2025"), `expandedSchools`, `invitationSheetOpen`.
+    - Data Display:
+        - Presents a table overview of all schools, showing:
+            - School name and code.
+            - Current overall score with a visual change indicator (arrow up/down/neutral) compared to the previous selected term.
+            - Number of completed assessments vs. total for the selected term.
+            - Total count of critical/intervention-required standards.
+            - A general performance trend label (e.g., "Excellent", "Needs Attention").
+            - Last updated date for the school's assessments in the selected term.
+        - Rows are expandable to show a detailed breakdown of assessments by strategy category for the selected school and term.
+            - Each category shows its status, average score (also with a change indicator from the previous term), completion progress, and critical standard count.
+            - Direct links to view the full details of each category assessment.
+    - Filtering & Navigation:
+        - **Academic Term Selector:** Allows users to choose an academic term (e.g., "Summer 2024-2025", "Spring 2024-2025") to load and analyze data for that specific period.
+        - Search by school name.
+        - Filter by overall school performance (High, Medium, Low).
+        - Filter by assessment status (Completed, In Progress, etc., for categories within a school).
+        - Filter by strategy category.
+        - Filter for schools with "Intervention Required" issues.
+        - "Clear All Filters" option.
+    - Actions:
+        - Integrates the `AssessmentInvitationSheet` component to allow admins to request new assessments.
+    - UI Components: `Card`, `Table`, `Input`, `Select`, `Badge`, `Progress`, `Tooltip`, `Collapsible`, `Button`.
+    - Helper Functions: For calculating scores, determining change indicators, status colors, category icons, and performance trends.
+
+### `src/components/MatAdminAssessmentsView.tsx`
+- **Description:** **(Superseded by `SchoolPerformanceView.tsx`)** This component is no longer the primary view for MAT administrators. For the current MAT admin assessment overview and school performance monitoring, please refer to `SchoolPerformanceView.tsx`.
+- **Original Functionality (Legacy Summary):** This component previously offered a way for MAT administrators to view assessments with features like tabbed navigation for "Completed" and "Ongoing" assessments, filtering options, and card/table views. It has been replaced by the more advanced and school-centric `SchoolPerformanceView`.
 
 ### `src/components/RoleSwitcher.tsx`
 - **Description:** A dropdown menu component that allows users to switch between predefined roles (e.g., "MAT Administrator", "School Dept. Head"). The selected role is managed via the `UserContext`.

@@ -2,7 +2,7 @@ import { Link, Outlet } from "react-router-dom";
 import { RoleSwitcher } from "@/components/RoleSwitcher";
 import { Button } from "@/components/ui/button";
 import { useUser } from "@/contexts/UserContext";
-import { ClipboardList } from "lucide-react";
+import { ClipboardList, ExternalLink } from "lucide-react";
 
 export function RootLayout() {
   const { role } = useUser();
@@ -24,7 +24,22 @@ export function RootLayout() {
               </Button>
             </nav>
           </div>
-          <div className="flex items-center space-x-4">
+          <div className="flex items-center space-x-6">
+            {/* Partnership Logo */}
+            <a 
+              href="https://www.goconfigur.com/" 
+              target="_blank" 
+              rel="noopener noreferrer"
+              className="hidden md:flex items-center space-x-2 text-sm text-muted-foreground hover:text-foreground transition-colors group"
+            >
+              <span className="text-xs font-medium">in partnership with</span>
+              <img 
+                src="/src/assets/configur.png" 
+                alt="Configur" 
+                className="h-6 w-auto object-contain" 
+              />
+              <ExternalLink className="h-3 w-3 opacity-50 group-hover:opacity-70 transition-opacity" />
+            </a>
             <RoleSwitcher />
           </div>
         </div>
@@ -35,7 +50,7 @@ export function RootLayout() {
       <footer className="border-t py-6 md:py-0 bg-background">
         <div className="container flex flex-col items-center justify-between gap-4 md:h-16 md:flex-row">
           <p className="text-center text-sm leading-loose text-muted-foreground md:text-left">
-            © 2024 Assurly. All rights reserved.
+            © 2025 Assurly. All rights reserved.
           </p>
         </div>
       </footer>
