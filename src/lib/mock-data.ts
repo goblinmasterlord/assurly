@@ -32,7 +32,7 @@ export const assessmentCategories: { value: AssessmentCategory; description: str
   { value: "Estates", description: "Health & safety, estate management, asset planning, etc." },
   { value: "Governance", description: "Strategic leadership, accountability, governance structures, etc." },
   { value: "IT & Information Services", description: "Data security, breach management, GDPR compliance, etc." },
-  { value: "IT Strategy & Support", description: "IT strategy, service management, asset management, etc." },
+  { value: "IT (Digital Strategy)", description: "IT strategy, service management, asset management, etc." },
 ];
 
 // #endregion
@@ -108,7 +108,7 @@ const allStandards = {
   "Estates": estatesStandards,
   "Governance": governanceStandards,
   "IT & Information Services": itInformationStandards,
-  "IT Strategy & Support": itStrategyStandards,
+  "IT (Digital Strategy)": itStrategyStandards,
 };
 
 // #endregion

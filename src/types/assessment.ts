@@ -6,7 +6,7 @@ export type AssessmentCategory =
   | "Estates"
   | "Governance"
   | "IT & Information Services"
-  | "IT Strategy & Support";
+  | "IT (Digital Strategy)";
 
 // Academic terms
 export type AcademicTerm = 
@@ -116,4 +116,48 @@ export interface User {
   name: string;
   email: string;
   role: string;
+}
+
+// --- API Response Types ---
+// These types represent the raw data structure we expect from the backend API.
+// We will transform this data into the component-friendly types above.
+
+export interface ApiSchool {
+  school_id: string;
+  school_name: string;
+  // 'code' is on the frontend type but not in the DB schema, will handle in transformer
+}
+
+export interface ApiUser {
+  id: string; // Assuming API returns 'id' directly
+  name: string;
+  email: string;
+  role: string;
+}
+
+export interface ApiStandard {
+  standard_id: string;
+  code: string;
+  title: string;
+  description: string;
+  rating: Rating; // Assuming BE sends a number or null
+  evidence_comments?: string;
+  submitted_at?: string; // or last_updated
+}
+
+export interface ApiAssessment {
+  // This mirrors the aggregated data we expect from `GET /api/assessments`
+  id: string;
+  name: string;
+  category: AssessmentCategory;
+  school: ApiSchool;
+  status: AssessmentStatus;
+  completed_standards: number;
+  total_standards: number;
+  last_updated: string;
+  due_date?: string;
+  assigned_to?: ApiUser[];
+  standards?: ApiStandard[];
+  term?: AcademicTerm;
+  academic_year?: AcademicYear;
 } 

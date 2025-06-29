@@ -1,0 +1,19 @@
+---
+description: 
+globs: 
+alwaysApply: false
+---
+
+
+
+## API endpoints
+
+### Submitting assessments
+POST /api/assessments
+
+We submit assessment data according to the db schema to this endpont. We use BigQuery for the database.
+
+### Retrieving data for showing it on the frontend
+GET /api/assessments
+
+We get data from this endpoint that we use all over the frontend.

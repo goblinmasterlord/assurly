@@ -1,6 +1,6 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { format } from "date-fns";
-import { CalendarIcon, CheckCircle, ChevronDown, ChevronRight, School as SchoolIcon, Search, Send, ChevronLeft } from "lucide-react";
+import { CalendarIcon, CheckCircle, ChevronDown, ChevronRight, School as SchoolIcon, Search, Send, ChevronLeft, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Calendar } from "@/components/ui/calendar";
 import {
@@ -28,13 +28,23 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
 import { cn } from "@/lib/utils";
-import { mockSchools, assessmentCategories } from "@/lib/mock-data";
+import { assessmentCategories } from "@/lib/mock-data";
+import { getSchools, createAssessments } from "@/services/assessment-service";
+import { useToast } from "@/hooks/use-toast";
 import type { AssessmentCategory } from "@/types/assessment";
 
 type AssessmentInvitationSheetProps = {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  onSuccess?: () => void; // Callback to refresh assessments list
 };
+
+// School type for the API response
+interface School {
+  id: string;
+  name: string;
+  code: string;
+}
 
 // Simple calendar component without relying on external dependencies
 const SimpleDatePicker = ({ 
@@ -174,16 +184,44 @@ const SimpleDatePicker = ({
   );
 };
 
-export function AssessmentInvitationSheet({ open, onOpenChange }: AssessmentInvitationSheetProps) {
+export function AssessmentInvitationSheet({ open, onOpenChange, onSuccess }: AssessmentInvitationSheetProps) {
   const [category, setCategory] = useState<AssessmentCategory | "">("");
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedSchools, setSelectedSchools] = useState<string[]>([]);
   const [dueDate, setDueDate] = useState<Date>();
   const [isSelectAllOpen, setIsSelectAllOpen] = useState(false);
   const [datePickerOpen, setDatePickerOpen] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [schools, setSchools] = useState<School[]>([]);
+  const [schoolsLoading, setSchoolsLoading] = useState(false);
+  const { toast } = useToast();
+  
+  // Fetch schools when component mounts
+  useEffect(() => {
+    const fetchSchools = async () => {
+      setSchoolsLoading(true);
+      try {
+        const schoolsData = await getSchools();
+        setSchools(schoolsData);
+      } catch (error) {
+        console.error('Failed to fetch schools:', error);
+        toast({
+          title: "Error loading schools",
+          description: "Failed to load schools. Please try again.",
+          variant: "destructive",
+        });
+      } finally {
+        setSchoolsLoading(false);
+      }
+    };
+
+    if (open) {
+      fetchSchools();
+    }
+  }, [open, toast]);
   
   // Filter schools based on the search term
-  const filteredSchools = mockSchools.filter(school => 
+  const filteredSchools = schools.filter(school => 
     school.name.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
@@ -198,28 +236,52 @@ export function AssessmentInvitationSheet({ open, onOpenChange }: AssessmentInvi
 
   // Toggle all schools
   const toggleAllSchools = () => {
-    if (selectedSchools.length === mockSchools.length) {
+    if (selectedSchools.length === schools.length) {
       setSelectedSchools([]);
     } else {
-      setSelectedSchools(mockSchools.map(school => school.id));
+      setSelectedSchools(schools.map(school => school.id));
     }
   };
 
   // Handle invitation send
-  const handleSendInvitations = () => {
-    // In a real app, you would send API requests here
-    console.log("Invitations sent to:", {
-      category,
-      schools: selectedSchools.map(id => mockSchools.find(s => s.id === id)?.name),
-      dueDate: dueDate ? format(dueDate, "PPP") : "No deadline",
-    });
-    
-    // Close the sheet and reset form
-    onOpenChange(false);
-    setCategory("");
-    setSelectedSchools([]);
-    setDueDate(undefined);
-    setSearchTerm("");
+  const handleSendInvitations = async () => {
+    if (!category || selectedSchools.length === 0) return;
+
+    setLoading(true);
+
+    try {
+      const success = await createAssessments({
+        category,
+        schoolIds: selectedSchools,
+        dueDate: dueDate ? format(dueDate, "yyyy-MM-dd") : undefined,
+        term: "Summer", // Could be made dynamic
+        academicYear: "2024-2025" // Could be made dynamic
+      });
+
+      if (success) {
+        toast({
+          title: "Invitations sent successfully!",
+          description: `Requesting ${selectedSchools.length} ${selectedSchools.length === 1 ? 'school' : 'schools'} to complete the ${category} assessment.`,
+        });
+
+        onSuccess?.();
+        onOpenChange(false);
+        setCategory("");
+        setSelectedSchools([]);
+        setDueDate(undefined);
+        setSearchTerm("");
+      } else {
+        throw new Error("Failed to create assessments");
+      }
+    } catch (error) {
+      toast({
+        title: "Error sending invitations",
+        description: error instanceof Error ? error.message : "An error occurred",
+        variant: "destructive",
+      });
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -324,7 +386,7 @@ export function AssessmentInvitationSheet({ open, onOpenChange }: AssessmentInvi
                 <div className="flex items-center gap-2">
                   <Checkbox 
                     id="selectAll" 
-                    checked={selectedSchools.length === mockSchools.length}
+                    checked={selectedSchools.length === schools.length}
                     onCheckedChange={toggleAllSchools}
                   />
                   <Label htmlFor="selectAll" className="text-xs font-medium cursor-pointer">
@@ -332,7 +394,7 @@ export function AssessmentInvitationSheet({ open, onOpenChange }: AssessmentInvi
                   </Label>
                 </div>
                 <Badge variant="outline" className="font-normal">
-                  {mockSchools.length} schools
+                  {schools.length} schools
                 </Badge>
               </div>
             )}
@@ -381,7 +443,7 @@ export function AssessmentInvitationSheet({ open, onOpenChange }: AssessmentInvi
             </div>
             
             <p className="text-xs text-muted-foreground">
-              {selectedSchools.length} of {mockSchools.length} schools selected
+              {selectedSchools.length} of {schools.length} schools selected
             </p>
           </div>
         </div>
@@ -394,7 +456,7 @@ export function AssessmentInvitationSheet({ open, onOpenChange }: AssessmentInvi
                 <div className="space-y-1.5">
                   <p className="text-sm font-medium text-blue-700">Ready to send</p>
                   <p className="text-sm text-blue-600">
-                    Requesting {selectedSchools.length} {selectedSchools.length === 1 ? 'school' : 'schools'} to complete the <span className="font-medium">{category}</span> assessment
+                    Requesting {selectedSchools.length} {selectedSchools.length === 1 ? 'school' : 'schools'} to complete the {category} assessment
                     {dueDate ? ` by ${format(dueDate, "PPP")}` : ''}.
                   </p>
                 </div>
@@ -414,11 +476,17 @@ export function AssessmentInvitationSheet({ open, onOpenChange }: AssessmentInvi
             <Button
               type="button"
               className="flex-1 gap-2"
-              disabled={!category || selectedSchools.length === 0}
+              disabled={!category || selectedSchools.length === 0 || loading}
               onClick={handleSendInvitations}
             >
-              <Send className="h-4 w-4" />
-              Request Assessment
+              {loading ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <>
+                  <Send className="h-4 w-4" />
+                  Request Assessment
+                </>
+              )}
             </Button>
           </div>
         </div>

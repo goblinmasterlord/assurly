@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { Link } from "react-router-dom";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -20,10 +20,9 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useUser } from "@/contexts/UserContext";
 import {
-  mockAssessmentsAdmin,
-  mockAssessmentsForDeptHead,
   mockSchools,
 } from "@/lib/mock-data";
+import { getAssessments } from "@/services/assessment-service";
 import { 
   AlertTriangle,
   Calendar, 
@@ -32,7 +31,7 @@ import {
   Clock,
   Filter, 
   Layers,
-  ListChecks,
+  ListChecks, 
   PlusCircle, 
   School as SchoolIcon, 
   Search,
@@ -47,7 +46,36 @@ import { SchoolPerformanceView } from "@/components/SchoolPerformanceView";
 export function AssessmentsPage() {
   const { role } = useUser();
   const isMatAdmin = role === "mat-admin";
-  const assessments = isMatAdmin ? mockAssessmentsAdmin : mockAssessmentsForDeptHead;
+
+  const [assessments, setAssessments] = useState<Assessment[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  const fetchAssessments = async () => {
+    try {
+      setIsLoading(true);
+      const data = await getAssessments();
+      setAssessments(data);
+    } catch (err) {
+      setError("Failed to load assessments. Please try again later.");
+      console.error(err);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const refreshAssessments = async () => {
+    try {
+      const data = await getAssessments();
+      setAssessments(data);
+    } catch (err) {
+      console.error("Failed to refresh assessments:", err);
+    }
+  };
+
+  useEffect(() => {
+    fetchAssessments();
+  }, []);
   
   // Define all hooks unconditionally here
   const [searchTerm, setSearchTerm] = useState("");
@@ -168,11 +196,27 @@ export function AssessmentsPage() {
     }
   };
   
+  if (isLoading) {
+    return (
+      <div className="container py-10 flex justify-center items-center h-64">
+        <p className="text-muted-foreground">Loading assessments...</p>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="container py-10 flex justify-center items-center h-64">
+        <p className="text-destructive">{error}</p>
+      </div>
+    );
+  }
+  
   // Now that all hooks are defined, we can use conditional rendering
   if (isMatAdmin) {
     return (
       <div className="container py-10">
-        <SchoolPerformanceView assessments={assessments} />
+        <SchoolPerformanceView assessments={assessments} refreshAssessments={refreshAssessments} />
       </div>
     );
   }

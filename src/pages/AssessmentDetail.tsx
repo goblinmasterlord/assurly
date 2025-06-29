@@ -26,10 +26,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { useUser } from "@/contexts/UserContext";
-import {
-  mockAssessmentsAdmin,
-  mockAssessmentsForDeptHead,
-} from "@/lib/mock-data";
+import { getAssessmentById, saveAssessmentProgress, submitAssessment } from "@/services/assessment-service";
 import {
   AlertCircle,
   AlertTriangle,
@@ -50,7 +47,7 @@ import {
   User,
   XCircle,
 } from "lucide-react";
-import { RatingLabels, RatingDescriptions, type Rating, type Standard } from "@/types/assessment";
+import { RatingLabels, RatingDescriptions, type Rating, type Standard, type Assessment, type FileAttachment } from "@/types/assessment";
 import {
   Tooltip,
   TooltipContent,
@@ -74,7 +71,6 @@ import {
 } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
 import { FileUpload } from "@/components/ui/file-upload";
-import type { FileAttachment } from "@/types/assessment";
 
 export function AssessmentDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -82,53 +78,79 @@ export function AssessmentDetailPage() {
   const { role } = useUser();
   const { toast } = useToast();
   
+  // State for assessment data
+  const [assessment, setAssessment] = useState<Assessment | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  
   // Check for admin view mode from URL params
   const searchParams = new URLSearchParams(window.location.search);
   const isAdminView = searchParams.get('view') === 'admin' || role === 'mat-admin';
   
-  // Get the assessment based on user role
-  const isMatAdmin = role === "mat-admin";
-  const assessments = isMatAdmin ? mockAssessmentsAdmin : mockAssessmentsForDeptHead;
-  const assessment = assessments.find(a => a.id === id);
+  // Fetch assessment data
+  const fetchAssessment = useCallback(async () => {
+    if (!id) {
+      setError("No assessment ID provided");
+      setIsLoading(false);
+      return;
+    }
+
+    try {
+      setIsLoading(true);
+      const data = await getAssessmentById(id);
+      if (data) {
+        setAssessment(data);
+      } else {
+        setError("Assessment not found");
+      }
+    } catch (err) {
+      setError("Failed to load assessment");
+      console.error(err);
+    } finally {
+      setIsLoading(false);
+    }
+  }, [id]);
+
+  useEffect(() => {
+    fetchAssessment();
+  }, [fetchAssessment]);
   
   // Get other assessments for the same category but different schools (for department heads)
-  const relatedAssessments = role === "department-head" ? assessments.filter(a => 
-    a.id !== id && 
-    a.category === assessment?.category
-  ) : [];
+  // This will need to be updated later to also use API data
+  const relatedAssessments: Assessment[] = [];
   
-  const [activeStandard, setActiveStandard] = useState<Standard | null>(
-    assessment?.standards && assessment.standards.length > 0
-      ? assessment.standards[0]
-      : null
-  );
+  const [activeStandard, setActiveStandard] = useState<Standard | null>(null);
   
-  const [ratings, setRatings] = useState<Record<string, Rating>>(
-    assessment?.standards
-      ? assessment.standards.reduce((acc, standard) => {
-          acc[standard.id] = standard.rating;
-          return acc;
-        }, {} as Record<string, Rating>)
-      : {}
-  );
+  // Update activeStandard when assessment loads
+  useEffect(() => {
+    if (assessment?.standards && assessment.standards.length > 0) {
+      setActiveStandard(assessment.standards[0]);
+    }
+  }, [assessment]);
   
-  const [evidence, setEvidence] = useState<Record<string, string>>(
-    assessment?.standards
-      ? assessment.standards.reduce((acc, standard) => {
-          acc[standard.id] = standard.evidence || "";
-          return acc;
-        }, {} as Record<string, string>)
-      : {}
-  );
+  const [ratings, setRatings] = useState<Record<string, Rating>>({});
+  const [evidence, setEvidence] = useState<Record<string, string>>({});
+  const [attachments, setAttachments] = useState<Record<string, FileAttachment[]>>({});
 
-  const [attachments, setAttachments] = useState<Record<string, FileAttachment[]>>(
-    assessment?.standards
-      ? assessment.standards.reduce((acc, standard) => {
-          acc[standard.id] = standard.attachments || [];
-          return acc;
-        }, {} as Record<string, FileAttachment[]>)
-      : {}
-  );
+  // Initialize form state when assessment loads
+  useEffect(() => {
+    if (assessment?.standards) {
+      setRatings(assessment.standards.reduce((acc, standard) => {
+        acc[standard.id] = standard.rating;
+        return acc;
+      }, {} as Record<string, Rating>));
+
+      setEvidence(assessment.standards.reduce((acc, standard) => {
+        acc[standard.id] = standard.evidence || "";
+        return acc;
+      }, {} as Record<string, string>));
+
+      setAttachments(assessment.standards.reduce((acc, standard) => {
+        acc[standard.id] = standard.attachments || [];
+        return acc;
+      }, {} as Record<string, FileAttachment[]>));
+    }
+  }, [assessment]);
 
   const [saving, setSaving] = useState(false);
   const [showSuccessDialog, setShowSuccessDialog] = useState(false);
@@ -194,7 +216,18 @@ export function AssessmentDetailPage() {
     { key: "⌘S / Ctrl+S", action: "Save progress" }
   ];
 
-  if (!assessment) {
+  if (isLoading) {
+    return (
+      <div className="container py-10 flex justify-center items-center h-64">
+        <div className="flex items-center gap-2">
+          <Loader2 className="h-4 w-4 animate-spin" />
+          <p className="text-muted-foreground">Loading assessment...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (error || !assessment) {
     return (
       <div className="container py-10">
         <div className="flex items-center mb-6">
@@ -251,31 +284,73 @@ export function AssessmentDetailPage() {
     }));
   };
   
-  const handleSave = () => {
+  const handleSave = async () => {
+    if (!assessment || !id) return;
+    
     setSaving(true);
-    // Simulate API call with timeout
-    setTimeout(() => {
-      setSaving(false);
+    try {
+      const success = await saveAssessmentProgress(id, ratings, evidence);
+      
+      if (success) {
+        // Refetch the assessment to get updated data
+        await fetchAssessment();
+        toast({
+          title: "Progress saved",
+          description: "Your assessment progress has been saved successfully",
+          variant: "default",
+        });
+      } else {
+        toast({
+          title: "Save failed",
+          description: "There was an error saving your progress. Please try again.",
+          variant: "destructive",
+        });
+      }
+    } catch (error) {
+      console.error('Save error:', error);
       toast({
-        title: "Progress saved",
-        description: "Your assessment progress has been saved successfully",
-        variant: "default",
+        title: "Save failed",
+        description: "There was an error saving your progress. Please try again.",
+        variant: "destructive",
       });
-    }, 800);
+    } finally {
+      setSaving(false);
+    }
   };
   
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
+    if (!assessment || !id) return;
+    
     setSaving(true);
-    // Simulate API call with timeout
-    setTimeout(() => {
-      setSaving(false);
-      setShowSuccessDialog(true);
+    try {
+      const success = await submitAssessment(id, ratings, evidence);
+      
+      if (success) {
+        // Refetch the assessment to get updated data
+        await fetchAssessment();
+        setShowSuccessDialog(true);
+        toast({
+          title: "Assessment submitted",
+          description: "Your assessment has been submitted successfully",
+          variant: "default",
+        });
+      } else {
+        toast({
+          title: "Submission failed",
+          description: "There was an error submitting your assessment. Please try again.",
+          variant: "destructive",
+        });
+      }
+    } catch (error) {
+      console.error('Submit error:', error);
       toast({
-        title: "Assessment submitted",
-        description: "Your assessment has been submitted successfully",
-        variant: "default",
+        title: "Submission failed",
+        description: "There was an error submitting your assessment. Please try again.",
+        variant: "destructive",
       });
-    }, 1000);
+    } finally {
+      setSaving(false);
+    }
   };
 
   const getStandardStatus = (standard: Standard) => {

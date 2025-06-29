@@ -64,9 +64,10 @@ import { AssessmentInvitationSheet } from "@/components/AssessmentInvitationShee
 
 type SchoolPerformanceViewProps = {
   assessments: Assessment[];
+  refreshAssessments?: () => Promise<void>;
 }
 
-export function SchoolPerformanceView({ assessments }: SchoolPerformanceViewProps) {
+export function SchoolPerformanceView({ assessments, refreshAssessments }: SchoolPerformanceViewProps) {
   const [searchTerm, setSearchTerm] = useState("");
   const [performanceFilter, setPerformanceFilter] = useState<string>("all");
   const [statusFilter, setStatusFilter] = useState<string>("all");
@@ -760,7 +761,8 @@ export function SchoolPerformanceView({ assessments }: SchoolPerformanceViewProp
       {/* Assessment Invitation Sheet */}
       <AssessmentInvitationSheet 
         open={invitationSheetOpen} 
-        onOpenChange={setInvitationSheetOpen} 
+        onOpenChange={setInvitationSheetOpen}
+        onSuccess={refreshAssessments}
       />
     </div>
     </TooltipProvider>
