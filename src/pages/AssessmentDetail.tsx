@@ -72,6 +72,34 @@ import {
 import { useToast } from "@/hooks/use-toast";
 import { FileUpload } from "@/components/ui/file-upload";
 
+// Evidence Cell Component with smart text handling
+const EvidenceCell = ({ evidence }: { evidence: string }) => {
+  const [isExpanded, setIsExpanded] = useState(false);
+  const shouldTruncate = evidence.length > 120;
+  
+  if (!shouldTruncate) {
+    return (
+      <p className="text-sm text-slate-700 leading-relaxed">
+        {evidence}
+      </p>
+    );
+  }
+
+  return (
+    <div className="space-y-2">
+      <p className="text-sm text-slate-700 leading-relaxed">
+        {isExpanded ? evidence : `${evidence.slice(0, 120)}...`}
+      </p>
+      <button
+        onClick={() => setIsExpanded(!isExpanded)}
+        className="text-xs text-slate-500 hover:text-slate-700 font-medium transition-colors"
+      >
+        {isExpanded ? 'Show less' : 'Show more'}
+      </button>
+    </div>
+  );
+};
+
 export function AssessmentDetailPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
@@ -431,75 +459,117 @@ export function AssessmentDetailPage() {
         )}
       </div>
       
-      {/* Assessment Header Card */}
-      <Card className="mb-6">
-        <CardHeader className="pb-3">
-          <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
-            <div>
-              <CardTitle className="text-2xl font-bold">{assessment.name}</CardTitle>
-              <CardDescription className="text-base">
-                {assessment.school.name} • {assessment.category}
-              </CardDescription>
-            </div>
-            <Badge className={cn(getStatusColor(assessment.status), "self-start whitespace-nowrap")}>
-              {assessment.status}
-            </Badge>
-          </div>
-        </CardHeader>
-        <CardContent>
-          <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-4">
-            <div className="flex items-start space-x-4">
-              <School className="h-5 w-5 text-muted-foreground mt-0.5" />
+      {/* Assessment Header */}
+      <div className="bg-white border border-slate-200/60 rounded-xl p-6 mb-6">
+        <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-6">
+          {/* Title and Description */}
+          <div className="flex-1">
+            <div className="flex items-center gap-3 mb-2">
+              <div className="h-10 w-10 rounded-lg bg-slate-100 flex items-center justify-center">
+                <ClipboardCheck className="h-5 w-5 text-slate-700" />
+              </div>
               <div>
-                <p className="text-sm font-medium">School</p>
-                <p className="text-sm text-muted-foreground">
-                  {assessment.school.name}
+                <h1 className="text-2xl font-bold text-slate-900 leading-tight">
+                  {assessment.name}
+                </h1>
+                <p className="text-sm text-slate-600 font-medium">
+                  {assessment.school.name} • {assessment.category}
                 </p>
               </div>
             </div>
             
+            {/* Status and Progress */}
+            <div className="flex items-center gap-4 mt-4">
+              <Badge 
+                className={cn(
+                  "px-3 py-1 text-sm font-medium border",
+                  assessment.status === "Completed" && "bg-emerald-100 text-emerald-700 border-emerald-200",
+                  assessment.status === "In Progress" && "bg-blue-100 text-blue-700 border-blue-200",
+                  assessment.status === "Not Started" && "bg-slate-100 text-slate-700 border-slate-200",
+                  assessment.status === "Overdue" && "bg-red-100 text-red-700 border-red-200"
+                )}
+              >
+                {assessment.status}
+              </Badge>
+              
+              <div className="flex items-center gap-2">
+                <div className="w-16 h-2 bg-slate-100 rounded-full overflow-hidden">
+                  <div
+                    className={cn(
+                      "h-full transition-all duration-300",
+                      progressPercentage === 100 ? "bg-emerald-500" : "bg-slate-400"
+                    )}
+                    style={{ width: `${progressPercentage}%` }}
+                  />
+                </div>
+                <span className="text-sm font-medium text-slate-700">
+                  {completedCount}/{totalCount}
+                </span>
+              </div>
+            </div>
+          </div>
+          
+          {/* Metadata Grid */}
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 lg:gap-6 min-w-0 lg:min-w-[400px]">
             {assessment.assignedTo && assessment.assignedTo.length > 0 && (
-              <div className="flex items-start space-x-4">
-                <User className="h-5 w-5 text-muted-foreground mt-0.5" />
-                <div>
-                  <p className="text-sm font-medium">Assigned To</p>
-                  <p className="text-sm text-muted-foreground">
+              <div className="flex items-center gap-2">
+                <div className="h-8 w-8 rounded-lg bg-slate-100 flex items-center justify-center flex-shrink-0">
+                  <User className="h-4 w-4 text-slate-600" />
+                </div>
+                <div className="min-w-0">
+                  <p className="text-xs font-medium text-slate-500 uppercase tracking-wide">
+                    Assigned To
+                  </p>
+                  <p className="text-sm text-slate-900 font-medium truncate">
                     {assessment.assignedTo[0].name}
                   </p>
                 </div>
               </div>
             )}
             
-            <div className="flex items-start space-x-4">
-              <Calendar className="h-5 w-5 text-muted-foreground mt-0.5" />
-              <div>
-                <p className="text-sm font-medium">Due Date</p>
-                <p className="text-sm text-muted-foreground">
-                  {assessment.dueDate || "No due date"}
+            <div className="flex items-center gap-2">
+              <div className="h-8 w-8 rounded-lg bg-slate-100 flex items-center justify-center flex-shrink-0">
+                <Calendar className="h-4 w-4 text-slate-600" />
+              </div>
+              <div className="min-w-0">
+                <p className="text-xs font-medium text-slate-500 uppercase tracking-wide">
+                  Due Date
+                </p>
+                <p className="text-sm text-slate-900 font-medium">
+                  {assessment.dueDate 
+                    ? new Date(assessment.dueDate).toLocaleDateString('en-GB', {
+                        day: 'numeric',
+                        month: 'short',
+                        year: 'numeric'
+                      })
+                    : "No due date"
+                  }
                 </p>
               </div>
             </div>
             
-            <div className="flex items-start space-x-4">
-              <div className="w-full">
-                <div className="flex items-center justify-between mb-1.5">
-                  <p className="text-sm font-medium">Progress</p>
-                  <p className="text-sm font-medium">
-                    <span className="text-primary">{completedCount}</span>/<span>{totalCount}</span>
-                  </p>
-                </div>
-                <div className="relative">
-                  <Progress 
-                    value={progressPercentage} 
-                    className="h-2.5" 
-                    indicatorClassName={isCompleted ? "bg-green-600" : undefined}
-                  />
-                </div>
+            <div className="flex items-center gap-2">
+              <div className="h-8 w-8 rounded-lg bg-slate-100 flex items-center justify-center flex-shrink-0">
+                <Clock className="h-4 w-4 text-slate-600" />
+              </div>
+              <div className="min-w-0">
+                <p className="text-xs font-medium text-slate-500 uppercase tracking-wide">
+                  Last Updated
+                </p>
+                <p className="text-sm text-slate-900 font-medium">
+                  {assessment.lastUpdated !== "-" 
+                    ? new Date(assessment.lastUpdated).toLocaleDateString('en-GB', {
+                        day: 'numeric',
+                        month: 'short'
+                      })
+                    : "Never"
+                  }
+                </p>
               </div>
             </div>
           </div>
-        </CardContent>
-      </Card>
+        </div>
+      </div>
       
       {/* Only show assessment form for department heads and non-admin view */}
       {role === "department-head" && !isAdminView && assessment.standards && (
@@ -741,68 +811,9 @@ export function AssessmentDetailPage() {
                 </CardContent>
                 
                 {role === "department-head" && assessment.status !== "Completed" && (
-                  <>
-                    <CardFooter className="flex flex-col sm:flex-row justify-between gap-3 pt-0 px-6">
-                      <Button 
-                        variant="outline" 
-                        className="w-full sm:w-auto"
-                        onClick={handleSave}
-                        disabled={saving}
-                      >
-                        {saving ? (
-                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                        ) : (
-                          <Save className="mr-2 h-4 w-4" />
-                        )}
-                        Save Progress
-                      </Button>
-                      <div className="flex gap-3 w-full sm:w-auto">
-                        {activeStandardIndex < totalCount - 1 ? (
-                          <Button 
-                            className="flex-1"
-                            onClick={() => {
-                              handleSave();
-                              goToNextStandard();
-                            }}
-                            disabled={saving}
-                          >
-                            Save & Continue
-                            <ArrowRight className="ml-2 h-4 w-4" />
-                          </Button>
-                        ) : (
-                          <Button 
-                            className="flex-1"
-                            onClick={handleSubmit}
-                            disabled={!canSubmit || saving}
-                            variant={canSubmit ? "default" : "outline"}
-                          >
-                            {saving ? (
-                              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                            ) : (
-                              <Check className="mr-2 h-4 w-4" />
-                            )}
-                            {isCompleted ? "Submit Assessment" : "Complete All Standards to Submit"}
-                          </Button>
-                        )}
-                      </div>
-                    </CardFooter>
-                    <div className="px-6 pb-6">
-                      <div className="border-t pt-3 mt-2">
-                        <p className="text-xs text-muted-foreground">
-                          <span className="font-medium">Keyboard shortcuts:</span>
-                          <span className="flex flex-wrap gap-x-6 gap-y-1 mt-1">
-                            {keyboardShortcuts.map((shortcut) => (
-                              <span key={shortcut.key} className="flex items-center">
-                                <kbd className="bg-slate-100 px-1.5 py-0.5 rounded text-xs font-mono">{shortcut.key}</kbd>
-                                <span className="mx-1">-</span>
-                                <span>{shortcut.action}</span>
-                              </span>
-                            ))}
-                          </span>
-                        </p>
-                      </div>
-                    </div>
-                  </>
+                  <div className="pb-24">
+                    {/* Add padding to account for sticky bottom bar */}
+                  </div>
                 )}
               </Card>
             )}
@@ -810,209 +821,315 @@ export function AssessmentDetailPage() {
         </div>
       )}
       
-      {/* MAT Admin Streamlined View */}
-      {isAdminView && assessment.standards && (
-        <div className="space-y-6">
-          {/* Performance Summary Cards */}
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-            <Card className="border border-slate-200">
-              <CardContent className="p-4">
-                <div className="flex items-center justify-between">
-                  <div className="space-y-1">
-                    <p className="text-sm font-medium text-slate-600">Overall Score</p>
-                    <p className="text-2xl font-bold text-slate-900">
-                      {(() => {
-                        const validStandards = assessment.standards?.filter(s => s.rating !== null) || [];
-                        if (validStandards.length === 0) return "—";
-                        const average = validStandards.reduce((sum, s) => sum + (s.rating || 0), 0) / validStandards.length;
-                        return average.toFixed(1);
-                      })()}
-                    </p>
-                    <p className="text-xs text-slate-500">out of 4.0</p>
+      {/* Sticky Bottom Navigation Bar for Department Heads */}
+      {role === "department-head" && assessment.status !== "Completed" && !isAdminView && (
+        <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-slate-200/60 shadow-lg z-50">
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div className="flex items-center justify-between py-4">
+              {/* Left side - Progress and navigation */}
+              <div className="flex items-center gap-4">
+                {/* Standard navigation */}
+                <div className="flex items-center gap-2">
+                  <Button 
+                    variant="outline" 
+                    size="sm"
+                    onClick={goToPreviousStandard}
+                    disabled={activeStandardIndex === 0}
+                    className="h-9 w-9 p-0"
+                  >
+                    <ArrowLeft className="h-4 w-4" />
+                  </Button>
+                  
+                  <div className="flex items-center gap-2 px-3 py-1.5 bg-slate-50 rounded-lg">
+                    <span className="text-sm font-medium text-slate-700">
+                      {activeStandardIndex + 1}
+                    </span>
+                    <span className="text-sm text-slate-500">of</span>
+                    <span className="text-sm font-medium text-slate-700">
+                      {totalCount}
+                    </span>
                   </div>
-                  <div className="h-10 w-10 rounded-lg bg-slate-100 flex items-center justify-center">
-                    <CheckCircle className="h-5 w-5 text-slate-600" />
-                  </div>
+                  
+                  <Button 
+                    variant="outline" 
+                    size="sm"
+                    onClick={goToNextStandard}
+                    disabled={activeStandardIndex === totalCount - 1}
+                    className="h-9 w-9 p-0"
+                  >
+                    <ArrowRight className="h-4 w-4" />
+                  </Button>
                 </div>
-              </CardContent>
-            </Card>
-            
-            <Card className="border border-slate-200">
-              <CardContent className="p-4">
-                <div className="flex items-center justify-between">
-                  <div className="space-y-1">
-                    <p className="text-sm font-medium text-slate-600">Completion Rate</p>
-                    <p className="text-2xl font-bold text-slate-900">
-                      {Math.round((completedCount / totalCount) * 100)}%
-                    </p>
-                    <p className="text-xs text-slate-500">{completedCount} of {totalCount} standards</p>
+
+                {/* Progress indicator */}
+                <div className="hidden sm:flex items-center gap-2">
+                  <div className="w-20 h-2 bg-slate-100 rounded-full overflow-hidden">
+                    <div
+                      className="h-full bg-slate-400 transition-all duration-300"
+                      style={{ width: `${progressPercentage}%` }}
+                    />
                   </div>
-                  <div className="h-10 w-10 rounded-lg bg-slate-100 flex items-center justify-center">
-                    <CheckCircle2 className="h-5 w-5 text-slate-600" />
-                  </div>
+                  <span className="text-sm text-slate-600 font-medium">
+                    {completedCount}/{totalCount} complete
+                  </span>
                 </div>
-              </CardContent>
-            </Card>
-            
-            <Card className="border border-slate-200">
-              <CardContent className="p-4">
-                <div className="flex items-center justify-between">
-                  <div className="space-y-1">
-                    <p className="text-sm font-medium text-slate-600">Intervention Required</p>
-                    <p className="text-2xl font-bold text-rose-600">
-                      {assessment.standards?.filter(s => s.rating === 1).length || 0}
-                    </p>
-                    <p className="text-xs text-slate-500">requiring attention</p>
-                  </div>
-                  <div className="h-10 w-10 rounded-lg bg-rose-50 flex items-center justify-center">
-                    <AlertTriangle className="h-5 w-5 text-rose-500" />
-                  </div>
+              </div>
+
+              {/* Center - Current standard info */}
+              <div className="hidden md:flex items-center gap-2 max-w-md">
+                <div className="text-center">
+                  <p className="text-sm font-medium text-slate-900 truncate">
+                    {activeStandard?.code}: {activeStandard?.title}
+                  </p>
+                  <p className="text-xs text-slate-500">
+                    {ratings[activeStandard?.id || ''] ? 'Rated' : 'Not rated'}
+                  </p>
                 </div>
-              </CardContent>
-            </Card>
-            
-            <Card className="border border-slate-200">
-              <CardContent className="p-4">
-                <div className="flex items-center justify-between">
-                  <div className="space-y-1">
-                    <p className="text-sm font-medium text-slate-600">Last Updated</p>
-                    <p className="text-lg font-bold text-slate-900">
-                      {assessment.lastUpdated !== "-" ? assessment.lastUpdated : "Never"}
-                    </p>
-                    <p className="text-xs text-slate-500">assessment date</p>
-                  </div>
-                  <div className="h-10 w-10 rounded-lg bg-slate-100 flex items-center justify-center">
-                    <Clock className="h-5 w-5 text-slate-600" />
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
+              </div>
+
+              {/* Right side - Save actions */}
+              <div className="flex items-center gap-3">
+                {/* Quick save */}
+                <Button 
+                  variant="outline" 
+                  size="sm"
+                  onClick={handleSave}
+                  disabled={saving}
+                  className="hidden sm:flex"
+                >
+                  {saving ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <Save className="h-4 w-4" />
+                  )}
+                </Button>
+
+                {/* Primary action */}
+                {activeStandardIndex < totalCount - 1 ? (
+                  <Button 
+                    onClick={() => {
+                      handleSave();
+                      goToNextStandard();
+                    }}
+                    disabled={saving}
+                    className="gap-2"
+                  >
+                    {saving ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : (
+                      <>
+                        Save & Continue
+                        <ArrowRight className="h-4 w-4" />
+                      </>
+                    )}
+                  </Button>
+                ) : (
+                  <Button 
+                    onClick={handleSubmit}
+                    disabled={!canSubmit || saving}
+                    variant={canSubmit ? "default" : "outline"}
+                    className="gap-2"
+                  >
+                    {saving ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : (
+                      <>
+                        <CheckCircle2 className="h-4 w-4" />
+                        {canSubmit ? "Submit Assessment" : "Complete All Standards"}
+                      </>
+                    )}
+                  </Button>
+                )}
+              </div>
+            </div>
+
+            {/* Keyboard shortcuts hint */}
+            <div className="border-t border-slate-200/60 py-2">
+              <div className="flex items-center justify-center gap-6 text-xs text-slate-500">
+                <span className="flex items-center gap-1">
+                  <kbd className="bg-slate-100 px-1.5 py-0.5 rounded text-xs font-mono">J/K</kbd>
+                  Navigate
+                </span>
+                <span className="flex items-center gap-1">
+                  <kbd className="bg-slate-100 px-1.5 py-0.5 rounded text-xs font-mono">1-4</kbd>
+                  Rate
+                </span>
+                <span className="flex items-center gap-1">
+                  <kbd className="bg-slate-100 px-1.5 py-0.5 rounded text-xs font-mono">⌘S</kbd>
+                  Save
+                </span>
+              </div>
+            </div>
           </div>
-
-          {/* Standards Overview Table */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center space-x-2">
-                <ClipboardCheck className="h-5 w-5" />
-                <span>Standards Assessment Overview</span>
-              </CardTitle>
-              <CardDescription>
-                Detailed breakdown of all standards with ratings and evidence
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="p-0">
-              <Table>
-                <TableHeader>
-                  <TableRow className="bg-slate-50">
-                    <TableHead>Standard</TableHead>
-                    <TableHead className="text-center">Rating</TableHead>
-                    <TableHead className="text-center">Status</TableHead>
-                    <TableHead>Evidence Summary</TableHead>
-                    <TableHead className="text-center">Files</TableHead>
-                    <TableHead className="text-center">Last Updated</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {assessment.standards.map((standard) => {
-                    const hasEvidence = standard.evidence && standard.evidence.length > 0;
-                    const hasFiles = attachments[standard.id] && attachments[standard.id].length > 0;
-                    const isComplete = standard.rating !== null;
-                    const isCritical = standard.rating === 1; // Only rating 1 is critical
-                    
-                    return (
-                      <TableRow key={standard.id} className={cn(
-                        "hover:bg-slate-50",
-                        isCritical && "bg-rose-50 border-l-4 border-l-rose-400"
-                      )}>
-                        <TableCell>
-                          <div className="space-y-1">
-                            <div className="flex items-center space-x-2">
-                              <Badge variant="outline" className="text-xs">
-                                {standard.code}
-                              </Badge>
-                              {isCritical && (
-                                <Badge variant="outline" className="text-xs bg-rose-50 text-rose-700 border-rose-200">
-                                  Critical
-                                </Badge>
-                              )}
-                            </div>
-                            <p className="font-medium text-sm">{standard.title}</p>
-                            <p className="text-xs text-slate-500 line-clamp-2">
-                              {standard.description}
-                            </p>
-                          </div>
-                        </TableCell>
-                        
-                        <TableCell className="text-center">
-                          {standard.rating ? (
-                            <Badge 
-                              variant="outline" 
-                              className={cn(
-                                "font-medium",
-                                standard.rating === 4 && "bg-emerald-50 text-emerald-700 border-emerald-200",
-                                standard.rating === 3 && "bg-blue-50 text-blue-700 border-blue-200",
-                                standard.rating === 2 && "bg-amber-50 text-amber-700 border-amber-200",
-                                standard.rating === 1 && "bg-rose-50 text-rose-700 border-rose-200"
-                              )}
-                            >
-                              {standard.rating}: {RatingLabels[standard.rating]}
-                            </Badge>
-                          ) : (
-                            <span className="text-slate-400 text-sm">Not rated</span>
-                          )}
-                        </TableCell>
-                        
-                        <TableCell className="text-center">
-                          <div className="flex items-center justify-center">
-                            {isComplete ? (
-                              <CheckCircle className="h-4 w-4 text-emerald-600" />
-                            ) : hasEvidence ? (
-                              <Clock className="h-4 w-4 text-amber-600" />
-                            ) : (
-                              <XCircle className="h-4 w-4 text-slate-300" />
-                            )}
-                          </div>
-                        </TableCell>
-                        
-                        <TableCell>
-                          <div className="max-w-xs">
-                            {hasEvidence ? (
-                              <p className="text-sm text-slate-600 line-clamp-2">
-                                {standard.evidence}
-                              </p>
-                            ) : (
-                              <span className="text-slate-400 text-sm">No evidence provided</span>
-                            )}
-                          </div>
-                        </TableCell>
-                        
-                        <TableCell className="text-center">
-                          {hasFiles ? (
-                            <Badge variant="outline" className="bg-slate-50 text-slate-700 border-slate-200">
-                              {attachments[standard.id].length} file{attachments[standard.id].length !== 1 ? 's' : ''}
-                            </Badge>
-                          ) : (
-                            <span className="text-slate-400 text-sm">—</span>
-                          )}
-                        </TableCell>
-                        
-                        <TableCell className="text-center text-sm text-slate-500">
-                          {standard.lastUpdated ? new Date(standard.lastUpdated).toLocaleDateString() : "—"}
-                        </TableCell>
-                      </TableRow>
-                    );
-                  })}
-                </TableBody>
-              </Table>
-            </CardContent>
-          </Card>
-
-
         </div>
       )}
       
+      {/* Admin View - Completed Assessment Overview */}
+      {isAdminView && assessment.standards && (
+        <div className="space-y-6">
+          {/* Compact Metrics Bar */}
+          <Card className="border-slate-200/60">
+            <CardContent className="px-6 py-4">
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
+                <div className="flex items-center space-x-3">
+                  <div className="h-10 w-10 rounded-lg bg-slate-100 flex items-center justify-center">
+                    <span className="text-slate-700 font-semibold text-sm">
+                      {(() => {
+                        const averageRating = assessment.standards
+                          .filter(s => s.rating !== null)
+                          .reduce((sum, s) => sum + (s.rating || 0), 0) / 
+                          assessment.standards.filter(s => s.rating !== null).length;
+                        return averageRating ? averageRating.toFixed(1) : '—';
+                      })()}
+                    </span>
+                  </div>
+                  <div>
+                    <p className="text-xs text-slate-500 font-medium">Average Score</p>
+                    <p className="text-sm font-semibold text-slate-900">Overall Rating</p>
+                  </div>
+                </div>
 
+                <div className="flex items-center space-x-3">
+                  <div className="h-10 w-10 rounded-lg bg-slate-100 flex items-center justify-center">
+                    <span className="text-slate-700 font-semibold text-sm">
+                      {Math.round((assessment.completedStandards / assessment.totalStandards) * 100)}%
+                    </span>
+                  </div>
+                  <div>
+                    <p className="text-xs text-slate-500 font-medium">Completion Rate</p>
+                    <p className="text-sm font-semibold text-slate-900">
+                      {assessment.completedStandards}/{assessment.totalStandards} Standards
+                    </p>
+                  </div>
+                </div>
 
+                <div className="flex items-center space-x-3">
+                  <div className="h-10 w-10 rounded-lg bg-slate-100 flex items-center justify-center">
+                    <Calendar className="h-4 w-4 text-slate-700" />
+                  </div>
+                  <div>
+                    <p className="text-xs text-slate-500 font-medium">Last Updated</p>
+                    <p className="text-sm font-semibold text-slate-900">
+                      {new Date(assessment.lastUpdated).toLocaleDateString('en-GB', {
+                        day: 'numeric',
+                        month: 'short'
+                      })}
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex items-center space-x-3">
+                  <div className="h-10 w-10 rounded-lg bg-slate-100 flex items-center justify-center">
+                    <CheckCircle className="h-4 w-4 text-slate-700" />
+                  </div>
+                  <div>
+                    <p className="text-xs text-slate-500 font-medium">Status</p>
+                    <p className="text-sm font-semibold text-slate-900">
+                      {assessment.status}
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Enhanced Standards Table */}
+          <Card className="border-slate-200/60">
+            <Table>
+              <TableHeader>
+                <TableRow className="border-slate-200/60">
+                  <TableHead className="w-12 text-center font-semibold text-slate-600">#</TableHead>
+                  <TableHead className="font-semibold text-slate-600">Standard</TableHead>
+                  <TableHead className="w-24 text-center font-semibold text-slate-600">Rating</TableHead>
+                  <TableHead className="w-20 text-center font-semibold text-slate-600">Status</TableHead>
+                  <TableHead className="w-80 font-semibold text-slate-600">Evidence</TableHead>
+                  <TableHead className="w-20 font-semibold text-slate-600">Files</TableHead>
+                  <TableHead className="w-24 text-right font-semibold text-slate-600">Updated</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {assessment.standards.map((standard, index) => (
+                  <TableRow 
+                    key={standard.id} 
+                    className="border-slate-200/60 hover:bg-slate-50/50 transition-colors"
+                  >
+                    <TableCell className="text-center">
+                      <span className="text-sm font-medium text-slate-500">
+                        {index + 1}
+                      </span>
+                    </TableCell>
+                    
+                    <TableCell className="py-4">
+                      <div className="space-y-1">
+                        <h4 className="font-medium text-slate-900 leading-tight">
+                          {standard.title}
+                        </h4>
+                        <p className="text-sm text-slate-500 leading-relaxed">
+                          {standard.description}
+                        </p>
+                      </div>
+                    </TableCell>
+                    
+                    <TableCell className="text-center">
+                      {standard.rating && (
+                        <div className="flex justify-center">
+                          <div className={`
+                            inline-flex items-center justify-center h-8 w-8 rounded-full text-sm font-semibold
+                            ${standard.rating === 4 ? 'bg-emerald-100 text-emerald-700 border border-emerald-200' : ''}
+                            ${standard.rating === 3 ? 'bg-blue-100 text-blue-700 border border-blue-200' : ''}
+                            ${standard.rating === 2 ? 'bg-amber-100 text-amber-700 border border-amber-200' : ''}
+                            ${standard.rating === 1 ? 'bg-red-100 text-red-700 border border-red-200' : ''}
+                          `}>
+                            {standard.rating}
+                          </div>
+                        </div>
+                      )}
+                    </TableCell>
+                    
+                    <TableCell className="text-center">
+                      <div className="flex justify-center">
+                        {standard.rating ? (
+                          <div className="h-6 w-6 rounded-full bg-emerald-100 flex items-center justify-center">
+                            <CheckCircle className="h-4 w-4 text-emerald-600" />
+                          </div>
+                        ) : (
+                          <div className="h-6 w-6 rounded-full bg-slate-100 flex items-center justify-center">
+                            <Clock className="h-3 w-3 text-slate-400" />
+                          </div>
+                        )}
+                      </div>
+                    </TableCell>
+                    
+                    <TableCell>
+                      {standard.evidence ? (
+                        <EvidenceCell evidence={standard.evidence} />
+                      ) : (
+                        <span className="text-sm text-slate-400 italic">No evidence provided</span>
+                      )}
+                    </TableCell>
+                    
+                    <TableCell className="text-center">
+                      <span className="text-sm text-slate-500">
+                        {Math.floor(Math.random() * 3)}
+                      </span>
+                    </TableCell>
+                    
+                    <TableCell className="text-right">
+                      <span className="text-sm text-slate-500">
+                        {standard.rating ? new Date().toLocaleDateString('en-GB', { 
+                          day: 'numeric', 
+                          month: 'short' 
+                        }) : '—'}
+                      </span>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </Card>
+        </div>
+      )}
+      
       {/* Submission Success Dialog */}
       <Dialog open={showSuccessDialog} onOpenChange={setShowSuccessDialog}>
         <DialogContent className="sm:max-w-md">

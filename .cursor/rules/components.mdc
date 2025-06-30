@@ -158,8 +158,8 @@ This document provides a functional description of the frontend components in th
     - Helper Functions: For calculating scores, determining change indicators, status colors, category icons, and performance trends.
 
 ### `src/components/MatAdminAssessmentsView.tsx`
-- **Description:** **(Superseded by `SchoolPerformanceView.tsx`)** This component is no longer the primary view for MAT administrators. For the current MAT admin assessment overview and school performance monitoring, please refer to `SchoolPerformanceView.tsx`.
-- **Original Functionality (Legacy Summary):** This component previously offered a way for MAT administrators to view assessments with features like tabbed navigation for "Completed" and "Ongoing" assessments, filtering options, and card/table views. It has been replaced by the more advanced and school-centric `SchoolPerformanceView`.
+- **Description:** **(Obsolete)** This component is no longer in use and has been replaced by `SchoolPerformanceView.tsx`.
+
 
 ### `src/components/RoleSwitcher.tsx`
 - **Description:** A dropdown menu component that allows users to switch between predefined roles (e.g., "MAT Administrator", "School Dept. Head"). The selected role is managed via the `UserContext`.

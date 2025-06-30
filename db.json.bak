@@ -6,7 +6,8 @@
       "category": "Education",
       "school": {
         "school_id": "1",
-        "school_name": "Oak Hill Academy"
+        "school_name": "Oak Hill Academy",
+        "id": "1"
       },
       "status": "In Progress",
       "completed_standards": 2,
@@ -86,7 +87,8 @@
       "category": "Finance & Procurement",
       "school": {
         "school_id": "2",
-        "school_name": "Riverside Primary"
+        "school_name": "Riverside Primary",
+        "id": "2"
       },
       "status": "Completed",
       "completed_standards": 8,
@@ -179,6 +181,326 @@
       "academic_year": "2024-2025"
     },
     {
+      "id": "202",
+      "name": "Education Maturity Assessment",
+      "category": "Education",
+      "school": {
+        "school_id": "2",
+        "school_name": "Riverside Primary"
+      },
+      "status": "Completed",
+      "completed_standards": 6,
+      "total_standards": 6,
+      "last_updated": "2024-04-15T16:45:00Z",
+      "due_date": "2024-04-25",
+      "assigned_to": [
+        {
+          "id": "3",
+          "name": "Emma Thompson",
+          "email": "emma.thompson@riverside.edu",
+          "role": "Head of Education"
+        }
+      ],
+      "standards": [
+        {
+          "standard_id": "ES1",
+          "standard_name": "Quality of Education",
+          "description": "Curriculum intent, implementation, and impact. Focus on sequencing, ambition, progression, and outcomes across all key stages.",
+          "area_id": "Education",
+          "rating": 3,
+          "evidence_comments": "Strong curriculum framework in place.",
+          "submitted_at": "2024-04-10T14:30:00Z"
+        },
+        {
+          "standard_id": "ES2",
+          "standard_name": "Behaviour & Attitudes",
+          "description": "Standards of behaviour, attendance, punctuality, and attitudes to learning. Evidence of a safe and respectful learning environment.",
+          "area_id": "Education",
+          "rating": 4,
+          "evidence_comments": "Excellent behaviour standards maintained.",
+          "submitted_at": "2024-04-11T09:15:00Z"
+        },
+        {
+          "standard_id": "ES3",
+          "standard_name": "Personal Development",
+          "description": "Opportunities for spiritual, moral, social, and cultural development. Focus on character, citizenship, enrichment, and pupil wellbeing.",
+          "area_id": "Education",
+          "rating": 3,
+          "evidence_comments": "Good range of development opportunities.",
+          "submitted_at": "2024-04-12T11:00:00Z"
+        },
+        {
+          "standard_id": "ES4",
+          "standard_name": "Leadership & Management",
+          "description": "Visionary and ethical leadership at all levels. Effective governance, safeguarding, staff development, and accountability structures.",
+          "area_id": "Education",
+          "rating": 3,
+          "evidence_comments": "Leadership structures are effective.",
+          "submitted_at": "2024-04-13T10:30:00Z"
+        },
+        {
+          "standard_id": "ES5",
+          "standard_name": "Early Years Education",
+          "description": "High-quality early education provision. Emphasis on communication, physical development, literacy, and preparing children for Year 1.",
+          "area_id": "Education",
+          "rating": 4,
+          "evidence_comments": "Outstanding early years provision.",
+          "submitted_at": "2024-04-14T14:00:00Z"
+        },
+        {
+          "standard_id": "ES6",
+          "standard_name": "Sixth Form Provision",
+          "description": "Quality, ambition, and impact of post-16 education. Focus on destinations, progression pathways, curriculum breadth, and outcomes.",
+          "area_id": "Education",
+          "rating": 2,
+          "evidence_comments": "Sixth form not applicable to primary school.",
+          "submitted_at": "2024-04-14T14:30:00Z"
+        }
+      ],
+      "term": "Spring",
+      "academic_year": "2024-2025"
+    },
+    {
+      "id": "203",
+      "name": "Education Maturity Assessment",
+      "category": "Education",
+      "school": {
+        "school_id": "2",
+        "school_name": "Riverside Primary"
+      },
+      "status": "Completed",
+      "completed_standards": 6,
+      "total_standards": 6,
+      "last_updated": "2023-12-15T16:45:00Z",
+      "due_date": "2023-12-25",
+      "assigned_to": [
+        {
+          "id": "3",
+          "name": "Emma Thompson",
+          "email": "emma.thompson@riverside.edu",
+          "role": "Head of Education"
+        }
+      ],
+      "standards": [
+        {
+          "standard_id": "ES1",
+          "standard_name": "Quality of Education",
+          "description": "Curriculum intent, implementation, and impact. Focus on sequencing, ambition, progression, and outcomes across all key stages.",
+          "area_id": "Education",
+          "rating": 2,
+          "evidence_comments": "Curriculum needs improvement.",
+          "submitted_at": "2023-12-10T14:30:00Z"
+        },
+        {
+          "standard_id": "ES2",
+          "standard_name": "Behaviour & Attitudes",
+          "description": "Standards of behaviour, attendance, punctuality, and attitudes to learning. Evidence of a safe and respectful learning environment.",
+          "area_id": "Education",
+          "rating": 3,
+          "evidence_comments": "Good behaviour standards.",
+          "submitted_at": "2023-12-11T09:15:00Z"
+        },
+        {
+          "standard_id": "ES3",
+          "standard_name": "Personal Development",
+          "description": "Opportunities for spiritual, moral, social, and cultural development. Focus on character, citizenship, enrichment, and pupil wellbeing.",
+          "area_id": "Education",
+          "rating": 2,
+          "evidence_comments": "Limited development opportunities.",
+          "submitted_at": "2023-12-12T11:00:00Z"
+        },
+        {
+          "standard_id": "ES4",
+          "standard_name": "Leadership & Management",
+          "description": "Visionary and ethical leadership at all levels. Effective governance, safeguarding, staff development, and accountability structures.",
+          "area_id": "Education",
+          "rating": 3,
+          "evidence_comments": "Leadership is developing.",
+          "submitted_at": "2023-12-13T10:30:00Z"
+        },
+        {
+          "standard_id": "ES5",
+          "standard_name": "Early Years Education",
+          "description": "High-quality early education provision. Emphasis on communication, physical development, literacy, and preparing children for Year 1.",
+          "area_id": "Education",
+          "rating": 3,
+          "evidence_comments": "Good early years provision.",
+          "submitted_at": "2023-12-14T14:00:00Z"
+        },
+        {
+          "standard_id": "ES6",
+          "standard_name": "Sixth Form Provision",
+          "description": "Quality, ambition, and impact of post-16 education. Focus on destinations, progression pathways, curriculum breadth, and outcomes.",
+          "area_id": "Education",
+          "rating": 2,
+          "evidence_comments": "Not applicable to primary school.",
+          "submitted_at": "2023-12-14T14:30:00Z"
+        }
+      ],
+      "term": "Autumn",
+      "academic_year": "2023-2024"
+    },
+    {
+      "id": "301",
+      "name": "Education Maturity Assessment",
+      "category": "Education",
+      "school": {
+        "school_id": "1",
+        "school_name": "Oak Hill Academy"
+      },
+      "status": "Completed",
+      "completed_standards": 6,
+      "total_standards": 6,
+      "last_updated": "2024-04-20T16:45:00Z",
+      "due_date": "2024-04-30",
+      "assigned_to": [
+        {
+          "id": "4",
+          "name": "Michael Brown",
+          "email": "michael.brown@oakhill.edu",
+          "role": "Head of Education"
+        }
+      ],
+      "standards": [
+        {
+          "standard_id": "ES1",
+          "standard_name": "Quality of Education",
+          "description": "Curriculum intent, implementation, and impact. Focus on sequencing, ambition, progression, and outcomes across all key stages.",
+          "area_id": "Education",
+          "rating": 2,
+          "evidence_comments": "Curriculum under review.",
+          "submitted_at": "2024-04-15T14:30:00Z"
+        },
+        {
+          "standard_id": "ES2",
+          "standard_name": "Behaviour & Attitudes",
+          "description": "Standards of behaviour, attendance, punctuality, and attitudes to learning. Evidence of a safe and respectful learning environment.",
+          "area_id": "Education",
+          "rating": 3,
+          "evidence_comments": "Behaviour policy recently updated.",
+          "submitted_at": "2024-04-16T09:15:00Z"
+        },
+        {
+          "standard_id": "ES3",
+          "standard_name": "Personal Development",
+          "description": "Opportunities for spiritual, moral, social, and cultural development. Focus on character, citizenship, enrichment, and pupil wellbeing.",
+          "area_id": "Education",
+          "rating": 2,
+          "evidence_comments": "Development opportunities limited.",
+          "submitted_at": "2024-04-17T11:00:00Z"
+        },
+        {
+          "standard_id": "ES4",
+          "standard_name": "Leadership & Management",
+          "description": "Visionary and ethical leadership at all levels. Effective governance, safeguarding, staff development, and accountability structures.",
+          "area_id": "Education",
+          "rating": 3,
+          "evidence_comments": "Leadership team restructured.",
+          "submitted_at": "2024-04-18T10:30:00Z"
+        },
+        {
+          "standard_id": "ES5",
+          "standard_name": "Early Years Education",
+          "description": "High-quality early education provision. Emphasis on communication, physical development, literacy, and preparing children for Year 1.",
+          "area_id": "Education",
+          "rating": 3,
+          "evidence_comments": "Early years showing improvement.",
+          "submitted_at": "2024-04-19T14:00:00Z"
+        },
+        {
+          "standard_id": "ES6",
+          "standard_name": "Sixth Form Provision",
+          "description": "Quality, ambition, and impact of post-16 education. Focus on destinations, progression pathways, curriculum breadth, and outcomes.",
+          "area_id": "Education",
+          "rating": 2,
+          "evidence_comments": "Sixth form results below target.",
+          "submitted_at": "2024-04-19T14:30:00Z"
+        }
+      ],
+      "term": "Spring",
+      "academic_year": "2024-2025"
+    },
+    {
+      "id": "302",
+      "name": "Education Maturity Assessment",
+      "category": "Education",
+      "school": {
+        "school_id": "1",
+        "school_name": "Oak Hill Academy"
+      },
+      "status": "Completed",
+      "completed_standards": 6,
+      "total_standards": 6,
+      "last_updated": "2023-12-20T16:45:00Z",
+      "due_date": "2023-12-30",
+      "assigned_to": [
+        {
+          "id": "4",
+          "name": "Michael Brown",
+          "email": "michael.brown@oakhill.edu",
+          "role": "Head of Education"
+        }
+      ],
+      "standards": [
+        {
+          "standard_id": "ES1",
+          "standard_name": "Quality of Education",
+          "description": "Curriculum intent, implementation, and impact. Focus on sequencing, ambition, progression, and outcomes across all key stages.",
+          "area_id": "Education",
+          "rating": 2,
+          "evidence_comments": "Curriculum requires significant work.",
+          "submitted_at": "2023-12-15T14:30:00Z"
+        },
+        {
+          "standard_id": "ES2",
+          "standard_name": "Behaviour & Attitudes",
+          "description": "Standards of behaviour, attendance, punctuality, and attitudes to learning. Evidence of a safe and respectful learning environment.",
+          "area_id": "Education",
+          "rating": 2,
+          "evidence_comments": "Behaviour issues being addressed.",
+          "submitted_at": "2023-12-16T09:15:00Z"
+        },
+        {
+          "standard_id": "ES3",
+          "standard_name": "Personal Development",
+          "description": "Opportunities for spiritual, moral, social, and cultural development. Focus on character, citizenship, enrichment, and pupil wellbeing.",
+          "area_id": "Education",
+          "rating": 2,
+          "evidence_comments": "Personal development needs attention.",
+          "submitted_at": "2023-12-17T11:00:00Z"
+        },
+        {
+          "standard_id": "ES4",
+          "standard_name": "Leadership & Management",
+          "description": "Visionary and ethical leadership at all levels. Effective governance, safeguarding, staff development, and accountability structures.",
+          "area_id": "Education",
+          "rating": 2,
+          "evidence_comments": "Leadership changes required.",
+          "submitted_at": "2023-12-18T10:30:00Z"
+        },
+        {
+          "standard_id": "ES5",
+          "standard_name": "Early Years Education",
+          "description": "High-quality early education provision. Emphasis on communication, physical development, literacy, and preparing children for Year 1.",
+          "area_id": "Education",
+          "rating": 2,
+          "evidence_comments": "Early years needs improvement.",
+          "submitted_at": "2023-12-19T14:00:00Z"
+        },
+        {
+          "standard_id": "ES6",
+          "standard_name": "Sixth Form Provision",
+          "description": "Quality, ambition, and impact of post-16 education. Focus on destinations, progression pathways, curriculum breadth, and outcomes.",
+          "area_id": "Education",
+          "rating": 1,
+          "evidence_comments": "Sixth form requires urgent attention.",
+          "submitted_at": "2023-12-19T14:30:00Z"
+        }
+      ],
+      "term": "Autumn",
+      "academic_year": "2023-2024"
+    },
+    {
       "id": "1751223875335-5",
       "name": "Human Resources Assessment",
       "category": "Human Resources",
@@ -245,10 +567,10 @@
         "school_id": "1",
         "school_name": "Oak Hill Academy"
       },
-      "status": "Completed",
-      "completed_standards": 6,
+      "status": "Not Started",
+      "completed_standards": 0,
       "total_standards": 6,
-      "last_updated": "2025-06-30T22:20:33.049Z",
+      "last_updated": "2025-06-29T19:04:58.631Z",
       "assigned_to": [],
       "standards": [
         {
@@ -256,54 +578,48 @@
           "code": "EG1",
           "title": "Strategic Leadership",
           "description": "Clear vision, ethos, and strategic direction set and monitored by the board. Evidence of alignment to trust-wide priorities and improvement plans.",
-          "rating": 4,
-          "evidence_comments": "",
-          "submitted_at": "2025-06-30T22:20:33.025Z"
+          "rating": null,
+          "evidence_comments": ""
         },
         {
           "standard_id": "EG2",
           "code": "EG2",
           "title": "Accountability for Educational and Financial Performance",
           "description": "Robust oversight of educational outcomes, safeguarding, and financial performance. Challenge and support provided to executive leaders.",
-          "rating": 4,
-          "evidence_comments": "",
-          "submitted_at": "2025-06-30T22:20:33.025Z"
+          "rating": null,
+          "evidence_comments": ""
         },
         {
           "standard_id": "EG3",
           "code": "EG3",
           "title": "Governance Capacity & Skills",
           "description": "Effective recruitment, induction, and development of trustees and governors. Skills audit and succession planning in place.",
-          "rating": 4,
-          "evidence_comments": "",
-          "submitted_at": "2025-06-30T22:20:33.025Z"
+          "rating": null,
+          "evidence_comments": ""
         },
         {
           "standard_id": "EG4",
           "code": "EG4",
           "title": "Governance Structures",
           "description": "Appropriate and compliant governance structures established at trust and school level. Clarity of roles, responsibilities, and delegation.",
-          "rating": 3,
-          "evidence_comments": "",
-          "submitted_at": "2025-06-30T22:20:33.025Z"
+          "rating": null,
+          "evidence_comments": ""
         },
         {
           "standard_id": "EG5",
           "code": "EG5",
           "title": "Legal & Regulatory Compliance",
           "description": "Compliance with statutory and regulatory duties, including safeguarding, data protection, financial reporting, and charitable obligations.",
-          "rating": 3,
-          "evidence_comments": "",
-          "submitted_at": "2025-06-30T22:20:33.025Z"
+          "rating": null,
+          "evidence_comments": ""
         },
         {
           "standard_id": "EG6",
           "code": "EG6",
           "title": "Evaluation & Continuous Improvement",
           "description": "Regular self-evaluation of governance effectiveness, including external reviews. Evidence of learning, improvement actions, and impact.",
-          "rating": 3,
-          "evidence_comments": "",
-          "submitted_at": "2025-06-30T22:20:33.025Z"
+          "rating": null,
+          "evidence_comments": ""
         }
       ],
       "term": "Summer",
