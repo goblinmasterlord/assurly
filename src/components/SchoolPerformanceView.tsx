@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useMemo, useState, useEffect } from "react";
 import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -61,6 +61,7 @@ import {
   Minus
 } from "lucide-react";
 import { AssessmentInvitationSheet } from "@/components/AssessmentInvitationSheet";
+import { MiniTrendChart, type TrendDataPoint } from "@/components/ui/mini-trend-chart";
 
 type SchoolPerformanceViewProps = {
   assessments: Assessment[];
@@ -75,7 +76,32 @@ export function SchoolPerformanceView({ assessments, refreshAssessments }: Schoo
   const [criticalFilter, setCriticalFilter] = useState<boolean>(false);
   const [invitationSheetOpen, setInvitationSheetOpen] = useState(false);
   const [expandedSchools, setExpandedSchools] = useState<Set<string>>(new Set());
+  const [expandedHistoric, setExpandedHistoric] = useState<Set<string>>(new Set());
   const [selectedTerm, setSelectedTerm] = useState<string>("Summer 2024-2025"); // Default to current term
+  const [schoolsWithHistoric, setSchoolsWithHistoric] = useState<Map<string, any>>(new Map());
+
+  // Load schools with historic data from db.json
+  useEffect(() => {
+    const loadSchoolsWithHistoric = async () => {
+      try {
+        // In production, this would be an API call
+        // For now, we'll simulate loading from db.json
+        const response = await fetch('/db.json');
+        const data = await response.json();
+        
+        const schoolsMap = new Map();
+        data.schools.forEach((school: any) => {
+          schoolsMap.set(school.school_id, school);
+        });
+        
+        setSchoolsWithHistoric(schoolsMap);
+      } catch (error) {
+        console.error('Failed to load schools data:', error);
+      }
+    };
+
+    loadSchoolsWithHistoric();
+  }, []);
 
   // Get available terms from assessments
   const availableTerms = useMemo(() => {
@@ -143,8 +169,15 @@ export function SchoolPerformanceView({ assessments, refreshAssessments }: Schoo
       const schoolId = assessment.school.id;
       
       if (!schoolMap.has(schoolId)) {
+        // Merge historic data from schoolsWithHistoric
+        const historicSchoolData = schoolsWithHistoric.get(schoolId);
+        const schoolWithHistoric = {
+          ...assessment.school,
+          historicScores: historicSchoolData?.historicScores || []
+        };
+        
         schoolMap.set(schoolId, {
-          school: assessment.school,
+          school: schoolWithHistoric,
           overallScore: 0,
           assessmentsByCategory: [],
           criticalStandardsTotal: 0,
@@ -224,7 +257,7 @@ export function SchoolPerformanceView({ assessments, refreshAssessments }: Schoo
     });
 
     return Array.from(schoolMap.values());
-  }, [filteredByTermAssessments, previousTermAssessments]);
+  }, [filteredByTermAssessments, previousTermAssessments, schoolsWithHistoric]);
 
   // Filter schools based on search and multiple criteria
   const filteredSchools = useMemo(() => {
@@ -273,7 +306,7 @@ export function SchoolPerformanceView({ assessments, refreshAssessments }: Schoo
         return <Shield className="h-4 w-4" />;
       case "IT & Information Services":
         return <Monitor className="h-4 w-4" />;
-      case "IT Strategy & Support":
+      case "IT (Digital Strategy)":
         return <Settings className="h-4 w-4" />;
       default:
         return <ClipboardCheck className="h-4 w-4" />;
@@ -317,6 +350,16 @@ export function SchoolPerformanceView({ assessments, refreshAssessments }: Schoo
       newExpanded.add(schoolId);
     }
     setExpandedSchools(newExpanded);
+  };
+
+  const toggleHistoricExpansion = (schoolId: string) => {
+    const newExpanded = new Set(expandedHistoric);
+    if (newExpanded.has(schoolId)) {
+      newExpanded.delete(schoolId);
+    } else {
+      newExpanded.add(schoolId);
+    }
+    setExpandedHistoric(newExpanded);
   };
 
   const getPerformanceTrend = (score: number, criticalCount: number) => {
@@ -478,10 +521,9 @@ export function SchoolPerformanceView({ assessments, refreshAssessments }: Schoo
               <TableRow className="bg-slate-50">
                 <TableHead className="w-12"></TableHead>
                 <TableHead>School</TableHead>
-                <TableHead className="text-center">Overall Score</TableHead>
                 <TableHead className="text-center">Assessments</TableHead>
+                <TableHead className="text-center">Overall Score</TableHead>
                 <TableHead className="text-center">Intervention Required</TableHead>
-                <TableHead className="text-center">Performance</TableHead>
                 <TableHead className="text-center">Last Updated</TableHead>
               </TableRow>
             </TableHeader>
@@ -522,51 +564,69 @@ export function SchoolPerformanceView({ assessments, refreshAssessments }: Schoo
                         </div>
                       </TableCell>
                       <TableCell className="text-center">
+                        <div className="flex items-center justify-center space-x-2">
+                          <span className="text-sm font-medium">{completedCount}/{totalCount}</span>
+                          <Progress value={(completedCount / totalCount) * 100} className="w-16 h-2" />
+                        </div>
+                      </TableCell>
+                      <TableCell className="text-center">
                         {school.overallScore > 0 ? (
-                          <div className="flex items-center justify-center space-x-2">
-                            <Badge variant="outline" className={getScoreBadgeColor(school.overallScore)}>
-                              {school.overallScore.toFixed(1)}
-                            </Badge>
-                            {/* Change indicator */}
-                            {school.previousOverallScore && school.previousOverallScore > 0 && (() => {
-                              const change = calculateChange(school.overallScore, school.previousOverallScore);
-                              if (!change) return null;
-                              return (
-                                <Tooltip>
-                                  <TooltipTrigger asChild>
-                                    <div className={cn(
-                                      "flex items-center space-x-1 px-1.5 py-0.5 rounded text-xs font-medium",
-                                      change.type === "positive" && "bg-emerald-50 text-emerald-700",
-                                      change.type === "negative" && "bg-rose-50 text-rose-700",
-                                      change.type === "neutral" && "bg-slate-50 text-slate-500"
-                                    )}>
-                                      {change.icon}
-                                      {change.type !== "neutral" && (
-                                        <span>{change.value.toFixed(1)}</span>
-                                      )}
-                                    </div>
-                                  </TooltipTrigger>
-                                  <TooltipContent>
-                                    <p>
-                                      {change.type === "positive" ? "Improved" : change.type === "negative" ? "Declined" : "No change"} from previous term
-                                      {change.type !== "neutral" && (
-                                        <> ({change.value.toFixed(1)} points)</>
-                                      )}
-                                    </p>
-                                  </TooltipContent>
-                                </Tooltip>
-                              );
+                          <div className="flex items-center justify-center space-x-1.5">
+                            <div className="flex items-center space-x-1">
+                              <Badge variant="outline" className={getScoreBadgeColor(school.overallScore)}>
+                                {school.overallScore.toFixed(1)}
+                              </Badge>
+                              {/* More compact change indicator */}
+                              {school.previousOverallScore && school.previousOverallScore > 0 && (() => {
+                                const change = calculateChange(school.overallScore, school.previousOverallScore);
+                                if (!change || change.type === "neutral") return null;
+                                return (
+                                  <Tooltip>
+                                    <TooltipTrigger asChild>
+                                      <div className={cn(
+                                        "flex items-center px-1 py-0.5 rounded text-xs font-medium",
+                                        change.type === "positive" && "bg-emerald-50 text-emerald-600",
+                                        change.type === "negative" && "bg-rose-50 text-rose-600"
+                                      )}>
+                                        {change.icon}
+                                        <span className="text-xs">{Math.abs(change.value).toFixed(1)}</span>
+                                      </div>
+                                    </TooltipTrigger>
+                                    <TooltipContent>
+                                      <p>
+                                        {change.type === "positive" ? "Improved" : "Declined"} from previous term
+                                        ({Math.abs(change.value).toFixed(1)} points)
+                                      </p>
+                                    </TooltipContent>
+                                  </Tooltip>
+                                );
+                              })()}
+                            </div>
+                            {/* Historic toggle button - only show if data exists */}
+                            {(() => {
+                              const historicData = school.school.historicScores;
+                              if (historicData && historicData.length >= 2) {
+                                const isHistoricExpanded = expandedHistoric.has(school.school.id);
+                                return (
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    className="h-5 w-5 p-0 text-slate-400 hover:text-slate-600"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      toggleHistoricExpansion(school.school.id);
+                                    }}
+                                  >
+                                    <TrendingUp className="h-3 w-3" />
+                                  </Button>
+                                );
+                              }
+                              return null;
                             })()}
                           </div>
                         ) : (
                           <span className="text-slate-400">—</span>
                         )}
-                      </TableCell>
-                      <TableCell className="text-center">
-                        <div className="flex items-center justify-center space-x-2">
-                          <span className="text-sm font-medium">{completedCount}/{totalCount}</span>
-                          <Progress value={(completedCount / totalCount) * 100} className="w-16 h-2" />
-                        </div>
                       </TableCell>
                       <TableCell className="text-center">
                         {school.criticalStandardsTotal > 0 ? (
@@ -579,21 +639,53 @@ export function SchoolPerformanceView({ assessments, refreshAssessments }: Schoo
                           </Badge>
                         )}
                       </TableCell>
-                      <TableCell className="text-center">
-                        <div className="flex items-center justify-center space-x-1">
-                          {trend.icon}
-                          <span className="text-sm">{trend.label}</span>
-                        </div>
-                      </TableCell>
+
                       <TableCell className="text-center text-sm text-slate-600">
                         {school.lastUpdated !== "-" ? new Date(school.lastUpdated).toLocaleDateString() : "—"}
                       </TableCell>
                     </TableRow>
 
+                    {/* Historic Data Inline Expansion */}
+                    {expandedHistoric.has(school.school.id) && (
+                      <TableRow>
+                        <TableCell colSpan={6} className="bg-slate-50/30 p-3">
+                          {(() => {
+                            const historicData = school.school.historicScores;
+                            if (historicData && historicData.length >= 2) {
+                              // Show current + 3 previous terms only
+                              const recentData = historicData.slice(-4);
+                              const trendData: TrendDataPoint[] = recentData.map(h => ({
+                                term: h.term,
+                                overallScore: h.overallScore
+                              }));
+                              
+                              return (
+                                <div className="flex items-center justify-center space-x-6">
+                                  <div className="flex items-center space-x-3">
+                                    <span className="text-xs font-medium text-slate-600">Historic Performance:</span>
+                                    <MiniTrendChart data={trendData} width={140} height={36} />
+                                  </div>
+                                  <div className="flex items-center space-x-4 text-xs text-slate-600">
+                                    {recentData.map((point, index) => (
+                                      <div key={index} className="text-center">
+                                        <div className="font-medium">{point.overallScore.toFixed(1)}</div>
+                                        <div className="text-slate-400">{point.term.split(' ')[0]} {point.term.split(' ')[1]?.slice(-2)}</div>
+                                      </div>
+                                    ))}
+                                  </div>
+                                </div>
+                              );
+                            }
+                            return null;
+                          })()}
+                        </TableCell>
+                      </TableRow>
+                    )}
+
                     {/* Expanded Content */}
                     {isExpanded && (
                       <TableRow>
-                        <TableCell colSpan={7} className="bg-slate-50 p-0">
+                        <TableCell colSpan={6} className="bg-slate-50 p-0">
                           <div className="p-6 border-t">
                             <h4 className="text-sm font-medium text-slate-900 mb-4">Assessment Strategies</h4>
                             <div className="bg-white rounded-lg border">
@@ -643,28 +735,23 @@ export function SchoolPerformanceView({ assessments, refreshAssessments }: Schoo
                                               const previousScore = school.changesByCategory.get(categoryData.category);
                                               if (!previousScore || previousScore === 0) return null;
                                               const change = calculateChange(categoryData.averageScore, previousScore);
-                                              if (!change) return null;
+                                              if (!change || change.type === "neutral") return null;
                                               return (
                                                 <Tooltip>
                                                   <TooltipTrigger asChild>
                                                     <div className={cn(
                                                       "flex items-center space-x-1 px-1 py-0.5 rounded text-xs font-medium",
                                                       change.type === "positive" && "bg-emerald-50 text-emerald-700",
-                                                      change.type === "negative" && "bg-rose-50 text-rose-700",
-                                                      change.type === "neutral" && "bg-slate-50 text-slate-500"
+                                                      change.type === "negative" && "bg-rose-50 text-rose-700"
                                                     )}>
                                                       {change.icon}
-                                                      {change.type !== "neutral" && (
-                                                        <span className="text-xs">{change.value.toFixed(1)}</span>
-                                                      )}
+                                                      <span className="text-xs">{change.value.toFixed(1)}</span>
                                                     </div>
                                                   </TooltipTrigger>
                                                   <TooltipContent>
                                                     <p>
-                                                      {change.type === "positive" ? "Improved" : change.type === "negative" ? "Declined" : "No change"} from previous term
-                                                      {change.type !== "neutral" && (
-                                                        <> ({change.value.toFixed(1)} points)</>
-                                                      )}
+                                                      {change.type === "positive" ? "Improved" : "Declined"} from previous term
+                                                      ({change.value.toFixed(1)} points)
                                                     </p>
                                                   </TooltipContent>
                                                 </Tooltip>

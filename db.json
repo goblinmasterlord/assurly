@@ -310,6 +310,175 @@
       "academic_year": "2024-2025"
     },
     {
+      "id": "spring-2025-1-governance",
+      "name": "Governance Assessment",
+      "category": "Governance",
+      "school": {
+        "school_id": "1",
+        "school_name": "Oak Hill Academy"
+      },
+      "status": "Completed",
+      "completed_standards": 6,
+      "total_standards": 6,
+      "last_updated": "2025-03-15T16:30:00Z",
+      "assigned_to": [],
+      "standards": [
+        {
+          "standard_id": "EG1",
+          "code": "EG1",
+          "title": "Strategic Leadership",
+          "description": "Clear vision, ethos, and strategic direction set and monitored by the board. Evidence of alignment to trust-wide priorities and improvement plans.",
+          "rating": 3,
+          "evidence_comments": "",
+          "submitted_at": "2025-03-15T16:30:00Z"
+        },
+        {
+          "standard_id": "EG2",
+          "code": "EG2",
+          "title": "Accountability for Educational and Financial Performance",
+          "description": "Robust oversight of educational outcomes, safeguarding, and financial performance. Challenge and support provided to executive leaders.",
+          "rating": 3,
+          "evidence_comments": "",
+          "submitted_at": "2025-03-15T16:30:00Z"
+        },
+        {
+          "standard_id": "EG3",
+          "code": "EG3",
+          "title": "Governance Capacity & Skills",
+          "description": "Effective recruitment, induction, and development of trustees and governors. Skills audit and succession planning in place.",
+          "rating": 4,
+          "evidence_comments": "",
+          "submitted_at": "2025-03-15T16:30:00Z"
+        },
+        {
+          "standard_id": "EG4",
+          "code": "EG4",
+          "title": "Governance Structures",
+          "description": "Appropriate and compliant governance structures established at trust and school level. Clarity of roles, responsibilities, and delegation.",
+          "rating": 3,
+          "evidence_comments": "",
+          "submitted_at": "2025-03-15T16:30:00Z"
+        },
+        {
+          "standard_id": "EG5",
+          "code": "EG5",
+          "title": "Legal & Regulatory Compliance",
+          "description": "Compliance with statutory and regulatory duties, including safeguarding, data protection, financial reporting, and charitable obligations.",
+          "rating": 3,
+          "evidence_comments": "",
+          "submitted_at": "2025-03-15T16:30:00Z"
+        },
+        {
+          "standard_id": "EG6",
+          "code": "EG6",
+          "title": "Evaluation & Continuous Improvement",
+          "description": "Regular self-evaluation of governance effectiveness, including external reviews. Evidence of learning, improvement actions, and impact.",
+          "rating": 2,
+          "evidence_comments": "",
+          "submitted_at": "2025-03-15T16:30:00Z"
+        }
+      ],
+      "term": "Spring",
+      "academic_year": "2024-2025"
+    },
+    {
+      "id": "spring-2025-2-finance",
+      "name": "Finance & Procurement Assessment",
+      "category": "Finance & Procurement",
+      "school": {
+        "school_id": "2",
+        "school_name": "Riverside Primary"
+      },
+      "status": "Completed",
+      "completed_standards": 8,
+      "total_standards": 8,
+      "last_updated": "2025-03-10T14:20:00Z",
+      "assigned_to": [
+        {
+          "id": "2",
+          "name": "Sarah Williams",
+          "email": "sarah.williams@riverside.edu",
+          "role": "Business Manager"
+        }
+      ],
+      "standards": [
+        {
+          "standard_id": "FM1",
+          "standard_name": "Financial Governance & Management",
+          "description": "Robust financial leadership, compliance with statutory duties, oversight by the board and audit committee, and alignment with the Academies Financial Handbook.",
+          "area_id": "Finance & Procurement",
+          "rating": 3,
+          "evidence_comments": "Good compliance with financial handbook. Monthly reporting established.",
+          "submitted_at": "2025-03-10T14:20:00Z"
+        },
+        {
+          "standard_id": "FM2",
+          "standard_name": "Strategic Financial Planning",
+          "description": "Multi-year budgeting aligned to organisational priorities. Evidence of sensitivity analysis, scenario planning, and sustainability modelling.",
+          "area_id": "Finance & Procurement",
+          "rating": 2,
+          "evidence_comments": "Basic budget planning in place. Scenario planning needs development.",
+          "submitted_at": "2025-03-10T14:20:00Z"
+        },
+        {
+          "standard_id": "FM3",
+          "standard_name": "In-Year Financial Monitoring",
+          "description": "Monthly reporting to leaders and trustees, including forecast outturns, variance analysis, and corrective actions. Timeliness and accuracy of information.",
+          "area_id": "Finance & Procurement",
+          "rating": 3,
+          "evidence_comments": "Monthly reports delivered. Some improvements needed in variance analysis.",
+          "submitted_at": "2025-03-10T14:20:00Z"
+        },
+        {
+          "standard_id": "FM4",
+          "standard_name": "Financial Processing & Internal Controls",
+          "description": "Compliance with procurement policy, authorisation limits, segregation of duties, bank reconciliations, and fraud prevention measures.",
+          "area_id": "Finance & Procurement",
+          "rating": 3,
+          "evidence_comments": "Good internal controls. Regular reconciliations in place.",
+          "submitted_at": "2025-03-10T14:20:00Z"
+        },
+        {
+          "standard_id": "FM5",
+          "standard_name": "Value for Money (VfM) Assurance",
+          "description": "Evidence of cost-effectiveness, benchmarking, procurement efficiencies, and review of contracts to ensure outcomes justify expenditure.",
+          "area_id": "Finance & Procurement",
+          "rating": 2,
+          "evidence_comments": "Basic contract reviews. Benchmarking process needs strengthening.",
+          "submitted_at": "2025-03-10T14:20:00Z"
+        },
+        {
+          "standard_id": "FM6",
+          "standard_name": "Asset & Estate Strategy",
+          "description": "Asset management plans aligned to strategic priorities, including lifecycle planning, capital projects oversight, and statutory compliance.",
+          "area_id": "Finance & Procurement",
+          "rating": 2,
+          "evidence_comments": "Asset register in development. Lifecycle planning needs work.",
+          "submitted_at": "2025-03-10T14:20:00Z"
+        },
+        {
+          "standard_id": "FM7",
+          "standard_name": "Payroll Management",
+          "description": "Accuracy, timeliness, and reconciliation of payroll. Compliance with PAYE, pensions, and statutory reporting. Integration with HR systems.",
+          "area_id": "Finance & Procurement",
+          "rating": 4,
+          "evidence_comments": "Excellent payroll processes. Full compliance maintained.",
+          "submitted_at": "2025-03-10T14:20:00Z"
+        },
+        {
+          "standard_id": "FM8",
+          "standard_name": "Insurance & Risk Mitigation",
+          "description": "Adequacy of cover, alignment with risk profile, and annual review of insurance policies. Evidence of claims management and cost control.",
+          "area_id": "Finance & Procurement",
+          "rating": 3,
+          "evidence_comments": "Good insurance review process. Claims documentation could be improved.",
+          "submitted_at": "2025-03-10T14:20:00Z"
+        }
+      ],
+      "term": "Spring",
+      "academic_year": "2024-2025"
+    },
+    {
       "id": "1751223898631-2",
       "name": "Governance Assessment",
       "category": "Governance",
@@ -585,13 +754,29 @@
       "school_id": "1",
       "school_name": "Oak Hill Academy",
       "mat_id": "MAT001",
-      "id": "7efd"
+      "id": "7efd",
+      "historicScores": [
+        { "term": "Autumn 2023-2024", "overallScore": 3.2 },
+        { "term": "Spring 2023-2024", "overallScore": 3.1 },
+        { "term": "Summer 2023-2024", "overallScore": 3.4 },
+        { "term": "Autumn 2024-2025", "overallScore": 3.3 },
+        { "term": "Spring 2024-2025", "overallScore": 3.2 },
+        { "term": "Summer 2024-2025", "overallScore": 3.5 }
+      ]
     },
     {
       "school_id": "2",
       "school_name": "Riverside Primary",
       "mat_id": "MAT001",
-      "id": "f3a5"
+      "id": "f3a5",
+      "historicScores": [
+        { "term": "Autumn 2023-2024", "overallScore": 2.1 },
+        { "term": "Spring 2023-2024", "overallScore": 2.3 },
+        { "term": "Summer 2023-2024", "overallScore": 2.4 },
+        { "term": "Autumn 2024-2025", "overallScore": 2.2 },
+        { "term": "Spring 2024-2025", "overallScore": 2.6 },
+        { "term": "Summer 2024-2025", "overallScore": 2.5 }
+      ]
     },
     {
       "school_id": "3",

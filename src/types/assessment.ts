@@ -103,11 +103,18 @@ export interface Assessment {
   academicYear?: AcademicYear;
 }
 
+// Historic score data point
+export interface HistoricScore {
+  term: string;
+  overallScore: number;
+}
+
 // School model
 export interface School {
   id: string;
   name: string;
   code?: string;
+  historicScores?: HistoricScore[];
 }
 
 // User model
