@@ -101,6 +101,7 @@ export interface Assessment {
   standards?: Standard[];
   term?: AcademicTerm;
   academicYear?: AcademicYear;
+  overallScore?: number; // Overall score for the assessment (available in summary data)
 }
 
 // Historic score data point

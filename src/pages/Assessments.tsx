@@ -83,7 +83,7 @@ export function AssessmentsPage() {
   const [statusFilter, setStatusFilter] = useState<"all" | "completed" | "in-progress" | "not-started" | "overdue">("all");
   const [schoolFilter, setSchoolFilter] = useState<string>("all");
   const [view, setView] = useState<"table" | "cards">("table");
-  const [selectedTerm, setSelectedTerm] = useState<string>("Summer 2024-2025"); // Default to current term
+  const [selectedTerm, setSelectedTerm] = useState<string>(""); // Will be set to first available term
   
   // Pagination state
   const [currentPage, setCurrentPage] = useState(1);
@@ -101,9 +101,17 @@ export function AssessmentsPage() {
     return Array.from(termSet).sort().reverse(); // Latest terms first
   }, [assessments, isMatAdmin]);
 
+  // Auto-select the first available term for department head view
+  useEffect(() => {
+    if (!isMatAdmin && availableTerms.length > 0 && !selectedTerm) {
+      setSelectedTerm(availableTerms[0]);
+    }
+  }, [availableTerms, selectedTerm, isMatAdmin]);
+
   // Filter assessments by selected term first (for department head view)
   const termFilteredAssessments = useMemo(() => {
     if (isMatAdmin) return assessments;
+    if (!selectedTerm) return []; // No term selected yet
     const [term, academicYear] = selectedTerm.split(" ");
     return assessments.filter(assessment => 
       assessment.term === term && assessment.academicYear === academicYear

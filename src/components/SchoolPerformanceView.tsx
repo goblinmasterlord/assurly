@@ -1,4 +1,4 @@
-import { useMemo, useState, useEffect } from "react";
+import React, { useMemo, useState, useEffect } from "react";
 import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -69,6 +69,7 @@ type SchoolPerformanceViewProps = {
 }
 
 export function SchoolPerformanceView({ assessments, refreshAssessments }: SchoolPerformanceViewProps) {
+  
   const [searchTerm, setSearchTerm] = useState("");
   const [performanceFilter, setPerformanceFilter] = useState<string>("all");
   const [statusFilter, setStatusFilter] = useState<string>("all");
@@ -77,31 +78,7 @@ export function SchoolPerformanceView({ assessments, refreshAssessments }: Schoo
   const [invitationSheetOpen, setInvitationSheetOpen] = useState(false);
   const [expandedSchools, setExpandedSchools] = useState<Set<string>>(new Set());
   const [expandedHistoric, setExpandedHistoric] = useState<Set<string>>(new Set());
-  const [selectedTerm, setSelectedTerm] = useState<string>("Summer 2024-2025"); // Default to current term
-  const [schoolsWithHistoric, setSchoolsWithHistoric] = useState<Map<string, any>>(new Map());
-
-  // Load schools with historic data from db.json
-  useEffect(() => {
-    const loadSchoolsWithHistoric = async () => {
-      try {
-        // In production, this would be an API call
-        // For now, we'll simulate loading from db.json
-        const response = await fetch('/db.json');
-        const data = await response.json();
-        
-        const schoolsMap = new Map();
-        data.schools.forEach((school: any) => {
-          schoolsMap.set(school.school_id, school);
-        });
-        
-        setSchoolsWithHistoric(schoolsMap);
-      } catch (error) {
-        console.error('Failed to load schools data:', error);
-      }
-    };
-
-    loadSchoolsWithHistoric();
-  }, []);
+  const [selectedTerm, setSelectedTerm] = useState<string>(""); // Will be set to first available term
 
   // Get available terms from assessments
   const availableTerms = useMemo(() => {
@@ -111,48 +88,91 @@ export function SchoolPerformanceView({ assessments, refreshAssessments }: Schoo
         termSet.add(`${assessment.term} ${assessment.academicYear}`);
       }
     });
-    return Array.from(termSet).sort().reverse(); // Latest terms first
+    
+    // Convert to array and sort chronologically (not alphabetically)
+    const terms = Array.from(termSet).sort((a, b) => {
+      const [termA, yearA] = a.split(" ");
+      const [termB, yearB] = b.split(" ");
+      
+      // First compare academic years (convert 2023-2024 format to numbers)
+      const yearNumA = parseInt(yearA.split("-")[0]);
+      const yearNumB = parseInt(yearB.split("-")[0]);
+      
+      if (yearNumA !== yearNumB) {
+        return yearNumB - yearNumA; // Newest year first
+      }
+      
+      // If same year, sort by term with custom order: Autumn (newest), Summer, Spring
+      const termOrder = { "Autumn": 0, "Summer": 1, "Spring": 2 };
+      const termOrderA = termOrder[termA as keyof typeof termOrder] ?? 99;
+      const termOrderB = termOrder[termB as keyof typeof termOrder] ?? 99;
+
+      return termOrderA - termOrderB; // Smaller means newer within same year
+    });
+    
+    // console.debug('Available terms (chronologically sorted):', terms);
+    return terms;
   }, [assessments]);
+
+  // Auto-select the first available term if none is selected
+  useEffect(() => {
+    if (availableTerms.length > 0 && !selectedTerm) {
+      const firstTerm = availableTerms[0];
+      // console.debug('Auto-selecting first available term:', firstTerm);
+      setSelectedTerm(firstTerm);
+    }
+  }, [availableTerms, selectedTerm]);
 
   // Filter assessments by selected term
   const filteredByTermAssessments = useMemo(() => {
     const [term, academicYear] = selectedTerm.split(" ");
-    return assessments.filter(assessment => 
+    const filtered = assessments.filter(assessment => 
       assessment.term === term && assessment.academicYear === academicYear
     );
+    // console.debug(`Filtered assessments for ${selectedTerm}:`, filtered);
+    return filtered;
   }, [assessments, selectedTerm]);
 
-  // Get previous term assessments for comparison
+  // Get previous term assessments based on next item in ordered list
   const previousTermAssessments = useMemo(() => {
-    const currentTermIndex = availableTerms.indexOf(selectedTerm);
-    if (currentTermIndex === -1 || currentTermIndex === availableTerms.length - 1) {
+    if (!selectedTerm) return [];
+
+    const currentIndex = availableTerms.indexOf(selectedTerm);
+    if (currentIndex === -1 || currentIndex === availableTerms.length - 1) {
       return [];
     }
-    const previousTerm = availableTerms[currentTermIndex + 1];
-    const [term, academicYear] = previousTerm.split(" ");
-    return assessments.filter(assessment => 
-      assessment.term === term && assessment.academicYear === academicYear
+
+    const prevTermString = availableTerms[currentIndex + 1];
+    const [prevTerm, prevYear] = prevTermString.split(" ");
+
+    // console.debug(`Current term "${selectedTerm}" → Previous term: "${prevTermString}"`);
+
+    return assessments.filter(
+      a => a.term === prevTerm && a.academicYear === prevYear
     );
   }, [assessments, availableTerms, selectedTerm]);
 
   // Calculate change indicators
-  const calculateChange = (currentScore: number, previousScore: number) => {
-    if (previousScore === 0) return null;
+  const calculateChange = (currentScore: number, previousScore: number | undefined) => {
+    // Return null if no previous data or previous score is 0/undefined
+    if (!previousScore || previousScore === 0 || currentScore === 0) return null;
+    
     const change = currentScore - previousScore;
     const percentChange = Math.abs(change / previousScore) * 100;
     
+    // Only show change if it's significant (more than 0.1 difference)
     if (Math.abs(change) < 0.1) {
-      return { type: "neutral", value: 0, icon: <Minus className="h-3 w-3" /> };
+      return null; // Don't show neutral changes
     } else if (change > 0) {
       return { 
-        type: "positive", 
+        type: "positive" as const, 
         value: change, 
         percentChange,
         icon: <ArrowUp className="h-3 w-3 text-emerald-600" /> 
       };
     } else {
       return { 
-        type: "negative", 
+        type: "negative" as const, 
         value: Math.abs(change), 
         percentChange,
         icon: <ArrowDown className="h-3 w-3 text-rose-600" /> 
@@ -169,20 +189,13 @@ export function SchoolPerformanceView({ assessments, refreshAssessments }: Schoo
       const schoolId = assessment.school.id;
       
       if (!schoolMap.has(schoolId)) {
-        // Merge historic data from schoolsWithHistoric
-        const historicSchoolData = schoolsWithHistoric.get(schoolId);
-        const schoolWithHistoric = {
-          ...assessment.school,
-          historicScores: historicSchoolData?.historicScores || []
-        };
-        
         schoolMap.set(schoolId, {
-          school: schoolWithHistoric,
+          school: assessment.school,
           overallScore: 0,
           assessmentsByCategory: [],
           criticalStandardsTotal: 0,
           lastUpdated: assessment.lastUpdated,
-          previousOverallScore: 0,
+          previousOverallScore: undefined, // Start with undefined instead of 0
           changesByCategory: new Map()
         });
       }
@@ -193,7 +206,12 @@ export function SchoolPerformanceView({ assessments, refreshAssessments }: Schoo
       let averageScore = 0;
       let criticalStandardsCount = 0;
 
-      if (assessment.standards && assessment.standards.length > 0) {
+      // Use overall score from API summary data first, then fall back to standards calculation
+      if (assessment.overallScore !== undefined && assessment.overallScore > 0) {
+        // Use the API's calculated overall score (from summary endpoint)
+        averageScore = assessment.overallScore;
+      } else if (assessment.completedStandards > 0 && assessment.standards && assessment.standards.length > 0) {
+        // Fall back to calculating from individual standards (from detail endpoint)
         const validStandards = assessment.standards.filter(s => s.rating !== null);
         if (validStandards.length > 0) {
           const sum = validStandards.reduce((acc, s) => acc + (s.rating || 0), 0);
@@ -222,7 +240,7 @@ export function SchoolPerformanceView({ assessments, refreshAssessments }: Schoo
     // Calculate current term overall scores
     schoolMap.forEach((schoolData) => {
       const completedAssessments = schoolData.assessmentsByCategory.filter(
-        cat => cat.assessment.status === "Completed" && cat.averageScore > 0
+        cat => cat.assessment.status === "Completed" || cat.assessment.status === "In Progress"
       );
       
       if (completedAssessments.length > 0) {
@@ -236,12 +254,23 @@ export function SchoolPerformanceView({ assessments, refreshAssessments }: Schoo
       const schoolId = assessment.school.id;
       const schoolData = schoolMap.get(schoolId);
       
-      if (schoolData && assessment.standards && assessment.standards.length > 0) {
-        const validStandards = assessment.standards.filter(s => s.rating !== null);
-        if (validStandards.length > 0) {
-          const sum = validStandards.reduce((acc, s) => acc + (s.rating || 0), 0);
-          const previousCategoryScore = sum / validStandards.length;
-          
+
+      
+      if (schoolData) {
+        let previousCategoryScore = 0;
+        
+        // Use API overall score if available, otherwise calculate from standards
+        if (assessment.overallScore !== undefined && assessment.overallScore > 0) {
+          previousCategoryScore = assessment.overallScore;
+        } else if (assessment.standards && assessment.standards.length > 0) {
+          const validStandards = assessment.standards.filter(s => s.rating !== null);
+          if (validStandards.length > 0) {
+            const sum = validStandards.reduce((acc, s) => acc + (s.rating || 0), 0);
+            previousCategoryScore = sum / validStandards.length;
+          }
+        }
+        
+        if (previousCategoryScore > 0) {
           // Store previous category score for comparison
           schoolData.changesByCategory!.set(assessment.category, previousCategoryScore);
         }
@@ -251,13 +280,14 @@ export function SchoolPerformanceView({ assessments, refreshAssessments }: Schoo
     // Calculate previous overall scores
     schoolMap.forEach((schoolData) => {
       const categoryScores = Array.from(schoolData.changesByCategory!.values());
+      
       if (categoryScores.length > 0) {
         schoolData.previousOverallScore = categoryScores.reduce((sum, score) => sum + score, 0) / categoryScores.length;
       }
     });
 
     return Array.from(schoolMap.values());
-  }, [filteredByTermAssessments, previousTermAssessments, schoolsWithHistoric]);
+  }, [filteredByTermAssessments, previousTermAssessments]);
 
   // Filter schools based on search and multiple criteria
   const filteredSchools = useMemo(() => {
@@ -279,7 +309,9 @@ export function SchoolPerformanceView({ assessments, refreshAssessments }: Schoo
       // Status filter
       let matchesStatus = true;
       if (statusFilter !== "all") {
-        matchesStatus = school.assessmentsByCategory.some(cat => cat.assessment.status === statusFilter);
+        matchesStatus = school.assessmentsByCategory.some(cat => 
+          cat.assessment.status.toLowerCase() === statusFilter.toLowerCase()
+        );
       }
 
       // Category filter
@@ -534,10 +566,11 @@ export function SchoolPerformanceView({ assessments, refreshAssessments }: Schoo
                 const completedCount = school.assessmentsByCategory.filter(cat => cat.assessment.status === "Completed").length;
                 const totalCount = school.assessmentsByCategory.length;
 
+
+
                 return (
-                  <>
+                  <React.Fragment key={school.school.id}>
                     <TableRow 
-                      key={school.school.id}
                       className="cursor-pointer hover:bg-slate-50"
                       onClick={() => toggleSchoolExpansion(school.school.id)}
                     >
@@ -577,9 +610,9 @@ export function SchoolPerformanceView({ assessments, refreshAssessments }: Schoo
                                 {school.overallScore.toFixed(1)}
                               </Badge>
                               {/* More compact change indicator */}
-                              {school.previousOverallScore && school.previousOverallScore > 0 && (() => {
+                              {(() => {
                                 const change = calculateChange(school.overallScore, school.previousOverallScore);
-                                if (!change || change.type === "neutral") return null;
+                                if (!change) return null;
                                 return (
                                   <Tooltip>
                                     <TooltipTrigger asChild>
@@ -602,27 +635,6 @@ export function SchoolPerformanceView({ assessments, refreshAssessments }: Schoo
                                 );
                               })()}
                             </div>
-                            {/* Historic toggle button - only show if data exists */}
-                            {(() => {
-                              const historicData = school.school.historicScores;
-                              if (historicData && historicData.length >= 2) {
-                                const isHistoricExpanded = expandedHistoric.has(school.school.id);
-                                return (
-                                  <Button
-                                    variant="ghost"
-                                    size="sm"
-                                    className="h-5 w-5 p-0 text-slate-400 hover:text-slate-600"
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      toggleHistoricExpansion(school.school.id);
-                                    }}
-                                  >
-                                    <TrendingUp className="h-3 w-3" />
-                                  </Button>
-                                );
-                              }
-                              return null;
-                            })()}
                           </div>
                         ) : (
                           <span className="text-slate-400">—</span>
@@ -735,7 +747,7 @@ export function SchoolPerformanceView({ assessments, refreshAssessments }: Schoo
                                               const previousScore = school.changesByCategory.get(categoryData.category);
                                               if (!previousScore || previousScore === 0) return null;
                                               const change = calculateChange(categoryData.averageScore, previousScore);
-                                              if (!change || change.type === "neutral") return null;
+                                              if (!change) return null;
                                               return (
                                                 <Tooltip>
                                                   <TooltipTrigger asChild>
@@ -827,7 +839,7 @@ export function SchoolPerformanceView({ assessments, refreshAssessments }: Schoo
                         </TableCell>
                       </TableRow>
                     )}
-                  </>
+                  </React.Fragment>
                 );
               })}
             </TableBody>

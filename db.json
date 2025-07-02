@@ -186,10 +186,10 @@
         "school_id": "5",
         "school_name": "Meadowbrook Primary"
       },
-      "status": "Not Started",
-      "completed_standards": 0,
+      "status": "Completed",
+      "completed_standards": 5,
       "total_standards": 5,
-      "last_updated": "2025-06-29T19:04:35.335Z",
+      "last_updated": "2025-07-01T09:26:53.173Z",
       "due_date": "2025-06-30",
       "assigned_to": [],
       "standards": [
@@ -198,40 +198,45 @@
           "code": "HR1",
           "title": "Safer Recruitment Practice",
           "description": "Compliance with safer recruitment policies, including pre-employment checks, DBS clearances, and reference validation. Evidence of policy implementation and audit trails.",
-          "rating": null,
-          "evidence_comments": ""
+          "rating": 2,
+          "evidence_comments": "",
+          "submitted_at": "2025-07-01T09:26:53.159Z"
         },
         {
           "standard_id": "HR2",
           "code": "HR2",
           "title": "Sickness Absence Management",
           "description": "Monitoring of short- and long-term absence trends, with evidence of interventions, return-to-work processes, and supportive occupational health access.",
-          "rating": null,
-          "evidence_comments": ""
+          "rating": 2,
+          "evidence_comments": "",
+          "submitted_at": "2025-07-01T09:26:53.159Z"
         },
         {
           "standard_id": "HR3",
           "code": "HR3",
           "title": "People Conduct & Case Management",
           "description": "Oversight of disciplinary, grievance, and capability procedures. Assurance of timely, fair, and legally compliant case handling.",
-          "rating": null,
-          "evidence_comments": ""
+          "rating": 2,
+          "evidence_comments": "",
+          "submitted_at": "2025-07-01T09:26:53.159Z"
         },
         {
           "standard_id": "HR4",
           "code": "HR4",
           "title": "Staff Retention & Engagement",
           "description": "Annual turnover rates, pulse surveys, exit interview themes, and evidence of actions taken to improve employee satisfaction and retention.",
-          "rating": null,
-          "evidence_comments": ""
+          "rating": 2,
+          "evidence_comments": "",
+          "submitted_at": "2025-07-01T09:26:53.159Z"
         },
         {
           "standard_id": "HR5",
           "code": "HR5",
           "title": "Vacancy Rates & Recruitment Efficiency",
           "description": "Vacancy levels by role and site, time-to-fill metrics, and the impact on service delivery. Evaluation of recruitment campaign success and strategic workforce planning.",
-          "rating": null,
-          "evidence_comments": ""
+          "rating": 2,
+          "evidence_comments": "",
+          "submitted_at": "2025-07-01T09:26:53.159Z"
         }
       ],
       "term": "Summer",
@@ -756,12 +761,30 @@
       "mat_id": "MAT001",
       "id": "7efd",
       "historicScores": [
-        { "term": "Autumn 2023-2024", "overallScore": 3.2 },
-        { "term": "Spring 2023-2024", "overallScore": 3.1 },
-        { "term": "Summer 2023-2024", "overallScore": 3.4 },
-        { "term": "Autumn 2024-2025", "overallScore": 3.3 },
-        { "term": "Spring 2024-2025", "overallScore": 3.2 },
-        { "term": "Summer 2024-2025", "overallScore": 3.5 }
+        {
+          "term": "Autumn 2023-2024",
+          "overallScore": 3.2
+        },
+        {
+          "term": "Spring 2023-2024",
+          "overallScore": 3.1
+        },
+        {
+          "term": "Summer 2023-2024",
+          "overallScore": 3.4
+        },
+        {
+          "term": "Autumn 2024-2025",
+          "overallScore": 3.3
+        },
+        {
+          "term": "Spring 2024-2025",
+          "overallScore": 3.2
+        },
+        {
+          "term": "Summer 2024-2025",
+          "overallScore": 3.5
+        }
       ]
     },
     {
@@ -770,12 +793,30 @@
       "mat_id": "MAT001",
       "id": "f3a5",
       "historicScores": [
-        { "term": "Autumn 2023-2024", "overallScore": 2.1 },
-        { "term": "Spring 2023-2024", "overallScore": 2.3 },
-        { "term": "Summer 2023-2024", "overallScore": 2.4 },
-        { "term": "Autumn 2024-2025", "overallScore": 2.2 },
-        { "term": "Spring 2024-2025", "overallScore": 2.6 },
-        { "term": "Summer 2024-2025", "overallScore": 2.5 }
+        {
+          "term": "Autumn 2023-2024",
+          "overallScore": 2.1
+        },
+        {
+          "term": "Spring 2023-2024",
+          "overallScore": 2.3
+        },
+        {
+          "term": "Summer 2023-2024",
+          "overallScore": 2.4
+        },
+        {
+          "term": "Autumn 2024-2025",
+          "overallScore": 2.2
+        },
+        {
+          "term": "Spring 2024-2025",
+          "overallScore": 2.6
+        },
+        {
+          "term": "Summer 2024-2025",
+          "overallScore": 2.5
+        }
       ]
     },
     {

@@ -260,8 +260,8 @@ export function AssessmentInvitationSheet({ open, onOpenChange, onSuccess }: Ass
 
       if (success) {
         toast({
-          title: "Invitations sent successfully!",
-          description: `Requesting ${selectedSchools.length} ${selectedSchools.length === 1 ? 'school' : 'schools'} to complete the ${category} assessment.`,
+          title: "Assessments created successfully!",
+          description: `Successfully created ${category} assessments for ${selectedSchools.length} ${selectedSchools.length === 1 ? 'school' : 'schools'}.`,
         });
 
         onSuccess?.();
@@ -271,12 +271,25 @@ export function AssessmentInvitationSheet({ open, onOpenChange, onSuccess }: Ass
         setDueDate(undefined);
         setSearchTerm("");
       } else {
-        throw new Error("Failed to create assessments");
+        // Assessment creation is not available in backend yet
+        toast({
+          title: "Assessment creation not available",
+          description: "The backend doesn't support assessment creation yet. This feature is coming soon.",
+          variant: "default", // Use default instead of destructive since it's not an error
+        });
+        
+        // Still close the dialog and reset form for better UX
+        onOpenChange(false);
+        setCategory("");
+        setSelectedSchools([]);
+        setDueDate(undefined);
+        setSearchTerm("");
       }
     } catch (error) {
+      console.error('Error in assessment creation:', error);
       toast({
-        title: "Error sending invitations",
-        description: error instanceof Error ? error.message : "An error occurred",
+        title: "Error creating assessments",
+        description: "An unexpected error occurred. Please try again later.",
         variant: "destructive",
       });
     } finally {
