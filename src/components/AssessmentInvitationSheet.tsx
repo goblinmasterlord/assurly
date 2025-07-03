@@ -31,20 +31,13 @@ import { cn } from "@/lib/utils";
 import { assessmentCategories } from "@/lib/mock-data";
 import { getSchools, createAssessments } from "@/services/assessment-service";
 import { useToast } from "@/hooks/use-toast";
-import type { AssessmentCategory } from "@/types/assessment";
+import type { AssessmentCategory, School } from "@/types/assessment";
 
 type AssessmentInvitationSheetProps = {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onSuccess?: () => void; // Callback to refresh assessments list
 };
-
-// School type for the API response
-interface School {
-  id: string;
-  name: string;
-  code: string;
-}
 
 // Simple calendar component without relying on external dependencies
 const SimpleDatePicker = ({ 
@@ -250,7 +243,7 @@ export function AssessmentInvitationSheet({ open, onOpenChange, onSuccess }: Ass
     setLoading(true);
 
     try {
-      const success = await createAssessments({
+      const assessmentIds = await createAssessments({
         category,
         schoolIds: selectedSchools,
         dueDate: dueDate ? format(dueDate, "yyyy-MM-dd") : undefined,
@@ -258,27 +251,13 @@ export function AssessmentInvitationSheet({ open, onOpenChange, onSuccess }: Ass
         academicYear: "2024-2025" // Could be made dynamic
       });
 
-      if (success) {
+      if (assessmentIds.length > 0) {
         toast({
           title: "Assessments created successfully!",
-          description: `Successfully created ${category} assessments for ${selectedSchools.length} ${selectedSchools.length === 1 ? 'school' : 'schools'}.`,
+          description: `Successfully created ${assessmentIds.length} assessment(s).`,
         });
 
         onSuccess?.();
-        onOpenChange(false);
-        setCategory("");
-        setSelectedSchools([]);
-        setDueDate(undefined);
-        setSearchTerm("");
-      } else {
-        // Assessment creation is not available in backend yet
-        toast({
-          title: "Assessment creation not available",
-          description: "The backend doesn't support assessment creation yet. This feature is coming soon.",
-          variant: "default", // Use default instead of destructive since it's not an error
-        });
-        
-        // Still close the dialog and reset form for better UX
         onOpenChange(false);
         setCategory("");
         setSelectedSchools([]);

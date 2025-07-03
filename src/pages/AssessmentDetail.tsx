@@ -26,7 +26,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { useUser } from "@/contexts/UserContext";
-import { getAssessmentById, saveAssessmentProgress, submitAssessment } from "@/services/assessment-service";
+import { getAssessmentById, submitAssessment } from "@/services/assessment-service";
 import {
   AlertCircle,
   AlertTriangle,
@@ -317,23 +317,33 @@ export function AssessmentDetailPage() {
     
     setSaving(true);
     try {
-      const success = await saveAssessmentProgress(id, ratings, evidence);
-      
-      if (success) {
-        // Refetch the assessment to get updated data
-        await fetchAssessment();
+      // Convert the ratings and evidence into the format expected by the new API
+      const standards = Object.entries(ratings)
+        .filter(([standardId, rating]) => rating !== null)
+        .map(([standardId, rating]) => ({
+          standardId,
+          rating,
+          evidence: evidence[standardId] || '',
+        }));
+
+      if (standards.length === 0) {
         toast({
-          title: "Progress saved",
-          description: "Your assessment progress has been saved successfully",
-          variant: "default",
-        });
-      } else {
-        toast({
-          title: "Save failed",
-          description: "There was an error saving your progress. Please try again.",
+          title: "Nothing to save",
+          description: "Please rate at least one standard before saving.",
           variant: "destructive",
         });
+        return;
       }
+
+      await submitAssessment(id, standards);
+      
+      // Refetch the assessment to get updated data
+      await fetchAssessment();
+      toast({
+        title: "Progress saved",
+        description: "Your assessment progress has been saved successfully",
+        variant: "default",
+      });
     } catch (error) {
       console.error('Save error:', error);
       toast({
@@ -351,24 +361,34 @@ export function AssessmentDetailPage() {
     
     setSaving(true);
     try {
-      const success = await submitAssessment(id, ratings, evidence);
-      
-      if (success) {
-        // Refetch the assessment to get updated data
-        await fetchAssessment();
-        setShowSuccessDialog(true);
+      // Convert the ratings and evidence into the format expected by the new API
+      const standards = Object.entries(ratings)
+        .filter(([standardId, rating]) => rating !== null)
+        .map(([standardId, rating]) => ({
+          standardId,
+          rating,
+          evidence: evidence[standardId] || '',
+        }));
+
+      if (standards.length === 0) {
         toast({
-          title: "Assessment submitted",
-          description: "Your assessment has been submitted successfully",
-          variant: "default",
-        });
-      } else {
-        toast({
-          title: "Submission failed",
-          description: "There was an error submitting your assessment. Please try again.",
+          title: "Cannot submit",
+          description: "Please rate at least one standard before submitting.",
           variant: "destructive",
         });
+        return;
       }
+
+      await submitAssessment(id, standards);
+      
+      // Refetch the assessment to get updated data
+      await fetchAssessment();
+      setShowSuccessDialog(true);
+      toast({
+        title: "Assessment submitted",
+        description: "Your assessment has been submitted successfully",
+        variant: "default",
+      });
     } catch (error) {
       console.error('Submit error:', error);
       toast({

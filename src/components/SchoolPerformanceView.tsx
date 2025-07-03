@@ -62,13 +62,15 @@ import {
 } from "lucide-react";
 import { AssessmentInvitationSheet } from "@/components/AssessmentInvitationSheet";
 import { MiniTrendChart, type TrendDataPoint } from "@/components/ui/mini-trend-chart";
+import { SchoolPerformanceTableSkeleton } from "@/components/ui/table-skeleton";
 
 type SchoolPerformanceViewProps = {
   assessments: Assessment[];
   refreshAssessments?: () => Promise<void>;
+  isLoading?: boolean;
 }
 
-export function SchoolPerformanceView({ assessments, refreshAssessments }: SchoolPerformanceViewProps) {
+export function SchoolPerformanceView({ assessments, refreshAssessments, isLoading = false }: SchoolPerformanceViewProps) {
   
   const [searchTerm, setSearchTerm] = useState("");
   const [performanceFilter, setPerformanceFilter] = useState<string>("all");
@@ -263,13 +265,13 @@ export function SchoolPerformanceView({ assessments, refreshAssessments }: Schoo
         if (assessment.overallScore !== undefined && assessment.overallScore > 0) {
           previousCategoryScore = assessment.overallScore;
         } else if (assessment.standards && assessment.standards.length > 0) {
-          const validStandards = assessment.standards.filter(s => s.rating !== null);
-          if (validStandards.length > 0) {
-            const sum = validStandards.reduce((acc, s) => acc + (s.rating || 0), 0);
+        const validStandards = assessment.standards.filter(s => s.rating !== null);
+        if (validStandards.length > 0) {
+          const sum = validStandards.reduce((acc, s) => acc + (s.rating || 0), 0);
             previousCategoryScore = sum / validStandards.length;
           }
         }
-        
+          
         if (previousCategoryScore > 0) {
           // Store previous category score for comparison
           schoolData.changesByCategory!.set(assessment.category, previousCategoryScore);
@@ -560,11 +562,14 @@ export function SchoolPerformanceView({ assessments, refreshAssessments }: Schoo
               </TableRow>
             </TableHeader>
             <TableBody>
-              {filteredSchools.map((school) => {
-                const isExpanded = expandedSchools.has(school.school.id);
-                const trend = getPerformanceTrend(school.overallScore, school.criticalStandardsTotal);
-                const completedCount = school.assessmentsByCategory.filter(cat => cat.assessment.status === "Completed").length;
-                const totalCount = school.assessmentsByCategory.length;
+              {isLoading ? (
+                <SchoolPerformanceTableSkeleton />
+              ) : (
+                filteredSchools.map((school) => {
+                  const isExpanded = expandedSchools.has(school.school.id);
+                  const trend = getPerformanceTrend(school.overallScore, school.criticalStandardsTotal);
+                  const completedCount = school.assessmentsByCategory.filter(cat => cat.assessment.status === "Completed").length;
+                  const totalCount = school.assessmentsByCategory.length;
 
 
 
@@ -606,34 +611,34 @@ export function SchoolPerformanceView({ assessments, refreshAssessments }: Schoo
                         {school.overallScore > 0 ? (
                           <div className="flex items-center justify-center space-x-1.5">
                             <div className="flex items-center space-x-1">
-                              <Badge variant="outline" className={getScoreBadgeColor(school.overallScore)}>
-                                {school.overallScore.toFixed(1)}
-                              </Badge>
+                            <Badge variant="outline" className={getScoreBadgeColor(school.overallScore)}>
+                              {school.overallScore.toFixed(1)}
+                            </Badge>
                               {/* More compact change indicator */}
                               {(() => {
-                                const change = calculateChange(school.overallScore, school.previousOverallScore);
-                                if (!change) return null;
-                                return (
-                                  <Tooltip>
-                                    <TooltipTrigger asChild>
-                                      <div className={cn(
+                              const change = calculateChange(school.overallScore, school.previousOverallScore);
+                              if (!change) return null;
+                              return (
+                                <Tooltip>
+                                  <TooltipTrigger asChild>
+                                    <div className={cn(
                                         "flex items-center px-1 py-0.5 rounded text-xs font-medium",
                                         change.type === "positive" && "bg-emerald-50 text-emerald-600",
                                         change.type === "negative" && "bg-rose-50 text-rose-600"
-                                      )}>
-                                        {change.icon}
+                                    )}>
+                                      {change.icon}
                                         <span className="text-xs">{Math.abs(change.value).toFixed(1)}</span>
-                                      </div>
-                                    </TooltipTrigger>
-                                    <TooltipContent>
-                                      <p>
+                                    </div>
+                                  </TooltipTrigger>
+                                  <TooltipContent>
+                                    <p>
                                         {change.type === "positive" ? "Improved" : "Declined"} from previous term
                                         ({Math.abs(change.value).toFixed(1)} points)
-                                      </p>
-                                    </TooltipContent>
-                                  </Tooltip>
-                                );
-                              })()}
+                                    </p>
+                                  </TooltipContent>
+                                </Tooltip>
+                              );
+                            })()}
                             </div>
                           </div>
                         ) : (
@@ -757,7 +762,7 @@ export function SchoolPerformanceView({ assessments, refreshAssessments }: Schoo
                                                       change.type === "negative" && "bg-rose-50 text-rose-700"
                                                     )}>
                                                       {change.icon}
-                                                      <span className="text-xs">{change.value.toFixed(1)}</span>
+                                                        <span className="text-xs">{change.value.toFixed(1)}</span>
                                                     </div>
                                                   </TooltipTrigger>
                                                   <TooltipContent>
@@ -841,7 +846,8 @@ export function SchoolPerformanceView({ assessments, refreshAssessments }: Schoo
                     )}
                   </React.Fragment>
                 );
-              })}
+                })
+              )}
             </TableBody>
           </Table>
 
@@ -860,7 +866,7 @@ export function SchoolPerformanceView({ assessments, refreshAssessments }: Schoo
       {/* Assessment Invitation Sheet */}
       <AssessmentInvitationSheet 
         open={invitationSheetOpen} 
-        onOpenChange={setInvitationSheetOpen}
+        onOpenChange={setInvitationSheetOpen} 
         onSuccess={refreshAssessments}
       />
     </div>

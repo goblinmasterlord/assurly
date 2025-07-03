@@ -42,6 +42,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import type { Assessment, AssessmentCategory } from "@/types/assessment";
 import { cn } from "@/lib/utils";
 import { SchoolPerformanceView } from "@/components/SchoolPerformanceView";
+import { DepartmentHeadTableSkeleton } from "@/components/ui/table-skeleton";
+import { Skeleton } from "@/components/ui/skeleton";
 
 export function AssessmentsPage() {
   const { role } = useUser();
@@ -204,14 +206,6 @@ export function AssessmentsPage() {
     }
   };
   
-  if (isLoading) {
-    return (
-      <div className="container py-10 flex justify-center items-center h-64">
-        <p className="text-muted-foreground">Loading assessments...</p>
-      </div>
-    );
-  }
-
   if (error) {
     return (
       <div className="container py-10 flex justify-center items-center h-64">
@@ -224,7 +218,11 @@ export function AssessmentsPage() {
   if (isMatAdmin) {
     return (
       <div className="container py-10">
-        <SchoolPerformanceView assessments={assessments} refreshAssessments={refreshAssessments} />
+        <SchoolPerformanceView 
+          assessments={assessments} 
+          refreshAssessments={refreshAssessments} 
+          isLoading={isLoading}
+        />
       </div>
     );
   }
@@ -236,27 +234,38 @@ export function AssessmentsPage() {
         <div>
           <h1 className="text-3xl font-bold tracking-tight">My Assessments</h1>
           <p className="text-muted-foreground">
-            You have {overdueCount} overdue and {inProgressCount} in-progress assessments.
+            {isLoading ? (
+              <Skeleton className="h-4 w-64" />
+            ) : (
+              <>You have {overdueCount} overdue and {inProgressCount} in-progress assessments.</>
+            )}
           </p>
         </div>
         {/* Academic Term Selector */}
-        {availableTerms.length > 1 && (
+        {isLoading ? (
           <div className="flex items-center gap-2">
             <span className="text-sm font-medium text-muted-foreground">Academic Term:</span>
-            <Select value={selectedTerm} onValueChange={setSelectedTerm}>
-              <SelectTrigger className="w-[200px] bg-white">
-                <Calendar className="h-4 w-4 mr-2 opacity-50" />
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {availableTerms.map((term) => (
-                  <SelectItem key={term} value={term}>
-                    {term}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <Skeleton className="h-9 w-[200px]" />
           </div>
+        ) : (
+          availableTerms.length > 1 && (
+            <div className="flex items-center gap-2">
+              <span className="text-sm font-medium text-muted-foreground">Academic Term:</span>
+              <Select value={selectedTerm} onValueChange={setSelectedTerm}>
+                <SelectTrigger className="w-[200px] bg-white">
+                  <Calendar className="h-4 w-4 mr-2 opacity-50" />
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {availableTerms.map((term) => (
+                    <SelectItem key={term} value={term}>
+                      {term}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          )
         )}
       </div>
 
@@ -349,7 +358,9 @@ export function AssessmentsPage() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {paginatedAssessments.length === 0 ? (
+                {isLoading ? (
+                  <DepartmentHeadTableSkeleton />
+                ) : paginatedAssessments.length === 0 ? (
                   <TableRow>
                     <TableCell
                       colSpan={7}

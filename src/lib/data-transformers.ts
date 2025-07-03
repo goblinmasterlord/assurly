@@ -3,6 +3,8 @@ import type {
   School,
   Standard,
   User,
+  AcademicTerm,
+  AssessmentCategory,
 } from '@/types/assessment';
 
 // API response types for the real backend
@@ -42,6 +44,65 @@ interface ApiAssessmentDetail extends Omit<ApiAssessmentSummary, 'mat_id' | 'com
   standards: ApiStandardDetail[];
 }
 
+// New API types for schools and standards endpoints
+interface ApiSchoolResponse {
+  school_id: string;
+  school_name: string;
+  mat_id: string;
+  mat_name: string;
+  school_code: string;
+}
+
+interface ApiStandardResponse {
+  standard_id: string;
+  standard_name: string;
+  aspect_id: string;
+  aspect_name: string;
+  description: string;
+  sort_order: number;
+}
+
+// ------------------------------
+// Mapping Utilities
+// ------------------------------
+
+const termMap: Record<string, AcademicTerm> = {
+  T1: 'Autumn',
+  T2: 'Spring',
+  T3: 'Summer',
+};
+
+const statusMap: Record<string, string> = {
+  completed: 'Completed',
+  in_progress: 'In Progress',
+  not_started: 'Not Started',
+};
+
+/**
+ * Normalises category strings to match our `AssessmentCategory` union type.
+ * Example: "education" → "Education"
+ */
+const normaliseCategory = (category: string): AssessmentCategory => {
+  // Convert to Title Case and handle ampersand spacing
+  return category
+    .split(' ')
+    .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+    .join(' ') as AssessmentCategory;
+};
+
+/**
+ * Converts academic year from short format ("2024-25") to long format ("2024-2025").
+ */
+const expandAcademicYear = (year: string): string => {
+  if (/^\d{4}-\d{2}$/.test(year)) {
+    const [start, end] = year.split('-');
+    // If end has 2 digits, prepend the first two digits of the start year
+    const endFull = start.slice(0, 2) + end;
+    return `${start}-${endFull}`;
+  }
+  return year;
+};
+
 /**
  * Maps backend term IDs to frontend term names
  */
@@ -78,6 +139,7 @@ const mapCategory = (category: string): string => {
     'estates': 'Estates',
     'governance': 'Governance',
     'it': 'IT & Information Services',
+    'is': 'IT & Information Services', // Information Standards -> IT & Information Services
   };
   return categoryMap[category.toLowerCase()] || category;
 };
@@ -114,6 +176,17 @@ export const transformSchool = (schoolId: string, schoolName: string): School =>
 };
 
 /**
+ * Transforms API school response into frontend School format.
+ */
+export const transformSchoolResponse = (apiSchool: ApiSchoolResponse): School => {
+  return {
+    id: apiSchool.school_id,
+    name: apiSchool.school_name,
+    code: apiSchool.school_code,
+  };
+};
+
+/**
  * Transforms API user string to frontend User format.
  * For now, we'll create basic user objects from the user IDs.
  */
@@ -143,22 +216,37 @@ export const transformStandard = (apiStandard: ApiStandardDetail): Standard => {
 };
 
 /**
+ * Transforms API standard response into frontend Standard format.
+ */
+export const transformStandardResponse = (apiStandard: ApiStandardResponse): Standard => {
+  return {
+    id: apiStandard.standard_id,
+    code: apiStandard.standard_id,
+    title: apiStandard.standard_name,
+    description: apiStandard.description,
+    rating: null, // Standards from this endpoint don't have ratings yet
+    evidence: '',
+    attachments: [],
+  };
+};
+
+/**
  * Transforms API assessment summary into frontend Assessment format.
  */
 export const transformAssessmentSummary = (apiAssessment: ApiAssessmentSummary): Assessment => {
   return {
     id: apiAssessment.assessment_id,
     name: apiAssessment.name,
-    category: mapCategory(apiAssessment.category) as any,
+    category: normaliseCategory(apiAssessment.category) as any,
     school: transformSchool(apiAssessment.school_id, apiAssessment.school_name),
-    status: mapStatus(apiAssessment.status) as any,
+    status: (statusMap[apiAssessment.status] || apiAssessment.status) as any,
     completedStandards: apiAssessment.completed_standards,
     totalStandards: apiAssessment.total_standards,
     lastUpdated: apiAssessment.last_updated,
     dueDate: apiAssessment.due_date,
     assignedTo: apiAssessment.assigned_to.map(transformUser),
-    term: mapTermIdToTerm(apiAssessment.term_id) as any,
-    academicYear: mapAcademicYear(apiAssessment.academic_year),
+    term: termMap[apiAssessment.term_id] || (apiAssessment.term_id as any),
+    academicYear: expandAcademicYear(apiAssessment.academic_year),
     // Include the overall score from the API response
     overallScore: apiAssessment.overall_score,
     // Note: standards will be undefined for summary view
@@ -172,17 +260,17 @@ export const transformAssessmentDetail = (apiAssessment: ApiAssessmentDetail): A
   return {
     id: apiAssessment.assessment_id,
     name: apiAssessment.name,
-    category: mapCategory(apiAssessment.category) as any,
+    category: normaliseCategory(apiAssessment.category) as any,
     school: transformSchool(apiAssessment.school_id, apiAssessment.school_name),
-    status: mapStatus(apiAssessment.status) as any,
+    status: (statusMap[apiAssessment.status] || apiAssessment.status) as any,
     completedStandards: apiAssessment.standards.filter(s => s.rating !== null).length,
     totalStandards: apiAssessment.standards.length,
     lastUpdated: apiAssessment.last_updated,
     dueDate: apiAssessment.due_date,
     assignedTo: apiAssessment.assigned_to.map(transformUser),
     standards: apiAssessment.standards.map(transformStandard),
-    term: mapTermIdToTerm(apiAssessment.term_id) as any,
-    academicYear: mapAcademicYear(apiAssessment.academic_year),
+    term: termMap[apiAssessment.term_id] || (apiAssessment.term_id as any),
+    academicYear: expandAcademicYear(apiAssessment.academic_year),
   };
 };
 
