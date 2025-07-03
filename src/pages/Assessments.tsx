@@ -41,6 +41,7 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { MultiSelect, type MultiSelectOption } from "@/components/ui/multi-select";
 import { TermStepper } from "@/components/ui/term-stepper";
+import { FilterBar } from "@/components/ui/filter-bar";
 import type { Assessment, AssessmentCategory } from "@/types/assessment";
 import { cn } from "@/lib/utils";
 import { SchoolPerformanceView } from "@/components/SchoolPerformanceView";
@@ -337,66 +338,40 @@ export function AssessmentsPage() {
       </div>
 
       <div className="space-y-5">
-        {/* Filters */}
-        <Card>
-          <CardHeader className="pb-3">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <Filter className="h-4 w-4 text-slate-600" />
-                <CardTitle className="text-base">Filters</CardTitle>
-              </div>
-              <Button 
-                variant="ghost" 
-                size="sm" 
-                onClick={clearAllFilters}
-                className="text-xs text-slate-500 hover:text-slate-700"
-              >
-                Clear All
-              </Button>
-            </div>
-          </CardHeader>
-          <CardContent className="pt-0">
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
-              <div className="lg:col-span-2">
-                <div className="relative">
-                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-slate-400 h-4 w-4" />
-                  <Input
-                    placeholder="Search assessments..."
-                    value={searchTerm}
-                    onChange={(e) => setSearchTerm(e.target.value)}
-                    className="pl-10 h-9"
-                  />
-                </div>
-              </div>
-              
-              {uniqueSchools.length > 1 && (
-                <MultiSelect
-                  options={schoolOptions}
-                  selected={schoolFilter}
-                  onChange={handleSchoolFilterChange}
-                  placeholder="Schools"
-                  className="h-9"
-                />
-              )}
-              
-              <MultiSelect
-                options={categoryOptions}
-                selected={categoryFilter}
-                onChange={handleCategoryFilterChange}
-                placeholder="Strategies"
-                className="h-9"
-              />
-              
-              <MultiSelect
-                options={statusOptions}
-                selected={statusFilter}
-                onChange={handleStatusFilterChange}
-                placeholder="Status"
-                className="h-9"
-              />
-            </div>
-          </CardContent>
-        </Card>
+        <FilterBar
+          title="Filters"
+          layout="department-head"
+          onClearAll={clearAllFilters}
+          filters={[
+            {
+              type: 'search',
+              placeholder: 'Search assessments...',
+              value: searchTerm,
+              onChange: setSearchTerm
+            },
+            ...(uniqueSchools.length > 1 ? [{
+              type: 'multiselect' as const,
+              placeholder: 'Schools',
+              value: schoolFilter,
+              onChange: handleSchoolFilterChange,
+              options: schoolOptions
+            }] : []),
+            {
+              type: 'multiselect' as const,
+              placeholder: 'Strategies',
+              value: categoryFilter,
+              onChange: handleCategoryFilterChange,
+              options: categoryOptions
+            },
+            {
+              type: 'multiselect' as const,
+              placeholder: 'Status',
+              value: statusFilter,
+              onChange: handleStatusFilterChange,
+              options: statusOptions
+            }
+          ]}
+        />
 
         {/* Assessment Table */}
         <Card className="border-slate-200">

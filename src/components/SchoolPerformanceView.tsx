@@ -66,6 +66,7 @@ import { AssessmentInvitationSheet } from "@/components/AssessmentInvitationShee
 import { MiniTrendChart, type TrendDataPoint } from "@/components/ui/mini-trend-chart";
 import { SchoolPerformanceTableSkeleton } from "@/components/ui/table-skeleton";
 import { getStrategyDisplayName } from "@/lib/assessment-utils";
+import { FilterBar } from "@/components/ui/filter-bar";
 
 type SchoolPerformanceViewProps = {
   assessments: Assessment[];
@@ -480,76 +481,47 @@ export function SchoolPerformanceView({ assessments, refreshAssessments, isLoadi
         </div>
 
         {/* Enhanced Filters */}
-        <Card>
-          <CardHeader className="pb-3">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <Filter className="h-4 w-4 text-slate-600" />
-                <CardTitle className="text-base">Filters</CardTitle>
-              </div>
-              <Button 
-                variant="ghost" 
-                size="sm" 
-                onClick={clearAllFilters}
-                className="text-xs text-slate-500 hover:text-slate-700"
-              >
-                Clear All
-              </Button>
-            </div>
-          </CardHeader>
-          <CardContent className="pt-0">
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-6 gap-3">
-              <div className="lg:col-span-2">
-                <div className="relative">
-                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-slate-400 h-4 w-4" />
-                  <Input
-                    placeholder="Search schools..."
-                    value={searchTerm}
-                    onChange={(e) => setSearchTerm(e.target.value)}
-                    className="pl-10 h-9"
-                  />
-                </div>
-              </div>
-              
-               <MultiSelect
-                 options={performanceOptions}
-                 selected={performanceFilter}
-                 onChange={handlePerformanceFilterChange}
-                 placeholder="Performance"
-                 className="h-9"
-               />
-
-               <MultiSelect
-                 options={statusOptions}
-                 selected={statusFilter}
-                 onChange={handleStatusFilterChange}
-                 placeholder="Status"
-                 className="h-9"
-               />
-
-               <MultiSelect
-                 options={categoryOptions}
-                 selected={categoryFilter}
-                 onChange={handleCategoryFilterChange}
-                 placeholder="Category"
-                 className="h-9"
-               />
-
-              <div className="flex items-center space-x-2">
-                <input
-                  type="checkbox"
-                  id="critical-filter"
-                  checked={criticalFilter}
-                  onChange={(e) => setCriticalFilter(e.target.checked)}
-                  className="h-4 w-4 rounded border-slate-300 text-rose-600 focus:ring-rose-500"
-                />
-                <label htmlFor="critical-filter" className="text-sm font-medium text-slate-700 whitespace-nowrap">
-                  Intervention Required Only
-                </label>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
+        <FilterBar
+          title="Filters"
+          layout="mat-admin"
+          onClearAll={clearAllFilters}
+          filters={[
+            {
+              type: 'search',
+              placeholder: 'Search schools...',
+              value: searchTerm,
+              onChange: setSearchTerm
+            },
+            {
+              type: 'multiselect',
+              placeholder: 'Performance',
+              value: performanceFilter,
+              onChange: handlePerformanceFilterChange,
+              options: performanceOptions
+            },
+            {
+              type: 'multiselect',
+              placeholder: 'Status', 
+              value: statusFilter,
+              onChange: handleStatusFilterChange,
+              options: statusOptions
+            },
+            {
+              type: 'multiselect',
+              placeholder: 'Category',
+              value: categoryFilter,
+              onChange: handleCategoryFilterChange,
+              options: categoryOptions
+            },
+            {
+              type: 'checkbox',
+              label: 'Intervention Required Only',
+              value: criticalFilter,
+              onChange: setCriticalFilter,
+              id: 'critical-filter'
+            }
+          ]}
+        />
 
       {/* Schools Table */}
       <Card>
