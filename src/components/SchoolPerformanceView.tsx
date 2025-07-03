@@ -25,6 +25,8 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { MultiSelect, type MultiSelectOption } from "@/components/ui/multi-select";
+import { TermStepper } from "@/components/ui/term-stepper";
 import {
   Collapsible,
   CollapsibleContent,
@@ -63,6 +65,7 @@ import {
 import { AssessmentInvitationSheet } from "@/components/AssessmentInvitationSheet";
 import { MiniTrendChart, type TrendDataPoint } from "@/components/ui/mini-trend-chart";
 import { SchoolPerformanceTableSkeleton } from "@/components/ui/table-skeleton";
+import { getStrategyDisplayName } from "@/lib/assessment-utils";
 
 type SchoolPerformanceViewProps = {
   assessments: Assessment[];
@@ -73,9 +76,9 @@ type SchoolPerformanceViewProps = {
 export function SchoolPerformanceView({ assessments, refreshAssessments, isLoading = false }: SchoolPerformanceViewProps) {
   
   const [searchTerm, setSearchTerm] = useState("");
-  const [performanceFilter, setPerformanceFilter] = useState<string>("all");
-  const [statusFilter, setStatusFilter] = useState<string>("all");
-  const [categoryFilter, setCategoryFilter] = useState<string>("all");
+  const [performanceFilter, setPerformanceFilter] = useState<string[]>([]);
+  const [statusFilter, setStatusFilter] = useState<string[]>([]);
+  const [categoryFilter, setCategoryFilter] = useState<string[]>([]);
   const [criticalFilter, setCriticalFilter] = useState<boolean>(false);
   const [invitationSheetOpen, setInvitationSheetOpen] = useState(false);
   const [expandedSchools, setExpandedSchools] = useState<Set<string>>(new Set());
@@ -182,6 +185,67 @@ export function SchoolPerformanceView({ assessments, refreshAssessments, isLoadi
     }
   };
 
+  // Helper function - define before usage to avoid temporal dead zone
+  const getPerformanceTrend = (score: number, criticalCount: number) => {
+    if (score >= 3.5 && criticalCount === 0) {
+      return "Excellent";
+    } else if (score >= 3.0 && criticalCount <= 1) {
+      return "Strong";
+    } else if (score >= 2.5 && criticalCount <= 3) {
+      return "Good";
+    } else if (score >= 2.0 && criticalCount <= 5) {
+      return "Satisfactory";
+    } else if (score >= 1.5) {
+      return "Needs Attention";
+    } else {
+      return "Requires Intervention";
+    }
+  };
+
+  // Create filter options for multi-select components
+  const performanceOptions: MultiSelectOption[] = [
+    { label: "High Performance", value: "high" },
+    { label: "Medium Performance", value: "medium" },
+    { label: "Low Performance", value: "low" }
+  ];
+
+  const statusOptions: MultiSelectOption[] = [
+    { label: "Completed", value: "completed" },
+    { label: "In Progress", value: "in-progress" },
+    { label: "Not Started", value: "not-started" },
+    { label: "Overdue", value: "overdue" }
+  ];
+
+  const uniqueCategories = [...new Set(filteredByTermAssessments.map(a => a.category))];
+  const categoryOptions: MultiSelectOption[] = uniqueCategories.map(category => ({
+    label: getStrategyDisplayName(category),
+    value: category
+  }));
+
+  // DEBUG: Add debugging wrappers for filter state changes
+  const handlePerformanceFilterChange = (newValue: string[]) => {
+    console.log('🔍 MAT Admin PerformanceFilter changed:', { from: performanceFilter, to: newValue });
+    setPerformanceFilter(newValue);
+  };
+
+  const handleStatusFilterChange = (newValue: string[]) => {
+    console.log('🔍 MAT Admin StatusFilter changed:', { from: statusFilter, to: newValue });
+    setStatusFilter(newValue);
+  };
+
+  const handleCategoryFilterChange = (newValue: string[]) => {
+    console.log('🔍 MAT Admin CategoryFilter changed:', { from: categoryFilter, to: newValue });
+    setCategoryFilter(newValue);
+  };
+
+  // DEBUG: Log filter options
+  console.log('🔍 MAT Admin Filter Options Debug:', {
+    performanceOptions: performanceOptions.length,
+    statusOptions: statusOptions.length, 
+    categoryOptions: categoryOptions.length,
+    currentFilters: { performanceFilter, statusFilter, categoryFilter }
+  });
+
   // Group assessments by school and calculate performance metrics
   const schoolPerformanceData = useMemo(() => {
     const schoolMap = new Map<string, SchoolPerformance & { previousOverallScore?: number; changesByCategory?: Map<string, any> }>();
@@ -198,40 +262,26 @@ export function SchoolPerformanceView({ assessments, refreshAssessments, isLoadi
           criticalStandardsTotal: 0,
           lastUpdated: assessment.lastUpdated,
           previousOverallScore: undefined, // Start with undefined instead of 0
-          changesByCategory: new Map()
+          changesByCategory: new Map(),
         });
       }
 
       const schoolData = schoolMap.get(schoolId)!;
       
-      // Calculate average score for this assessment
-      let averageScore = 0;
-      let criticalStandardsCount = 0;
-
-      // Use overall score from API summary data first, then fall back to standards calculation
-      if (assessment.overallScore !== undefined && assessment.overallScore > 0) {
-        // Use the API's calculated overall score (from summary endpoint)
-        averageScore = assessment.overallScore;
-      } else if (assessment.completedStandards > 0 && assessment.standards && assessment.standards.length > 0) {
-        // Fall back to calculating from individual standards (from detail endpoint)
-        const validStandards = assessment.standards.filter(s => s.rating !== null);
-        if (validStandards.length > 0) {
-          const sum = validStandards.reduce((acc, s) => acc + (s.rating || 0), 0);
-          averageScore = sum / validStandards.length;
-        }
-        
-        // Count critical standards (rating of 1 only - Inadequate)
-        criticalStandardsCount = assessment.standards.filter(s => s.rating === 1).length;
-      }
+      // Calculate overall score based on completed assessments
+      const averageScore = assessment.overallScore || 0; // Use the overallScore from the assessment
+      
+      // Count critical standards (ratings of 1 or 2)
+      const criticalCount = assessment.standards?.filter(s => s.rating === 1 || s.rating === 2).length || 0;
 
       schoolData.assessmentsByCategory.push({
         category: assessment.category,
         assessment,
         averageScore,
-        criticalStandardsCount
+        criticalStandardsCount: criticalCount,
       });
 
-      schoolData.criticalStandardsTotal += criticalStandardsCount;
+      schoolData.criticalStandardsTotal += criticalCount;
       
       // Update last updated if this assessment is more recent
       if (assessment.lastUpdated > schoolData.lastUpdated) {
@@ -239,94 +289,99 @@ export function SchoolPerformanceView({ assessments, refreshAssessments, isLoadi
       }
     });
 
-    // Calculate current term overall scores
-    schoolMap.forEach((schoolData) => {
+    // Calculate overall scores and previous term comparisons
+    schoolMap.forEach((schoolData, schoolId) => {
       const completedAssessments = schoolData.assessmentsByCategory.filter(
-        cat => cat.assessment.status === "Completed" || cat.assessment.status === "In Progress"
+        cat => cat.assessment.status === "Completed"
       );
       
       if (completedAssessments.length > 0) {
         const totalScore = completedAssessments.reduce((sum, cat) => sum + cat.averageScore, 0);
         schoolData.overallScore = totalScore / completedAssessments.length;
       }
-    });
 
-    // Process previous term assessments for comparison
-    previousTermAssessments.forEach(assessment => {
-      const schoolId = assessment.school.id;
-      const schoolData = schoolMap.get(schoolId);
-      
+      // Find previous term data for comparison
+      const previousSchoolAssessments = previousTermAssessments.filter(
+        a => a.school.id === schoolId
+      );
 
-      
-      if (schoolData) {
-        let previousCategoryScore = 0;
-        
-        // Use API overall score if available, otherwise calculate from standards
-        if (assessment.overallScore !== undefined && assessment.overallScore > 0) {
-          previousCategoryScore = assessment.overallScore;
-        } else if (assessment.standards && assessment.standards.length > 0) {
-        const validStandards = assessment.standards.filter(s => s.rating !== null);
-        if (validStandards.length > 0) {
-          const sum = validStandards.reduce((acc, s) => acc + (s.rating || 0), 0);
-            previousCategoryScore = sum / validStandards.length;
+      if (previousSchoolAssessments.length > 0) {
+        const prevCompletedAssessments = previousSchoolAssessments.filter(a => a.status === "Completed");
+        if (prevCompletedAssessments.length > 0) {
+          const prevTotalScore = prevCompletedAssessments.reduce((sum, a) => sum + (a.overallScore || 0), 0);
+          schoolData.previousOverallScore = prevTotalScore / prevCompletedAssessments.length;
+        }
+
+        // Calculate changes by category
+        schoolData.assessmentsByCategory.forEach(categoryData => {
+          const prevCategoryAssessment = previousSchoolAssessments.find(
+            a => a.category === categoryData.category && a.status === "Completed"
+          );
+          if (prevCategoryAssessment) {
+            const change = calculateChange(categoryData.averageScore, prevCategoryAssessment.overallScore || 0);
+            schoolData.changesByCategory!.set(categoryData.category, change);
           }
-        }
-          
-        if (previousCategoryScore > 0) {
-          // Store previous category score for comparison
-          schoolData.changesByCategory!.set(assessment.category, previousCategoryScore);
-        }
-      }
-    });
-
-    // Calculate previous overall scores
-    schoolMap.forEach((schoolData) => {
-      const categoryScores = Array.from(schoolData.changesByCategory!.values());
-      
-      if (categoryScores.length > 0) {
-        schoolData.previousOverallScore = categoryScores.reduce((sum, score) => sum + score, 0) / categoryScores.length;
+        });
       }
     });
 
     return Array.from(schoolMap.values());
   }, [filteredByTermAssessments, previousTermAssessments]);
 
-  // Filter schools based on search and multiple criteria
-  const filteredSchools = useMemo(() => {
+  // Filter school performance data based on search and filters
+  const filteredSchoolData = useMemo(() => {
     return schoolPerformanceData.filter(school => {
-      const matchesSearch = school.school.name.toLowerCase().includes(searchTerm.toLowerCase());
-      
-      let matchesPerformance = true;
-      if (performanceFilter === "high") {
-        matchesPerformance = school.overallScore >= 3;
-      } else if (performanceFilter === "medium") {
-        matchesPerformance = school.overallScore >= 2 && school.overallScore < 3;
-      } else if (performanceFilter === "low") {
-        matchesPerformance = school.overallScore > 0 && school.overallScore < 2;
-      }
+      // Search filter
+      const matchesSearch = 
+        school.school.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        school.school.code?.toLowerCase().includes(searchTerm.toLowerCase());
+
+      // Performance filter
+      const performanceTrend = getPerformanceTrend(school.overallScore, school.criticalStandardsTotal);
+      const matchesPerformance = performanceFilter.length === 0 || performanceFilter.some(filter => {
+        switch (filter) {
+          case "high": return performanceTrend === "Excellent" || performanceTrend === "Strong";
+          case "medium": return performanceTrend === "Good" || performanceTrend === "Satisfactory";
+          case "low": return performanceTrend === "Needs Attention" || performanceTrend === "Requires Intervention";
+          default: return false;
+        }
+      });
+
+      // Status filter
+      const schoolStatuses = school.assessmentsByCategory.map(cat => cat.assessment.status);
+      const matchesStatus = statusFilter.length === 0 || statusFilter.some(status => {
+        switch (status) {
+          case "completed": return schoolStatuses.includes("Completed");
+          case "in-progress": return schoolStatuses.includes("In Progress");
+          case "not-started": return schoolStatuses.includes("Not Started");
+          case "overdue": return schoolStatuses.includes("Overdue");
+          default: return false;
+        }
+      });
+
+      // Category filter
+      const schoolCategories = school.assessmentsByCategory.map(cat => cat.category);
+      const matchesCategory = categoryFilter.length === 0 || categoryFilter.some(category => 
+        schoolCategories.includes(category as AssessmentCategory)
+      );
 
       // Critical filter
       const matchesCritical = !criticalFilter || school.criticalStandardsTotal > 0;
 
-      // Status filter
-      let matchesStatus = true;
-      if (statusFilter !== "all") {
-        matchesStatus = school.assessmentsByCategory.some(cat => 
-          cat.assessment.status.toLowerCase() === statusFilter.toLowerCase()
-        );
-      }
-
-      // Category filter
-      let matchesCategory = true;
-      if (categoryFilter !== "all") {
-        matchesCategory = school.assessmentsByCategory.some(cat => cat.category === categoryFilter);
-      }
-
-      return matchesSearch && matchesPerformance && matchesCritical && matchesStatus && matchesCategory;
+      return matchesSearch && matchesPerformance && matchesStatus && matchesCategory && matchesCritical;
     });
   }, [schoolPerformanceData, searchTerm, performanceFilter, statusFilter, categoryFilter, criticalFilter]);
 
-  const getCategoryIcon = (category: AssessmentCategory) => {
+  // Clear all filters
+  const clearAllFilters = () => {
+    setSearchTerm("");
+    setPerformanceFilter([]);
+    setStatusFilter([]);
+    setCategoryFilter([]);
+    setCriticalFilter(false);
+  };
+
+  const getCategoryIcon = (category: string) => {
     switch (category) {
       case "Education":
         return <BookOpen className="h-4 w-4" />;
@@ -396,18 +451,6 @@ export function SchoolPerformanceView({ assessments, refreshAssessments, isLoadi
     setExpandedHistoric(newExpanded);
   };
 
-  const getPerformanceTrend = (score: number, criticalCount: number) => {
-    if (score >= 3.5 && criticalCount === 0) {
-      return { icon: <TrendingUp className="h-4 w-4 text-emerald-600" />, label: "Excellent" };
-    } else if (score >= 2.5 && criticalCount <= 2) {
-      return { icon: <TrendingUp className="h-4 w-4 text-indigo-600" />, label: "Good" };
-    } else if (criticalCount > 5) {
-      return { icon: <TrendingDown className="h-4 w-4 text-rose-600" />, label: "Needs Attention" };
-    } else {
-      return { icon: <AlertCircle className="h-4 w-4 text-amber-600" />, label: "Monitor" };
-    }
-  };
-
   return (
     <TooltipProvider>
       <div className="space-y-6">
@@ -420,19 +463,12 @@ export function SchoolPerformanceView({ assessments, refreshAssessments, isLoadi
             </p>
           </div>
           <div className="flex flex-col space-y-2 md:flex-row md:space-y-0 md:space-x-3">
-            <Select value={selectedTerm} onValueChange={setSelectedTerm}>
-              <SelectTrigger className="w-full md:w-48">
-                <Calendar className="mr-2 h-4 w-4" />
-                <SelectValue placeholder="Select Term" />
-              </SelectTrigger>
-              <SelectContent>
-                {availableTerms.map((term) => (
-                  <SelectItem key={term} value={term}>
-                    {term}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <TermStepper
+              terms={availableTerms}
+              currentTerm={selectedTerm}
+              onTermChange={setSelectedTerm}
+              className="w-full md:w-auto"
+            />
             <Button 
               onClick={() => setInvitationSheetOpen(true)}
               className="w-full md:w-auto"
@@ -454,13 +490,7 @@ export function SchoolPerformanceView({ assessments, refreshAssessments, isLoadi
               <Button 
                 variant="ghost" 
                 size="sm" 
-                onClick={() => {
-                  setSearchTerm("");
-                  setPerformanceFilter("all");
-                  setStatusFilter("all");
-                  setCategoryFilter("all");
-                  setCriticalFilter(false);
-                }}
+                onClick={clearAllFilters}
                 className="text-xs text-slate-500 hover:text-slate-700"
               >
                 Clear All
@@ -468,7 +498,7 @@ export function SchoolPerformanceView({ assessments, refreshAssessments, isLoadi
             </div>
           </CardHeader>
           <CardContent className="pt-0">
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-6 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-6 gap-3">
               <div className="lg:col-span-2">
                 <div className="relative">
                   <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-slate-400 h-4 w-4" />
@@ -476,51 +506,34 @@ export function SchoolPerformanceView({ assessments, refreshAssessments, isLoadi
                     placeholder="Search schools..."
                     value={searchTerm}
                     onChange={(e) => setSearchTerm(e.target.value)}
-                    className="pl-10"
+                    className="pl-10 h-9"
                   />
                 </div>
               </div>
               
-              <Select value={performanceFilter} onValueChange={setPerformanceFilter}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Performance" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All Performance</SelectItem>
-                  <SelectItem value="high">High (3.0+)</SelectItem>
-                  <SelectItem value="medium">Medium (2.0-2.9)</SelectItem>
-                  <SelectItem value="low">Low (&lt;2.0)</SelectItem>
-                </SelectContent>
-              </Select>
+               <MultiSelect
+                 options={performanceOptions}
+                 selected={performanceFilter}
+                 onChange={handlePerformanceFilterChange}
+                 placeholder="Performance"
+                 className="h-9"
+               />
 
-              <Select value={statusFilter} onValueChange={setStatusFilter}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Status" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All Statuses</SelectItem>
-                  <SelectItem value="Completed">Completed</SelectItem>
-                  <SelectItem value="In Progress">In Progress</SelectItem>
-                  <SelectItem value="Not Started">Not Started</SelectItem>
-                  <SelectItem value="Overdue">Overdue</SelectItem>
-                </SelectContent>
-              </Select>
+               <MultiSelect
+                 options={statusOptions}
+                 selected={statusFilter}
+                 onChange={handleStatusFilterChange}
+                 placeholder="Status"
+                 className="h-9"
+               />
 
-              <Select value={categoryFilter} onValueChange={setCategoryFilter}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Category" />
-                </SelectTrigger>
-                <SelectContent>
-                                      <SelectItem value="all">All Strategies</SelectItem>
-                  <SelectItem value="Education">Education</SelectItem>
-                  <SelectItem value="Human Resources">Human Resources</SelectItem>
-                  <SelectItem value="Finance & Procurement">Finance & Procurement</SelectItem>
-                  <SelectItem value="Estates">Estates</SelectItem>
-                  <SelectItem value="Governance">Governance</SelectItem>
-                  <SelectItem value="IT & Information Services">IT & Information Services</SelectItem>
-                  <SelectItem value="IT Strategy & Support">IT Strategy & Support</SelectItem>
-                </SelectContent>
-              </Select>
+               <MultiSelect
+                 options={categoryOptions}
+                 selected={categoryFilter}
+                 onChange={handleCategoryFilterChange}
+                 placeholder="Category"
+                 className="h-9"
+               />
 
               <div className="flex items-center space-x-2">
                 <input
@@ -528,10 +541,10 @@ export function SchoolPerformanceView({ assessments, refreshAssessments, isLoadi
                   id="critical-filter"
                   checked={criticalFilter}
                   onChange={(e) => setCriticalFilter(e.target.checked)}
-                  className="rounded border-slate-300 text-rose-600 focus:ring-rose-500"
+                  className="h-4 w-4 rounded border-slate-300 text-rose-600 focus:ring-rose-500"
                 />
-                <label htmlFor="critical-filter" className="text-sm font-medium text-slate-700">
-                                          Intervention Required Only
+                <label htmlFor="critical-filter" className="text-sm font-medium text-slate-700 whitespace-nowrap">
+                  Intervention Required Only
                 </label>
               </div>
             </div>
@@ -565,13 +578,11 @@ export function SchoolPerformanceView({ assessments, refreshAssessments, isLoadi
               {isLoading ? (
                 <SchoolPerformanceTableSkeleton />
               ) : (
-                filteredSchools.map((school) => {
+                filteredSchoolData.map((school) => {
                   const isExpanded = expandedSchools.has(school.school.id);
                   const trend = getPerformanceTrend(school.overallScore, school.criticalStandardsTotal);
                   const completedCount = school.assessmentsByCategory.filter(cat => cat.assessment.status === "Completed").length;
                   const totalCount = school.assessmentsByCategory.length;
-
-
 
                 return (
                   <React.Fragment key={school.school.id}>
@@ -851,7 +862,7 @@ export function SchoolPerformanceView({ assessments, refreshAssessments, isLoadi
             </TableBody>
           </Table>
 
-          {filteredSchools.length === 0 && (
+          {filteredSchoolData.length === 0 && (
             <div className="text-center py-12">
               <SchoolIcon className="mx-auto h-12 w-12 text-slate-400" />
               <h3 className="mt-4 text-sm font-medium text-slate-900">No schools found</h3>

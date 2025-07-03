@@ -1,8 +1,3 @@
----
-description: 
-globs: 
-alwaysApply: false
----
 # Frontend Component Reference
 
 This document provides a functional description of the frontend components in the Assurly application.
@@ -427,6 +422,30 @@ This section details the reusable UI components, many of which are based on Radi
     - Exports:
         - `TooltipProvider`: Should wrap a major part of the application (or the whole app) to enable tooltips.
         - `Tooltip`: The root component that groups a trigger and its content.
+        - `TooltipTrigger`: The element that, when interacted with (hover/focus), shows the tooltip.
+        - `TooltipContent`: The actual content of the tooltip message.
+    - Behavior: Manages the appearance and disappearance of the tooltip content based on interaction with the trigger.
+    - Props: `TooltipContent` has `sideOffset` to control distance from the trigger.
+
+### `src/components/ui/multi-select.tsx`
+- **Description:** A reusable multi-select dropdown component with search and badge display. Built on top of Radix Popover and the Command (cmdk) list for powerful filtering and keyboard navigation.
+- **Key Properties/Functionality:**
+    - Props: `options` (array of `{ label, value, icon? }`), `selected` (string[]), `onChange` (callback), various text placeholders.
+    - Features: Type-ahead search, keyboard navigation, clear-all option, badge display for selected items (up to configurable max), optional icons, fully accessible keyboard support.
+    - UX: Clicking the badge "x" removes an item; Backspace in the search input removes the last selected item.
+
+### `src/components/ui/term-stepper.tsx`
+- **Description:** An academic term navigator that combines previous / next arrow buttons with a dropdown selector to jump between terms in chronological order.
+- **Key Properties/Functionality:**
+    - Props: `terms` (string[] in chrono-sorted order), `currentTerm`, `onTermChange`, optional `showDropdown`.
+    - Button state automatically disables when at first / last term.
+    - Displays relative position (e.g., "2 of 5").
+    - Uses a fixed-width trigger with `truncate` to avoid layout shift when terms have varying length.
+
+### Updated `src/components/AssessmentInvitationSheet.tsx`
+- **New Feature:** Added dual selector (Term + Academic Year) so admins can decide which academic window the request belongs to. Defaults to the current term/year based on today's date.
+- **API Payload:** `createAssessments` now receives `term` and `academicYear` from user selection instead of hard-coded values.
+
         - `TooltipTrigger`: The element that, when interacted with (hover/focus), shows the tooltip.
         - `TooltipContent`: The actual content of the tooltip message.
     - Behavior: Manages the appearance and disappearance of the tooltip content based on interaction with the trigger.

@@ -31,7 +31,7 @@ import { cn } from "@/lib/utils";
 import { assessmentCategories } from "@/lib/mock-data";
 import { getSchools, createAssessments } from "@/services/assessment-service";
 import { useToast } from "@/hooks/use-toast";
-import type { AssessmentCategory, School } from "@/types/assessment";
+import type { AssessmentCategory, School, AcademicTerm, AcademicYear } from "@/types/assessment";
 
 type AssessmentInvitationSheetProps = {
   open: boolean;
@@ -188,6 +188,36 @@ export function AssessmentInvitationSheet({ open, onOpenChange, onSuccess }: Ass
   const [schools, setSchools] = useState<School[]>([]);
   const [schoolsLoading, setSchoolsLoading] = useState(false);
   const { toast } = useToast();
+  const [term, setTerm] = useState<AcademicTerm>("Autumn");
+  const [academicYear, setAcademicYear] = useState<AcademicYear>("");
+  
+  // Determine default term and academic year based on current date
+  useEffect(() => {
+    const now = new Date();
+    const month = now.getMonth(); // 0 Jan ... 11 Dec
+    let defaultTerm: string;
+    if (month >= 8) {
+      defaultTerm = "Autumn";
+    } else if (month >= 4) {
+      defaultTerm = "Summer";
+    } else {
+      defaultTerm = "Spring";
+    }
+    const year = now.getFullYear();
+    const startYear = month >= 8 ? year : year - 1;
+    const endYearShort = (startYear + 1).toString().slice(-2);
+    const defaultAcademicYear = `${startYear}-${endYearShort}`;
+    setTerm(defaultTerm as AcademicTerm);
+    setAcademicYear(defaultAcademicYear);
+  }, []);
+
+  const termOptions = ["Autumn", "Spring", "Summer"];
+  // Generate a list of the current and next 2 academic years for convenience
+  const academicYearOptions = Array.from({ length: 3 }, (_, idx) => {
+    const start = new Date().getFullYear() + idx - 1; // start with previous/current depending on month
+    const endShort = (start + 1).toString().slice(-2);
+    return `${start}-${endShort}`;
+  });
   
   // Fetch schools when component mounts
   useEffect(() => {
@@ -247,8 +277,8 @@ export function AssessmentInvitationSheet({ open, onOpenChange, onSuccess }: Ass
         category,
         schoolIds: selectedSchools,
         dueDate: dueDate ? format(dueDate, "yyyy-MM-dd") : undefined,
-        term: "Summer", // Could be made dynamic
-        academicYear: "2024-2025" // Could be made dynamic
+        term,
+        academicYear,
       });
 
       if (assessmentIds.length > 0) {
@@ -353,6 +383,38 @@ export function AssessmentInvitationSheet({ open, onOpenChange, onSuccess }: Ass
               {dueDate 
                 ? `Schools will have until ${format(dueDate, "PPPP")} to complete this assessment.` 
                 : "Setting a due date is optional but recommended for timely completions."}
+            </p>
+          </div>
+          
+          {/* Term Selection */}
+          <div className="space-y-2">
+            <Label htmlFor="term" className="text-sm font-medium">
+              Academic Term
+            </Label>
+            <div className="grid grid-cols-2 gap-2">
+              <Select value={term} onValueChange={(val) => setTerm(val as AcademicTerm)}>
+                <SelectTrigger id="term" className="w-full">
+                  <SelectValue placeholder="Term" />
+                </SelectTrigger>
+                <SelectContent>
+                  {termOptions.map((t) => (
+                    <SelectItem key={t} value={t}>{t}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <Select value={academicYear} onValueChange={setAcademicYear}>
+                <SelectTrigger id="academicYear" className="w-full">
+                  <SelectValue placeholder="Academic Year" />
+                </SelectTrigger>
+                <SelectContent>
+                  {academicYearOptions.map((y) => (
+                    <SelectItem key={y} value={y}>{y}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <p className="text-xs text-muted-foreground mt-1">
+              The term and year determine when the assessment appears in dashboards.
             </p>
           </div>
           

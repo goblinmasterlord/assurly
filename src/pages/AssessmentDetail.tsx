@@ -116,7 +116,7 @@ export function AssessmentDetailPage() {
   const isAdminView = searchParams.get('view') === 'admin' || role === 'mat-admin';
   
   // Fetch assessment data
-  const fetchAssessment = useCallback(async () => {
+  const fetchAssessment = useCallback(async (showLoading = true) => {
     if (!id) {
       setError("No assessment ID provided");
       setIsLoading(false);
@@ -124,7 +124,9 @@ export function AssessmentDetailPage() {
     }
 
     try {
-      setIsLoading(true);
+      if (showLoading) {
+        setIsLoading(true);
+      }
       const data = await getAssessmentById(id);
       if (data) {
         setAssessment(data);
@@ -135,7 +137,9 @@ export function AssessmentDetailPage() {
       setError("Failed to load assessment");
       console.error(err);
     } finally {
-      setIsLoading(false);
+      if (showLoading) {
+        setIsLoading(false);
+      }
     }
   }, [id]);
 
@@ -317,19 +321,34 @@ export function AssessmentDetailPage() {
     
     setSaving(true);
     try {
-      // Convert the ratings and evidence into the format expected by the new API
-      const standards = Object.entries(ratings)
-        .filter(([standardId, rating]) => rating !== null)
-        .map(([standardId, rating]) => ({
-          standardId,
-          rating,
-          evidence: evidence[standardId] || '',
-        }));
+      // Get all standard IDs that have either a rating or evidence
+      const standardsWithData = new Set<string>();
+      
+      // Add standards with ratings
+      Object.entries(ratings).forEach(([standardId, rating]) => {
+        if (rating !== null) {
+          standardsWithData.add(standardId);
+        }
+      });
+      
+      // Add standards with evidence
+      Object.entries(evidence).forEach(([standardId, evidenceText]) => {
+        if (evidenceText && evidenceText.trim().length > 0) {
+          standardsWithData.add(standardId);
+        }
+      });
+
+      // Convert to the format expected by the API
+      const standards = Array.from(standardsWithData).map(standardId => ({
+        standardId,
+        rating: ratings[standardId] || null, // null is allowed by the API
+        evidence: evidence[standardId] || '',
+      }));
 
       if (standards.length === 0) {
         toast({
           title: "Nothing to save",
-          description: "Please rate at least one standard before saving.",
+          description: "Please add a rating or evidence to at least one standard before saving.",
           variant: "destructive",
         });
         return;
@@ -337,11 +356,11 @@ export function AssessmentDetailPage() {
 
       await submitAssessment(id, standards);
       
-      // Refetch the assessment to get updated data
-      await fetchAssessment();
+      // No need to refetch - the save operation confirms data is persisted
+      // and we already have the latest state in our local forms
       toast({
         title: "Progress saved",
-        description: "Your assessment progress has been saved successfully",
+        description: `Successfully saved progress for ${standards.length} standard${standards.length > 1 ? 's' : ''}`,
         variant: "default",
       });
     } catch (error) {
@@ -373,7 +392,18 @@ export function AssessmentDetailPage() {
       if (standards.length === 0) {
         toast({
           title: "Cannot submit",
-          description: "Please rate at least one standard before submitting.",
+          description: "Please rate all standards before submitting the assessment.",
+          variant: "destructive",
+        });
+        return;
+      }
+      
+      // Check if all standards have ratings for submission
+      const totalStandards = assessment.standards?.length || 0;
+      if (standards.length < totalStandards) {
+        toast({
+          title: "Cannot submit",
+          description: `Please rate all ${totalStandards} standards before submitting. Currently ${standards.length} are rated.`,
           variant: "destructive",
         });
         return;
@@ -381,8 +411,9 @@ export function AssessmentDetailPage() {
 
       await submitAssessment(id, standards);
       
-      // Refetch the assessment to get updated data
-      await fetchAssessment();
+      // For submission, we do want to refetch to get updated status
+      // but without showing the loading spinner to avoid the "reload" effect
+      await fetchAssessment(false);
       setShowSuccessDialog(true);
       toast({
         title: "Assessment submitted",

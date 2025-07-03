@@ -39,11 +39,14 @@ import {
 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { MultiSelect, type MultiSelectOption } from "@/components/ui/multi-select";
+import { TermStepper } from "@/components/ui/term-stepper";
 import type { Assessment, AssessmentCategory } from "@/types/assessment";
 import { cn } from "@/lib/utils";
 import { SchoolPerformanceView } from "@/components/SchoolPerformanceView";
 import { DepartmentHeadTableSkeleton } from "@/components/ui/table-skeleton";
 import { Skeleton } from "@/components/ui/skeleton";
+import { getStrategyDisplayName } from "@/lib/assessment-utils";
 
 export function AssessmentsPage() {
   const { role } = useUser();
@@ -81,16 +84,12 @@ export function AssessmentsPage() {
   
   // Define all hooks unconditionally here
   const [searchTerm, setSearchTerm] = useState("");
-  const [categoryFilter, setCategoryFilter] = useState<AssessmentCategory | "all">("all");
-  const [statusFilter, setStatusFilter] = useState<"all" | "completed" | "in-progress" | "not-started" | "overdue">("all");
-  const [schoolFilter, setSchoolFilter] = useState<string>("all");
+  const [categoryFilter, setCategoryFilter] = useState<string[]>([]);
+  const [statusFilter, setStatusFilter] = useState<string[]>([]);
+  const [schoolFilter, setSchoolFilter] = useState<string[]>([]);
   const [view, setView] = useState<"table" | "cards">("table");
   const [selectedTerm, setSelectedTerm] = useState<string>(""); // Will be set to first available term
   
-  // Pagination state
-  const [currentPage, setCurrentPage] = useState(1);
-  const itemsPerPage = 10; // Optimal for table view UX
-
   // Get available terms from assessments (for department head view)
   const availableTerms = useMemo(() => {
     if (isMatAdmin) return [];
@@ -100,7 +99,29 @@ export function AssessmentsPage() {
         termSet.add(`${assessment.term} ${assessment.academicYear}`);
       }
     });
-    return Array.from(termSet).sort().reverse(); // Latest terms first
+    
+    // Convert to array and sort chronologically
+    const terms = Array.from(termSet).sort((a, b) => {
+      const [termA, yearA] = a.split(" ");
+      const [termB, yearB] = b.split(" ");
+      
+      // First compare academic years
+      const yearNumA = parseInt(yearA.split("-")[0]);
+      const yearNumB = parseInt(yearB.split("-")[0]);
+      
+      if (yearNumA !== yearNumB) {
+        return yearNumB - yearNumA; // Newest year first
+      }
+      
+      // If same year, sort by term with custom order: Autumn (newest), Summer, Spring
+      const termOrder = { "Autumn": 0, "Summer": 1, "Spring": 2 };
+      const termOrderA = termOrder[termA as keyof typeof termOrder] ?? 99;
+      const termOrderB = termOrder[termB as keyof typeof termOrder] ?? 99;
+
+      return termOrderA - termOrderB;
+    });
+    
+    return terms;
   }, [assessments, isMatAdmin]);
 
   // Auto-select the first available term for department head view
@@ -127,6 +148,53 @@ export function AssessmentsPage() {
   
   const uniqueCategories = [...new Set(termFilteredAssessments.map(a => a.category))];
   
+  // Create filter options for multi-select components
+  const categoryOptions: MultiSelectOption[] = uniqueCategories.map(category => ({
+    label: getStrategyDisplayName(category),
+    value: category
+  }));
+
+  const statusOptions: MultiSelectOption[] = [
+    { label: "Completed", value: "completed" },
+    { label: "In Progress", value: "in-progress" },
+    { label: "Not Started", value: "not-started" },
+    { label: "Overdue", value: "overdue" }
+  ];
+
+  const schoolOptions: MultiSelectOption[] = uniqueSchools.map(school => ({
+    label: school.name,
+    value: school.id,
+    icon: <SchoolIcon className="h-4 w-4" />
+  }));
+  
+  // DEBUG: Add debugging wrappers for filter state changes
+  const handleCategoryFilterChange = (newValue: string[]) => {
+    console.log('🔍 CategoryFilter changed:', { from: categoryFilter, to: newValue });
+    setCategoryFilter(newValue);
+  };
+
+  const handleStatusFilterChange = (newValue: string[]) => {
+    console.log('🔍 StatusFilter changed:', { from: statusFilter, to: newValue });
+    setStatusFilter(newValue);
+  };
+
+  const handleSchoolFilterChange = (newValue: string[]) => {
+    console.log('🔍 SchoolFilter changed:', { from: schoolFilter, to: newValue });
+    setSchoolFilter(newValue);
+  };
+
+  // DEBUG: Log filter options
+  console.log('🔍 Filter Options Debug:', {
+    categoryOptions: categoryOptions.length,
+    statusOptions: statusOptions.length, 
+    schoolOptions: schoolOptions.length,
+    currentFilters: { categoryFilter, statusFilter, schoolFilter }
+  });
+
+  // Pagination state
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 10; // Optimal for table view UX
+
   const filteredAssessments = useMemo(() => {
     if (!isMatAdmin) {
       return termFilteredAssessments.filter((assessment) => {
@@ -137,18 +205,21 @@ export function AssessmentsPage() {
           assessment.category.toLowerCase().includes(searchTerm.toLowerCase());
         
         // Category filter
-        const matchesCategory = categoryFilter === "all" || assessment.category === categoryFilter;
+        const matchesCategory = categoryFilter.length === 0 || categoryFilter.includes(assessment.category);
         
         // Status filter
-        const matchesStatus = 
-          statusFilter === "all" || 
-          (statusFilter === "completed" && assessment.status === "Completed") ||
-          (statusFilter === "in-progress" && assessment.status === "In Progress") ||
-          (statusFilter === "not-started" && assessment.status === "Not Started") ||
-          (statusFilter === "overdue" && assessment.status === "Overdue");
+        const matchesStatus = statusFilter.length === 0 || statusFilter.some(status => {
+          switch (status) {
+            case "completed": return assessment.status === "Completed";
+            case "in-progress": return assessment.status === "In Progress";
+            case "not-started": return assessment.status === "Not Started";
+            case "overdue": return assessment.status === "Overdue";
+            default: return false;
+          }
+        });
         
-        // School filter
-        const matchesSchool = schoolFilter === "all" || assessment.school.id === schoolFilter;
+        // School filter  
+        const matchesSchool = schoolFilter.length === 0 || schoolFilter.includes(assessment.school.id);
 
         return matchesSearch && matchesCategory && matchesStatus && matchesSchool;
       });
@@ -205,6 +276,13 @@ export function AssessmentsPage() {
         return null;
     }
   };
+
+  const clearAllFilters = () => {
+    setSearchTerm("");
+    setCategoryFilter([]);
+    setStatusFilter([]);
+    setSchoolFilter([]);
+  };
   
   if (error) {
     return (
@@ -233,117 +311,95 @@ export function AssessmentsPage() {
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
         <div>
           <h1 className="text-3xl font-bold tracking-tight">My Assessments</h1>
-          <p className="text-muted-foreground">
+          <div className="text-muted-foreground">
             {isLoading ? (
               <Skeleton className="h-4 w-64" />
             ) : (
-              <>You have {overdueCount} overdue and {inProgressCount} in-progress assessments.</>
+              <p>You have {overdueCount} overdue and {inProgressCount} in-progress assessments.</p>
             )}
-          </p>
+          </div>
         </div>
-        {/* Academic Term Selector */}
+        {/* Academic Term Stepper */}
         {isLoading ? (
           <div className="flex items-center gap-2">
             <span className="text-sm font-medium text-muted-foreground">Academic Term:</span>
-            <Skeleton className="h-9 w-[200px]" />
+            <Skeleton className="h-8 w-[200px]" />
           </div>
         ) : (
           availableTerms.length > 1 && (
-            <div className="flex items-center gap-2">
-              <span className="text-sm font-medium text-muted-foreground">Academic Term:</span>
-              <Select value={selectedTerm} onValueChange={setSelectedTerm}>
-                <SelectTrigger className="w-[200px] bg-white">
-                  <Calendar className="h-4 w-4 mr-2 opacity-50" />
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {availableTerms.map((term) => (
-                    <SelectItem key={term} value={term}>
-                      {term}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
+            <TermStepper
+              terms={availableTerms}
+              currentTerm={selectedTerm}
+              onTermChange={setSelectedTerm}
+            />
           )
         )}
       </div>
 
       <div className="space-y-5">
-        <Card className="border-slate-200">
-          <CardHeader className="p-4 pb-2">
-            <div className="flex flex-col space-y-4 md:flex-row md:items-center md:justify-between md:space-y-0">
-              <div className="flex flex-1 items-center space-x-2">
-                <div className="relative flex-1 md:max-w-sm">
-                  <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-                  <Input
-                    type="search"
-                    placeholder="Search assessments..."
-                    className="pl-8"
-                    value={searchTerm}
-                    onChange={(e) => setSearchTerm(e.target.value)}
-                  />
-                </div>
-                <div className="flex gap-1">
-                  <Button 
-                    variant="outline" 
-                    size="sm" 
-                    className={cn(
-                      "h-9 w-9 p-0", 
-                      view === "table" ? "bg-slate-50" : ""
-                    )}
-                    onClick={() => setView("table")}
-                  >
-                    <Layers className="h-4 w-4" />
-                    <span className="sr-only">Table view</span>
-                  </Button>
-                </div>
+        {/* Filters */}
+        <Card>
+          <CardHeader className="pb-3">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Filter className="h-4 w-4 text-slate-600" />
+                <CardTitle className="text-base">Filters</CardTitle>
               </div>
-              <div className="flex flex-wrap gap-2">
-                {uniqueSchools.length > 1 && (
-                  <Select value={schoolFilter} onValueChange={setSchoolFilter}>
-                    <SelectTrigger className="h-9 w-full md:w-[180px] bg-white gap-1">
-                      <SchoolIcon className="h-4 w-4 text-muted-foreground opacity-70" />
-                      <SelectValue placeholder="All Schools" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="all">All Schools</SelectItem>
-                      {uniqueSchools.map((school) => (
-                        <SelectItem key={school.id} value={school.id}>
-                          {school.name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                )}
-                <Select value={categoryFilter} onValueChange={(value) => setCategoryFilter(value as AssessmentCategory | "all")}>
-                  <SelectTrigger className="h-9 w-full md:w-[180px] bg-white">
-                    <SelectValue placeholder="All Strategies" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">All Strategies</SelectItem>
-                    {uniqueCategories.map((category) => (
-                      <SelectItem key={category} value={category}>
-                        {category}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                <Select value={statusFilter} onValueChange={setStatusFilter as any}>
-                  <SelectTrigger className="h-9 w-full md:w-[180px] bg-white">
-                    <SelectValue placeholder="All Statuses" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">All Statuses</SelectItem>
-                    <SelectItem value="completed">Completed</SelectItem>
-                    <SelectItem value="in-progress">In Progress</SelectItem>
-                    <SelectItem value="not-started">Not Started</SelectItem>
-                    <SelectItem value="overdue">Overdue</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
+              <Button 
+                variant="ghost" 
+                size="sm" 
+                onClick={clearAllFilters}
+                className="text-xs text-slate-500 hover:text-slate-700"
+              >
+                Clear All
+              </Button>
             </div>
           </CardHeader>
+          <CardContent className="pt-0">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
+              <div className="lg:col-span-2">
+                <div className="relative">
+                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-slate-400 h-4 w-4" />
+                  <Input
+                    placeholder="Search assessments..."
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                    className="pl-10 h-9"
+                  />
+                </div>
+              </div>
+              
+              {uniqueSchools.length > 1 && (
+                <MultiSelect
+                  options={schoolOptions}
+                  selected={schoolFilter}
+                  onChange={handleSchoolFilterChange}
+                  placeholder="Schools"
+                  className="h-9"
+                />
+              )}
+              
+              <MultiSelect
+                options={categoryOptions}
+                selected={categoryFilter}
+                onChange={handleCategoryFilterChange}
+                placeholder="Strategies"
+                className="h-9"
+              />
+              
+              <MultiSelect
+                options={statusOptions}
+                selected={statusFilter}
+                onChange={handleStatusFilterChange}
+                placeholder="Status"
+                className="h-9"
+              />
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Assessment Table */}
+        <Card className="border-slate-200">
           <CardContent className="p-0">
             <Table>
               <TableHeader>
@@ -372,12 +428,7 @@ export function AssessmentsPage() {
                         <Button 
                           variant="link" 
                           className="mt-2"
-                          onClick={() => {
-                            setSearchTerm("");
-                            setCategoryFilter("all");
-                            setStatusFilter("all");
-                            setSchoolFilter("all");
-                          }}
+                          onClick={clearAllFilters}
                         >
                           Clear all filters
                         </Button>
@@ -407,7 +458,7 @@ export function AssessmentsPage() {
                       </TableCell>
                       <TableCell>
                         <Badge variant="outline" className="bg-slate-50 font-normal">
-                          {assessment.category}
+                          {getStrategyDisplayName(assessment.category)}
                         </Badge>
                       </TableCell>
                       <TableCell>
@@ -505,63 +556,34 @@ export function AssessmentsPage() {
                   <Button
                     variant="outline"
                     size="sm"
-                    onClick={() => setCurrentPage(Math.max(1, currentPage - 1))}
+                    onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
                     disabled={currentPage === 1}
-                    className="h-8 w-8 p-0"
                   >
-                    <ChevronRight className="h-4 w-4 rotate-180" />
+                    Previous
                   </Button>
-                  
-                  {/* Page numbers */}
                   <div className="flex items-center space-x-1">
                     {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
-                      let pageNum;
-                      if (totalPages <= 5) {
-                        pageNum = i + 1;
-                      } else if (currentPage <= 3) {
-                        pageNum = i + 1;
-                      } else if (currentPage >= totalPages - 2) {
-                        pageNum = totalPages - 4 + i;
-                      } else {
-                        pageNum = currentPage - 2 + i;
-                      }
-                      
+                      const pageNumber = i + 1;
                       return (
                         <Button
-                          key={pageNum}
-                          variant={currentPage === pageNum ? "default" : "outline"}
+                          key={pageNumber}
+                          variant={currentPage === pageNumber ? "default" : "outline"}
                           size="sm"
-                          onClick={() => setCurrentPage(pageNum)}
-                          className="h-8 w-8 p-0"
+                          className="w-9"
+                          onClick={() => setCurrentPage(pageNumber)}
                         >
-                          {pageNum}
+                          {pageNumber}
                         </Button>
                       );
                     })}
-                    
-                    {totalPages > 5 && currentPage < totalPages - 2 && (
-                      <>
-                        <span className="text-muted-foreground">...</span>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => setCurrentPage(totalPages)}
-                          className="h-8 w-8 p-0"
-                        >
-                          {totalPages}
-                        </Button>
-                      </>
-                    )}
                   </div>
-
                   <Button
                     variant="outline"
                     size="sm"
-                    onClick={() => setCurrentPage(Math.min(totalPages, currentPage + 1))}
+                    onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
                     disabled={currentPage === totalPages}
-                    className="h-8 w-8 p-0"
                   >
-                    <ChevronRight className="h-4 w-4" />
+                    Next
                   </Button>
                 </div>
               </div>

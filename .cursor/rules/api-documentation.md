@@ -218,7 +218,7 @@ curl -X GET "https://assurly-frontend-400616570417.europe-west2.run.app/api/asse
 **To find available academic years:**
 
 ```bash
-curl -X GET "[https://assurly-frontend-400616570417.europe-west2.run.app/api/assessments?school_id=cedar-park-primary](https://assurly-backend-400616570417.europe-west2.run.app/api/assessments?school_id=cedar-park-primary)" | jq '.[].academic_year' | sort | uniq
+curl -X GET "[https://assurly-frontend-400616570417.europe-west2.run.app/api/assessments?school_id=cedar-park-primary](https://assurly-frontend-400616570417.europe-west2.run.app/api/assessments?school_id=cedar-park-primary)" | jq '.[].academic_year' | sort | uniq
 ```
 
 ## 3. GET Schools

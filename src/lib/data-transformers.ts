@@ -72,11 +72,7 @@ const termMap: Record<string, AcademicTerm> = {
   T3: 'Summer',
 };
 
-const statusMap: Record<string, string> = {
-  completed: 'Completed',
-  in_progress: 'In Progress',
-  not_started: 'Not Started',
-};
+// Status mapping moved to mapStatus function below
 
 /**
  * Normalises category strings to match our `AssessmentCategory` union type.
@@ -139,7 +135,10 @@ const mapCategory = (category: string): string => {
     'estates': 'Estates',
     'governance': 'Governance',
     'it': 'IT & Information Services',
-    'is': 'IT & Information Services', // Information Standards -> IT & Information Services
+    'is': 'IT (Digital Strategy)', // Information Standards -> IT (Digital Strategy)
+    // Note: Only 6 categories exist in backend standards
+    // Frontend has additional categories that may not have backend implementations yet:
+    // 'IT (Digital Strategy)' - maps to 'it' for now
   };
   return categoryMap[category.toLowerCase()] || category;
 };
@@ -239,7 +238,7 @@ export const transformAssessmentSummary = (apiAssessment: ApiAssessmentSummary):
     name: apiAssessment.name,
     category: normaliseCategory(apiAssessment.category) as any,
     school: transformSchool(apiAssessment.school_id, apiAssessment.school_name),
-    status: (statusMap[apiAssessment.status] || apiAssessment.status) as any,
+    status: mapStatus(apiAssessment.status) as any,
     completedStandards: apiAssessment.completed_standards,
     totalStandards: apiAssessment.total_standards,
     lastUpdated: apiAssessment.last_updated,
@@ -262,7 +261,7 @@ export const transformAssessmentDetail = (apiAssessment: ApiAssessmentDetail): A
     name: apiAssessment.name,
     category: normaliseCategory(apiAssessment.category) as any,
     school: transformSchool(apiAssessment.school_id, apiAssessment.school_name),
-    status: (statusMap[apiAssessment.status] || apiAssessment.status) as any,
+    status: mapStatus(apiAssessment.status) as any,
     completedStandards: apiAssessment.standards.filter(s => s.rating !== null).length,
     totalStandards: apiAssessment.standards.length,
     lastUpdated: apiAssessment.last_updated,

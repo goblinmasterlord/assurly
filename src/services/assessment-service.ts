@@ -152,19 +152,35 @@ export const submitAssessment = async (assessmentId: string, standards: { standa
  */
 export const createAssessments = async (request: CreateAssessmentRequest): Promise<string[]> => {
   try {
+    // Map frontend categories to backend categories
+    const categoryMap: Record<string, string> = {
+      'Education': 'education',
+      'Finance & Procurement': 'finance', 
+      'Human Resources': 'hr',
+      'Estates': 'estates',
+      'Governance': 'governance',
+      'IT & Information Services': 'it',
+      'IT (Digital Strategy)': 'it', // Maps to same backend category as IT & Information Services
+      // Note: Backend only has 6 categories (education, finance, hr, estates, governance, it, is)
+      // 'is' appears to be an alias for information services
+    };
+    
+    const backendCategory = categoryMap[request.category] || request.category.toLowerCase();
+    
     const payload = {
-      category: request.category.toLowerCase().replace(/ & /g, ' ').replace(' ', '-'), // convert to slug maybe
+      category: backendCategory,
       school_ids: request.schoolIds,
       due_date: request.dueDate,
       term_id: request.term === 'Autumn' ? 'T1' : request.term === 'Spring' ? 'T2' : 'T3',
-      academic_year: request.academicYear,
+      academic_year: request.academicYear.replace(/^(\d{4})-(\d{4})$/, '$1-$2').replace(/^(\d{4})-(\d{2})$/, '$1-$2'), // Keep backend format: 2024-25
       assigned_to: ['user1'], // TODO: replace with actual user ID when auth implemented
     };
 
     const response = await apiClient.post('/api/assessments', payload);
 
-    // Assuming backend returns created assessment IDs or similar
-    return response.data?.assessment_ids || [];
+    // The backend returns assessment_ids array (filtering out null values)
+    const assessmentIds = response.data?.assessment_ids?.filter(Boolean) || [];
+    return assessmentIds;
   } catch (error: any) {
     console.error('Failed to create assessments:', error.response?.data || error.message);
     throw new Error(error.response?.data?.detail || 'Failed to create assessments. Please try again.');

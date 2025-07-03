@@ -147,4 +147,41 @@ export const getCategoryIcon = (category: string) => {
   }
 };
 
+/**
+ * Maps strategy category codes to their full display names
+ */
+export const getStrategyDisplayName = (category: string): string => {
+  const strategyMap: Record<string, string> = {
+    "Hr": "Human Resources",
+    "It": "IT & Information Services", 
+    "Is": "IT (Digital Strategy)",
+    "Education": "Education",
+    "Finance & Procurement": "Finance & Procurement",
+    "Estates": "Estates",
+    "Governance": "Governance",
+    "Human Resources": "Human Resources",
+    "IT & Information Services": "IT & Information Services",
+    "IT (Digital Strategy)": "IT (Digital Strategy)",
+  };
+  
+  return strategyMap[category] || category;
+};
+
+/**
+ * Gets the short display code for a strategy category
+ */
+export const getStrategyShortCode = (category: string): string => {
+  const codeMap: Record<string, string> = {
+    "Education": "Education",
+    "Human Resources": "HR",
+    "Finance & Procurement": "Finance",
+    "Estates": "Estates", 
+    "Governance": "Governance",
+    "IT & Information Services": "IT",
+    "IT (Digital Strategy)": "IS",
+  };
+  
+  return codeMap[category] || category;
+};
+
 // #endregion
