@@ -11,55 +11,55 @@ import {
   Users 
 } from "lucide-react";
 
-// Mapping from short codes/abbreviations to full category names
-export const categoryAbbreviationMap: Record<string, AssessmentCategory> = {
-  "Ed": "Education",
-  "Hr": "Human Resources", 
-  "Fm": "Finance & Procurement",
-  "Bo": "Estates", // Building Operations
-  "Eg": "Governance", // Executive Governance
-  "Is": "IT & Information Services", // Information Services
-  "It": "IT (Digital Strategy)",
-};
-
-// Reverse mapping from full names to abbreviations
-export const categoryToAbbreviation: Record<AssessmentCategory, string> = {
-  "Education": "Ed",
-  "Human Resources": "Hr",
-  "Finance & Procurement": "Fm", 
-  "Estates": "Bo",
-  "Governance": "Eg",
-  "IT & Information Services": "Is",
-  "IT (Digital Strategy)": "It",
-};
-
-// Full category display names (for cases where we want more descriptive names)
+// Mapping from backend category values to display names
 export const categoryDisplayNames: Record<AssessmentCategory, string> = {
-  "Education": "Education",
-  "Human Resources": "Human Resources",
-  "Finance & Procurement": "Finance & Procurement",
-  "Estates": "Estates",
-  "Governance": "Governance", 
-  "IT & Information Services": "IT & Information Services",
-  "IT (Digital Strategy)": "IT (Digital Strategy)",
+  "education": "Education",
+  "hr": "Human Resources",
+  "finance": "Finance & Procurement",
+  "estates": "Estates",
+  "governance": "Governance",
+  "is": "IT & Information Services",
+  "it": "IT (Digital Strategy)",
 };
 
-// Category icons mapping
+// Mapping from short codes/abbreviations to backend category values
+export const categoryAbbreviationMap: Record<string, AssessmentCategory> = {
+  "Ed": "education",
+  "Hr": "hr", 
+  "Fm": "finance",
+  "Bo": "estates", // Building Operations
+  "Eg": "governance", // Executive Governance
+  "Is": "is", // Information Services
+  "It": "it",
+};
+
+// Reverse mapping from backend categories to abbreviations
+export const categoryToAbbreviation: Record<AssessmentCategory, string> = {
+  "education": "Ed",
+  "hr": "Hr",
+  "finance": "Fm", 
+  "estates": "Bo",
+  "governance": "Eg",
+  "is": "Is",
+  "it": "It",
+};
+
+// Category icons mapping using backend category values
 export const getCategoryIconComponent = (category: AssessmentCategory) => {
   switch (category) {
-    case "Education":
+    case "education":
       return <BookOpen className="h-4 w-4" />;
-    case "Human Resources":
+    case "hr":
       return <Users className="h-4 w-4" />;
-    case "Finance & Procurement":
+    case "finance":
       return <DollarSign className="h-4 w-4" />;
-    case "Estates":
+    case "estates":
       return <Building className="h-4 w-4" />;
-    case "Governance":
+    case "governance":
       return <Shield className="h-4 w-4" />;
-    case "IT & Information Services":
+    case "is":
       return <Monitor className="h-4 w-4" />;
-    case "IT (Digital Strategy)":
+    case "it":
       return <Settings className="h-4 w-4" />;
     default:
       return null;
@@ -83,14 +83,23 @@ export const getCategoryIcon = (category: AssessmentCategory) => {
   return getCategoryIconComponent(category);
 };
 
-// Enhanced function that can handle both full names and abbreviations
+// Enhanced function that can handle both display names and abbreviations
 export const normalizeCategoryName = (input: string): AssessmentCategory | null => {
-  // First check if it's already a full category name
+  // First check if it's already a backend category value
   if (Object.keys(categoryDisplayNames).includes(input as AssessmentCategory)) {
     return input as AssessmentCategory;
   }
   
-  // Then check if it's an abbreviation
+  // Then check if it's a display name - reverse lookup
+  const backendCategory = Object.entries(categoryDisplayNames).find(
+    ([key, displayName]) => displayName === input
+  )?.[0] as AssessmentCategory;
+  
+  if (backendCategory) {
+    return backendCategory;
+  }
+  
+  // Finally check if it's an abbreviation
   return getCategoryFromAbbreviation(input);
 };
 
