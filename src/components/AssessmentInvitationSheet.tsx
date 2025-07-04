@@ -283,7 +283,7 @@ export function AssessmentInvitationSheet({ open, onOpenChange, onSuccess }: Ass
       });
 
       toast({
-        title: "Assessments created successfully!",
+                    title: "Ratings created successfully!",
         description: `Successfully created ${assessmentIds.length} assessment(s).`,
       });
 
@@ -296,7 +296,7 @@ export function AssessmentInvitationSheet({ open, onOpenChange, onSuccess }: Ass
     } catch (error) {
       console.error('Error in assessment creation:', error);
       toast({
-        title: "Error creating assessments",
+                    title: "Error creating ratings",
         description: "An unexpected error occurred. Please try again later.",
         variant: "destructive",
       });
@@ -309,24 +309,24 @@ export function AssessmentInvitationSheet({ open, onOpenChange, onSuccess }: Ass
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent className="flex flex-col h-full sm:max-w-md">
         <SheetHeader className="flex-shrink-0">
-          <SheetTitle className="text-xl">Request Assessment</SheetTitle>
+          <SheetTitle className="text-xl">Request Rating</SheetTitle>
           <SheetDescription>
-            Invite schools to complete a specific assessment category.
+            Invite schools to complete a specific aspect.
           </SheetDescription>
         </SheetHeader>
         
         <div className="flex-1 overflow-y-auto py-6 space-y-6">
-          {/* Assessment Category Selection */}
+          {/* Aspect Selection */}
           <div className="space-y-2">
             <Label htmlFor="category" className="text-sm font-medium">
-              Assessment Category
+              Aspect
             </Label>
             <Select value={category} onValueChange={(value) => setCategory(value as AssessmentCategory)}>
               <SelectTrigger id="category" className={cn(
                 "w-full", 
                 !category && "text-muted-foreground"
               )}>
-                <SelectValue placeholder="Select category" />
+                <SelectValue placeholder="Select aspect" />
               </SelectTrigger>
               <SelectContent>
                 {assessmentCategories.map((cat) => (
@@ -537,7 +537,7 @@ export function AssessmentInvitationSheet({ open, onOpenChange, onSuccess }: Ass
               ) : (
                 <>
                   <Send className="h-4 w-4" />
-                  Request Assessment
+                  Request Rating
                 </>
               )}
             </Button>

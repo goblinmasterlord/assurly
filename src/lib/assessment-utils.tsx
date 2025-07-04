@@ -183,7 +183,7 @@ export const getAspectDisplayName = (category: string): string => {
     // Legacy support for existing data
     "Finance & Procurement": "Finance",
     "IT & Information Services": "IT",
-    "IT (Digital Strategy)": "Information Standards",
+    "IT (Digital Aspects)": "Information Standards",
     "Hr": "Human Resources",
     "It": "IT",
     "Is": "Information Standards",
@@ -218,14 +218,13 @@ export const getAspectShortCode = (category: string): string => {
     // Legacy support
     "Finance & Procurement": "FN",
     "IT & Information Services": "IT",
-    "IT (Digital Strategy)": "IS",
+    "IT (Digital Aspects)": "IS",
   };
   
   return codeMap[category] || category;
 };
 
 // Backward compatibility aliases
-export const getStrategyDisplayName = getAspectDisplayName;
-export const getStrategyShortCode = getAspectShortCode;
+// These aliases were removed to avoid naming conflicts
 
 // #endregion

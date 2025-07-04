@@ -33,6 +33,7 @@ import {
   CollapsibleTrigger,
 } from "@/components/ui/collapsible";
 import { Progress } from "@/components/ui/progress";
+import { SortableTableHead, type SortDirection } from "@/components/ui/sortable-table-head";
 import type { Assessment, AssessmentCategory, SchoolPerformance, AcademicTerm } from "@/types/assessment";
 import { cn } from "@/lib/utils";
 import { 
@@ -93,6 +94,10 @@ export function SchoolPerformanceView({ assessments, refreshAssessments, isLoadi
   const [expandedSchools, setExpandedSchools] = useState<Set<string>>(new Set());
   const [expandedHistoric, setExpandedHistoric] = useState<Set<string>>(new Set());
   const [selectedTerm, setSelectedTerm] = useState<string>(""); // Will be set to first available term
+  const [sortConfig, setSortConfig] = useState<{ key: string; direction: SortDirection }>({
+    key: "",
+    direction: null
+  });
 
   // Get available terms from assessments
   const availableTerms = useMemo(() => {
@@ -393,49 +398,106 @@ export function SchoolPerformanceView({ assessments, refreshAssessments, isLoadi
     return Array.from(schoolMap.values());
   }, [filteredByTermAssessments, previousTermAssessments]);
 
-  // Filter school performance data based on search and filters
-  const filteredSchoolData = useMemo(() => {
-    return schoolPerformanceData.filter(school => {
-      // Search filter
-      const matchesSearch = 
-        school.school.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        school.school.code?.toLowerCase().includes(searchTerm.toLowerCase());
+  const handleSort = (key: string) => {
+    setSortConfig(prev => ({
+      key,
+      direction: prev.key === key ? 
+        (prev.direction === "asc" ? "desc" : prev.direction === "desc" ? null : "asc") :
+        "asc"
+    }));
+  };
 
-      // Performance filter
-      const performanceTrend = getPerformanceTrend(school.overallScore, school.criticalStandardsTotal);
+  const filteredSchoolData = useMemo(() => {
+    let filtered = schoolPerformanceData.filter(school => {
+      const matchesSearch = searchTerm === "" ||
+        school.school.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        (school.school.code && school.school.code.toLowerCase().includes(searchTerm.toLowerCase()));
+
       const matchesPerformance = performanceFilter.length === 0 || performanceFilter.some(filter => {
         switch (filter) {
-          case "high": return performanceTrend === "Excellent" || performanceTrend === "Strong";
-          case "medium": return performanceTrend === "Good" || performanceTrend === "Satisfactory";
-          case "low": return performanceTrend === "Needs Attention" || performanceTrend === "Requires Intervention";
+          case "excellent": return school.overallScore >= 3.5;
+          case "good": return school.overallScore >= 2.5 && school.overallScore < 3.5;
+          case "requires-improvement": return school.overallScore >= 1.5 && school.overallScore < 2.5;
+          case "inadequate": return school.overallScore < 1.5 && school.overallScore > 0;
+          case "no-data": return school.overallScore === 0;
           default: return false;
         }
       });
 
-      // Status filter
-      const schoolStatuses = school.assessmentsByCategory.map(cat => cat.assessment.status);
       const matchesStatus = statusFilter.length === 0 || statusFilter.some(status => {
-        switch (status) {
-          case "completed": return schoolStatuses.includes("Completed");
-          case "in-progress": return schoolStatuses.includes("In Progress");
-          case "not-started": return schoolStatuses.includes("Not Started");
-          case "overdue": return schoolStatuses.includes("Overdue");
-          default: return false;
-        }
+        return school.assessmentsByCategory.some(cat => {
+          switch (status) {
+            case "completed": return cat.assessment.status === "Completed";
+            case "in-progress": return cat.assessment.status === "In Progress";
+            case "not-started": return cat.assessment.status === "Not Started";
+            case "overdue": return cat.assessment.status === "Overdue";
+            default: return false;
+          }
+        });
       });
 
-      // Category filter
-      const schoolCategories = school.assessmentsByCategory.map(cat => cat.category);
-      const matchesCategory = categoryFilter.length === 0 || categoryFilter.some(category => 
-        schoolCategories.includes(category as AssessmentCategory)
-      );
+      const matchesCategory = categoryFilter.length === 0 || categoryFilter.some(category => {
+        return school.assessmentsByCategory.some(cat => cat.category === category);
+      });
 
-      // Critical filter
       const matchesCritical = !criticalFilter || school.criticalStandardsTotal > 0;
 
       return matchesSearch && matchesPerformance && matchesStatus && matchesCategory && matchesCritical;
     });
-  }, [schoolPerformanceData, searchTerm, performanceFilter, statusFilter, categoryFilter, criticalFilter]);
+
+    // Apply sorting
+    if (sortConfig.key && sortConfig.direction) {
+      filtered = [...filtered].sort((a, b) => {
+        let aValue: any;
+        let bValue: any;
+
+        switch (sortConfig.key) {
+          case "school":
+            aValue = a.school.name;
+            bValue = b.school.name;
+            break;
+          case "assessments":
+            const aCompleted = a.assessmentsByCategory.filter(cat => cat.assessment.status === "Completed").length;
+            const bCompleted = b.assessmentsByCategory.filter(cat => cat.assessment.status === "Completed").length;
+            const aTotal = a.assessmentsByCategory.length;
+            const bTotal = b.assessmentsByCategory.length;
+            aValue = aTotal > 0 ? (aCompleted / aTotal) : 0;
+            bValue = bTotal > 0 ? (bCompleted / bTotal) : 0;
+            break;
+          case "overallScore":
+            aValue = a.overallScore;
+            bValue = b.overallScore;
+            break;
+          case "criticalStandards":
+            aValue = a.criticalStandardsTotal;
+            bValue = b.criticalStandardsTotal;
+            break;
+          case "lastUpdated":
+            aValue = Math.max(...a.assessmentsByCategory.map(cat => new Date(cat.assessment.lastUpdated || '').getTime() || 0));
+            bValue = Math.max(...b.assessmentsByCategory.map(cat => new Date(cat.assessment.lastUpdated || '').getTime() || 0));
+            break;
+          default:
+            return 0;
+        }
+
+        if (typeof aValue === "string" && typeof bValue === "string") {
+          return sortConfig.direction === "asc" ? 
+            aValue.localeCompare(bValue) : 
+            bValue.localeCompare(aValue);
+        }
+
+        if (typeof aValue === "number" && typeof bValue === "number") {
+          return sortConfig.direction === "asc" ? 
+            aValue - bValue : 
+            bValue - aValue;
+        }
+
+        return 0;
+      });
+    }
+
+    return filtered;
+  }, [schoolPerformanceData, searchTerm, performanceFilter, statusFilter, categoryFilter, criticalFilter, sortConfig]);
 
   // Clear all filters
   const clearAllFilters = () => {
@@ -460,7 +522,7 @@ export function SchoolPerformanceView({ assessments, refreshAssessments, isLoadi
         return <Shield className="h-4 w-4" />;
       case "IT & Information Services":
         return <Monitor className="h-4 w-4" />;
-      case "IT (Digital Strategy)":
+      case "IT (Digital Aspects)":
         return <Settings className="h-4 w-4" />;
       default:
         return <ClipboardCheck className="h-4 w-4" />;
@@ -668,13 +730,13 @@ export function SchoolPerformanceView({ assessments, refreshAssessments, isLoadi
               onTermChange={setSelectedTerm}
               className="w-full md:w-auto"
             />
-            <Button 
-              onClick={() => setInvitationSheetOpen(true)}
-              className="w-full md:w-auto"
-            >
-              <CheckCircle2 className="mr-2 h-4 w-4" />
-              Request Assessment
-            </Button>
+          <Button 
+            onClick={() => setInvitationSheetOpen(true)}
+            className="w-full md:w-auto"
+          >
+            <CheckCircle2 className="mr-2 h-4 w-4" />
+            Request Rating
+          </Button>
           </div>
         </div>
 
@@ -737,11 +799,45 @@ export function SchoolPerformanceView({ assessments, refreshAssessments, isLoadi
             <TableHeader>
               <TableRow className="bg-slate-50">
                 <TableHead className="w-12"></TableHead>
-                <TableHead>School</TableHead>
-                <TableHead className="text-center">Assessments</TableHead>
-                <TableHead className="text-center">Overall Score</TableHead>
-                <TableHead className="text-center">Intervention Required</TableHead>
-                <TableHead className="text-center">Last Updated</TableHead>
+                <SortableTableHead 
+                  sortKey="school"
+                  currentSort={sortConfig}
+                  onSort={handleSort}
+                >
+                  School
+                </SortableTableHead>
+                <SortableTableHead 
+                  className="text-center"
+                  sortKey="assessments"
+                  currentSort={sortConfig}
+                  onSort={handleSort}
+                >
+                  Ratings
+                </SortableTableHead>
+                <SortableTableHead 
+                  className="text-center"
+                  sortKey="overallScore"
+                  currentSort={sortConfig}
+                  onSort={handleSort}
+                >
+                  Overall Score
+                </SortableTableHead>
+                <SortableTableHead 
+                  className="text-center"
+                  sortKey="criticalStandards"
+                  currentSort={sortConfig}
+                  onSort={handleSort}
+                >
+                  Intervention Required
+                </SortableTableHead>
+                <SortableTableHead 
+                  className="text-center"
+                  sortKey="lastUpdated"
+                  currentSort={sortConfig}
+                  onSort={handleSort}
+                >
+                  Last Updated
+                </SortableTableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -749,10 +845,10 @@ export function SchoolPerformanceView({ assessments, refreshAssessments, isLoadi
                 <SchoolPerformanceTableSkeleton />
               ) : (
                 filteredSchoolData.map((school) => {
-                  const isExpanded = expandedSchools.has(school.school.id);
-                  const trend = getPerformanceTrend(school.overallScore, school.criticalStandardsTotal);
-                  const completedCount = school.assessmentsByCategory.filter(cat => cat.assessment.status === "Completed").length;
-                  const totalCount = school.assessmentsByCategory.length;
+                const isExpanded = expandedSchools.has(school.school.id);
+                const trend = getPerformanceTrend(school.overallScore, school.criticalStandardsTotal);
+                const completedCount = school.assessmentsByCategory.filter(cat => cat.assessment.status === "Completed").length;
+                const totalCount = school.assessmentsByCategory.length;
 
                 return (
                   <React.Fragment key={school.school.id}>
@@ -792,9 +888,9 @@ export function SchoolPerformanceView({ assessments, refreshAssessments, isLoadi
                         {school.overallScore > 0 ? (
                           <div className="flex items-center justify-center space-x-1.5">
                             <div className="flex items-center space-x-1">
-                            <Badge variant="outline" className={getScoreBadgeColor(school.overallScore)}>
-                              {school.overallScore.toFixed(1)}
-                            </Badge>
+                          <Badge variant="outline" className={getScoreBadgeColor(school.overallScore)}>
+                            {school.overallScore.toFixed(1)}
+                          </Badge>
                               {/* More compact change indicator */}
                               {(() => {
                               const change = calculateChange(school.overallScore, school.previousOverallScore);
@@ -826,7 +922,7 @@ export function SchoolPerformanceView({ assessments, refreshAssessments, isLoadi
                           </div>
                         ) : (
                           <div className="flex items-center justify-center space-x-1.5">
-                            <span className="text-slate-400">—</span>
+                          <span className="text-slate-400">—</span>
                             {renderHistoricalButton(school.school.id, true)}
                           </div>
                         )}
@@ -934,33 +1030,33 @@ export function SchoolPerformanceView({ assessments, refreshAssessments, isLoadi
                                     return (
                                       <React.Fragment key={categoryData.category}>
                                         <TableRow className="hover:bg-slate-50">
-                                          <TableCell>
-                                            <div className="flex items-center space-x-3">
-                                              <div className="flex h-8 w-8 items-center justify-center rounded bg-slate-100">
-                                                {getCategoryIcon(categoryData.category)}
-                                              </div>
-                                              <div>
-                                                <p className="font-medium text-sm">{categoryData.category}</p>
-                                                <p className="text-xs text-slate-500">
-                                                  {categoryData.assessment.assignedTo?.[0]?.name || "Unassigned"}
-                                                </p>
-                                              </div>
-                                            </div>
-                                          </TableCell>
-                                          <TableCell className="text-center">
-                                            <Badge 
-                                              variant="outline" 
-                                              className={getStatusColor(categoryData.assessment.status)}
-                                            >
-                                              {categoryData.assessment.status}
-                                            </Badge>
-                                          </TableCell>
-                                          <TableCell className="text-center">
-                                            {categoryData.averageScore > 0 ? (
+                                      <TableCell>
+                                        <div className="flex items-center space-x-3">
+                                          <div className="flex h-8 w-8 items-center justify-center rounded bg-slate-100">
+                                            {getCategoryIcon(categoryData.category)}
+                                          </div>
+                                          <div>
+                                            <p className="font-medium text-sm">{categoryData.category}</p>
+                                            <p className="text-xs text-slate-500">
+                                              {categoryData.assessment.assignedTo?.[0]?.name || "Unassigned"}
+                                            </p>
+                                          </div>
+                                        </div>
+                                      </TableCell>
+                                      <TableCell className="text-center">
+                                        <Badge 
+                                          variant="outline" 
+                                          className={getStatusColor(categoryData.assessment.status)}
+                                        >
+                                          {categoryData.assessment.status}
+                                        </Badge>
+                                      </TableCell>
+                                      <TableCell className="text-center">
+                                        {categoryData.averageScore > 0 ? (
                                               <div className="flex items-center justify-center space-x-2">
-                                                <Badge variant="outline" className={getScoreBadgeColor(categoryData.averageScore)}>
-                                                  {categoryData.averageScore.toFixed(1)}
-                                                </Badge>
+                                          <Badge variant="outline" className={getScoreBadgeColor(categoryData.averageScore)}>
+                                            {categoryData.averageScore.toFixed(1)}
+                                          </Badge>
                                                 {/* Category change indicator */}
                                                 {school.changesByCategory && school.changesByCategory.has(categoryData.category) && (() => {
                                                   const previousScore = school.changesByCategory.get(categoryData.category);
@@ -1022,7 +1118,7 @@ export function SchoolPerformanceView({ assessments, refreshAssessments, isLoadi
                                               </div>
                                             ) : (
                                               <div className="flex items-center justify-center space-x-2">
-                                                <span className="text-slate-400 text-sm">—</span>
+                                          <span className="text-slate-400 text-sm">—</span>
                                                 <Tooltip>
                                                   <TooltipTrigger asChild>
                                                     <Button 
@@ -1039,65 +1135,65 @@ export function SchoolPerformanceView({ assessments, refreshAssessments, isLoadi
                                                   </TooltipContent>
                                                 </Tooltip>
                                               </div>
-                                            )}
-                                          </TableCell>
-                                          <TableCell className="text-center">
-                                            <div className="flex items-center justify-center space-x-2">
-                                              <span className="text-xs font-medium">
-                                                {categoryData.assessment.completedStandards}/{categoryData.assessment.totalStandards}
-                                              </span>
-                                              <Progress 
-                                                value={(categoryData.assessment.completedStandards / categoryData.assessment.totalStandards) * 100} 
-                                                className="w-12 h-1.5"
-                                              />
-                                            </div>
-                                          </TableCell>
-                                          <TableCell className="text-center">
-                                            {categoryData.criticalStandardsCount > 0 ? (
-                                              <Tooltip>
-                                                <TooltipTrigger asChild>
-                                                  <div className="flex items-center justify-center space-x-1 cursor-help">
-                                                    <AlertTriangle className="h-3 w-3 text-rose-600" />
-                                                    <span className="text-sm font-medium text-rose-700">
-                                                      {categoryData.criticalStandardsCount}
-                                                    </span>
-                                                  </div>
-                                                </TooltipTrigger>
-                                                <TooltipContent side="left" className="max-w-sm">
-                                                  <div className="space-y-1">
-                                                    <p className="font-medium text-rose-800">Critical Standards:</p>
-                                                    {categoryData.assessment.standards
+                                        )}
+                                      </TableCell>
+                                      <TableCell className="text-center">
+                                        <div className="flex items-center justify-center space-x-2">
+                                          <span className="text-xs font-medium">
+                                            {categoryData.assessment.completedStandards}/{categoryData.assessment.totalStandards}
+                                          </span>
+                                          <Progress 
+                                            value={(categoryData.assessment.completedStandards / categoryData.assessment.totalStandards) * 100} 
+                                            className="w-12 h-1.5"
+                                          />
+                                        </div>
+                                      </TableCell>
+                                                                             <TableCell className="text-center">
+                                         {categoryData.criticalStandardsCount > 0 ? (
+                                           <Tooltip>
+                                             <TooltipTrigger asChild>
+                                               <div className="flex items-center justify-center space-x-1 cursor-help">
+                                                 <AlertTriangle className="h-3 w-3 text-rose-600" />
+                                                 <span className="text-sm font-medium text-rose-700">
+                                                   {categoryData.criticalStandardsCount}
+                                                 </span>
+                                               </div>
+                                             </TooltipTrigger>
+                                             <TooltipContent side="left" className="max-w-sm">
+                                               <div className="space-y-1">
+                                                 <p className="font-medium text-rose-800">Critical Standards:</p>
+                                                 {categoryData.assessment.standards
                                                       ?.filter(s => s.rating === 1)
-                                                      .slice(0, 3)
-                                                      .map(standard => (
-                                                        <div key={standard.id} className="text-xs">
-                                                          <span className="font-medium">{standard.code}:</span> {standard.title}
-                                                        </div>
-                                                      ))}
-                                                    {categoryData.criticalStandardsCount > 3 && (
-                                                      <p className="text-xs text-slate-600">+{categoryData.criticalStandardsCount - 3} more...</p>
-                                                    )}
-                                                  </div>
-                                                </TooltipContent>
-                                              </Tooltip>
-                                            ) : (
-                                              <span className="text-slate-400 text-sm">—</span>
-                                            )}
-                                          </TableCell>
-                                          <TableCell className="text-center">
-                                            <Button 
-                                              variant="ghost" 
-                                              size="sm" 
-                                              asChild
-                                              className="h-7 px-2"
-                                            >
-                                              <Link to={`/assessments/${categoryData.assessment.id}?view=admin`}>
-                                                <Eye className="mr-1 h-3 w-3" />
-                                                View
-                                              </Link>
-                                            </Button>
-                                          </TableCell>
-                                        </TableRow>
+                                                   .slice(0, 3)
+                                                   .map(standard => (
+                                                     <div key={standard.id} className="text-xs">
+                                                       <span className="font-medium">{standard.code}:</span> {standard.title}
+                                                     </div>
+                                                   ))}
+                                                 {categoryData.criticalStandardsCount > 3 && (
+                                                   <p className="text-xs text-slate-600">+{categoryData.criticalStandardsCount - 3} more...</p>
+                                                 )}
+                                               </div>
+                                             </TooltipContent>
+                                           </Tooltip>
+                                         ) : (
+                                           <span className="text-slate-400 text-sm">—</span>
+                                         )}
+                                       </TableCell>
+                                      <TableCell className="text-center">
+                                        <Button 
+                                          variant="ghost" 
+                                          size="sm" 
+                                          asChild
+                                          className="h-7 px-2"
+                                        >
+                                          <Link to={`/assessments/${categoryData.assessment.id}?view=admin`}>
+                                            <Eye className="mr-1 h-3 w-3" />
+                                            View
+                                          </Link>
+                                        </Button>
+                                      </TableCell>
+                                    </TableRow>
 
                                         {/* Historical data row for this category */}
                                         {isCategoryHistoricExpanded && renderHistoricalDataRows(school.school.id, categoryData)}

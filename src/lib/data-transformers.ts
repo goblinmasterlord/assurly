@@ -135,10 +135,10 @@ const mapCategory = (category: string): string => {
     'estates': 'Estates',
     'governance': 'Governance',
     'it': 'IT & Information Services',
-    'is': 'IT (Digital Strategy)', // Information Standards -> IT (Digital Strategy)
+    'is': 'IT (Digital Aspects)', // Information Standards -> IT (Digital Aspects)
     // Note: Only 6 categories exist in backend standards
     // Frontend has additional categories that may not have backend implementations yet:
-    // 'IT (Digital Strategy)' - maps to 'it' for now
+    // 'IT (Digital Aspects)' - maps to 'it' for now
   };
   return categoryMap[category.toLowerCase()] || category;
 };

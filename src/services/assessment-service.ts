@@ -160,7 +160,7 @@ export const createAssessments = async (request: CreateAssessmentRequest): Promi
       'Estates': 'estates',
       'Governance': 'governance',
       'IT & Information Services': 'it',
-      'IT (Digital Strategy)': 'it', // Maps to same backend category as IT & Information Services
+      'IT (Digital Aspects)': 'it', // Maps to same backend category as IT & Information Services
       // Note: Backend only has 6 categories (education, finance, hr, estates, governance, it, is)
       // 'is' appears to be an alias for information services
     };

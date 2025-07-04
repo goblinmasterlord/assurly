@@ -19,7 +19,7 @@ export function RootLayout() {
               <Button variant="link" size="sm" asChild>
                 <Link to="/assessments" className="flex items-center">
                   <ClipboardList className="mr-1 h-4 w-4" /> 
-                  {role === "mat-admin" ? "All Assessments" : "My Assessments"}
+                  {role === "mat-admin" ? "All Ratings" : "My Ratings"}
                 </Link>
               </Button>
             </nav>

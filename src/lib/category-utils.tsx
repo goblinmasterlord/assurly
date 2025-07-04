@@ -19,7 +19,7 @@ export const categoryDisplayNames: Record<AssessmentCategory, string> = {
   "estates": "Estates",
   "governance": "Governance",
   "is": "IT & Information Services",
-  "it": "IT (Digital Strategy)",
+  "it": "IT (Digital Aspects)",
 };
 
 // Mapping from short codes/abbreviations to backend category values

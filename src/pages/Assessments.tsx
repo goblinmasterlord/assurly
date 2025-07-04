@@ -49,6 +49,8 @@ import { SchoolPerformanceView } from "@/components/SchoolPerformanceView";
 import { DepartmentHeadTableSkeleton } from "@/components/ui/table-skeleton";
 import { Skeleton } from "@/components/ui/skeleton";
 import { getAspectDisplayName } from "@/lib/assessment-utils";
+import { Progress } from "@/components/ui/progress";
+import { SortableTableHead, type SortDirection } from "@/components/ui/sortable-table-head";
 
 export function AssessmentsPage() {
   const { role } = useUser();
@@ -70,6 +72,10 @@ export function AssessmentsPage() {
   const [schoolFilter, setSchoolFilter] = useState<string[]>([]);
   const [view, setView] = useState<"table" | "cards">("table");
   const [selectedTerm, setSelectedTerm] = useState<string>(""); // Will be set to first available term
+  const [sortConfig, setSortConfig] = useState<{ key: string; direction: SortDirection }>({
+    key: "",
+    direction: null
+  });
   
   // Get available terms from assessments (for department head view)
   const availableTerms = useMemo(() => {
@@ -152,9 +158,18 @@ export function AssessmentsPage() {
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 10; // Optimal for table view UX
 
+  const handleSort = (key: string) => {
+    setSortConfig(prev => ({
+      key,
+      direction: prev.key === key ? 
+        (prev.direction === "asc" ? "desc" : prev.direction === "desc" ? null : "asc") :
+        "asc"
+    }));
+  };
+
   const filteredAssessments = useMemo(() => {
     if (!isMatAdmin) {
-      return termFilteredAssessments.filter((assessment) => {
+      let filtered = termFilteredAssessments.filter((assessment) => {
         // Search term filter
         const matchesSearch = 
           assessment.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -180,9 +195,63 @@ export function AssessmentsPage() {
 
         return matchesSearch && matchesCategory && matchesStatus && matchesSchool;
       });
+
+      // Apply sorting
+      if (sortConfig.key && sortConfig.direction) {
+        filtered = [...filtered].sort((a, b) => {
+          let aValue: any;
+          let bValue: any;
+
+          switch (sortConfig.key) {
+            case "assessment":
+              aValue = a.name;
+              bValue = b.name;
+              break;
+            case "school":
+              aValue = a.school.name;
+              bValue = b.school.name;
+              break;
+            case "aspect":
+              aValue = getAspectDisplayName(a.category);
+              bValue = getAspectDisplayName(b.category);
+              break;
+            case "completion":
+              aValue = a.completedStandards / a.totalStandards;
+              bValue = b.completedStandards / b.totalStandards;
+              break;
+            case "dueDate":
+              aValue = a.dueDate ? new Date(a.dueDate).getTime() : 0;
+              bValue = b.dueDate ? new Date(b.dueDate).getTime() : 0;
+              break;
+            case "status":
+              const statusOrder = { "Overdue": 0, "In Progress": 1, "Not Started": 2, "Completed": 3 };
+              aValue = statusOrder[a.status as keyof typeof statusOrder] ?? 4;
+              bValue = statusOrder[b.status as keyof typeof statusOrder] ?? 4;
+              break;
+            default:
+              return 0;
+          }
+
+          if (typeof aValue === "string" && typeof bValue === "string") {
+            return sortConfig.direction === "asc" ? 
+              aValue.localeCompare(bValue) : 
+              bValue.localeCompare(aValue);
+          }
+
+          if (typeof aValue === "number" && typeof bValue === "number") {
+            return sortConfig.direction === "asc" ? 
+              aValue - bValue : 
+              bValue - aValue;
+          }
+
+          return 0;
+        });
+      }
+
+      return filtered;
     }
     return [];
-  }, [isMatAdmin, termFilteredAssessments, searchTerm, categoryFilter, statusFilter, schoolFilter]);
+  }, [isMatAdmin, termFilteredAssessments, searchTerm, categoryFilter, statusFilter, schoolFilter, sortConfig]);
 
   // Pagination calculations
   const totalPages = Math.ceil(filteredAssessments.length / itemsPerPage);
@@ -273,12 +342,12 @@ export function AssessmentsPage() {
     <div className="container py-10">
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">My Assessments</h1>
+                      <h1 className="text-3xl font-bold tracking-tight">My Ratings</h1>
           <div className="text-muted-foreground">
             {isLoading ? (
               <Skeleton className="h-4 w-64" />
             ) : (
-              <p>You have {overdueCount} overdue and {inProgressCount} in-progress assessments.</p>
+              <p>You have {overdueCount} overdue and {inProgressCount} in-progress ratings.</p>
             )}
           </div>
         </div>
@@ -307,7 +376,7 @@ export function AssessmentsPage() {
           filters={[
             {
               type: 'search',
-              placeholder: 'Search assessments...',
+              placeholder: 'Search ratings...',
               value: searchTerm,
               onChange: setSearchTerm
             },
@@ -320,7 +389,7 @@ export function AssessmentsPage() {
             }] : []),
             {
               type: 'multiselect' as const,
-              placeholder: 'Strategies',
+              placeholder: 'Aspects',
               value: categoryFilter,
               onChange: setCategoryFilter,
               options: categoryOptions
@@ -341,12 +410,49 @@ export function AssessmentsPage() {
             <Table>
               <TableHeader>
                 <TableRow className="bg-slate-50">
-                  <TableHead className="py-3">Assessment</TableHead>
-                  <TableHead>School</TableHead>
-                  <TableHead>Aspect</TableHead>
-                  <TableHead>Completion Rate</TableHead>
-                  <TableHead>Due Date</TableHead>
-                  <TableHead>Status</TableHead>
+                  <SortableTableHead 
+                    className="py-3"
+                    sortKey="assessment"
+                    currentSort={sortConfig}
+                    onSort={handleSort}
+                  >
+                    Rating
+                  </SortableTableHead>
+                  <SortableTableHead 
+                    sortKey="school"
+                    currentSort={sortConfig}
+                    onSort={handleSort}
+                  >
+                    School
+                  </SortableTableHead>
+                  <SortableTableHead 
+                    sortKey="aspect"
+                    currentSort={sortConfig}
+                    onSort={handleSort}
+                  >
+                    Aspect
+                  </SortableTableHead>
+                  <SortableTableHead 
+                    sortKey="completion"
+                    currentSort={sortConfig}
+                    onSort={handleSort}
+                  >
+                    Completion Rate
+                  </SortableTableHead>
+                  <SortableTableHead 
+                    sortKey="dueDate"
+                    currentSort={sortConfig}
+                    onSort={handleSort}
+                  >
+                    Due Date
+                  </SortableTableHead>
+                  <SortableTableHead 
+                    sortKey="status"
+                    currentSort={sortConfig}
+                    onSort={handleSort}
+                  >
+                    Status
+                  </SortableTableHead>
                   <TableHead className="text-right">Actions</TableHead>
                 </TableRow>
               </TableHeader>
@@ -361,7 +467,7 @@ export function AssessmentsPage() {
                     >
                       <div className="flex flex-col items-center justify-center py-8 text-muted-foreground">
                         <XCircle className="h-10 w-10 mb-2 opacity-20" />
-                        <p>No assessments found matching your filters.</p>
+                        <p>No ratings found matching your filters.</p>
                         <Button 
                           variant="link" 
                           className="mt-2"
@@ -374,49 +480,33 @@ export function AssessmentsPage() {
                   </TableRow>
                 ) : (
                   paginatedAssessments.map((assessment) => (
-                    <TableRow key={assessment.id} className="group">
-                      <TableCell className="font-medium">
-                        <div className="flex flex-col">
-                          <span className="transition-colors">
+                    <TableRow key={assessment.id} className="hover:bg-slate-50">
+                      <TableCell>
+                        <div className="space-y-1">
+                          <p className="font-medium text-slate-900">
                             {assessment.name}
-                          </span>
-                          <span className="text-xs text-muted-foreground">
-                            Last updated: {assessment.lastUpdated !== "-" ? assessment.lastUpdated : "Never"}
-                          </span>
+                          </p>
+                          <p className="text-sm text-slate-500">
+                            {assessment.category}
+                          </p>
                         </div>
+                      </TableCell>
+                      <TableCell>
+                        <span className="text-sm text-slate-700">
+                          {assessment.school.name}
+                        </span>
                       </TableCell>
                       <TableCell>
                         <div className="flex items-center gap-2">
-                          <div className="flex h-7 w-7 items-center justify-center rounded-full bg-violet-50">
-                            <SchoolIcon className="h-3.5 w-3.5 text-violet-500" />
-                          </div>
-                          <span>{assessment.school.name}</span>
+                          <span className="text-sm">
+                            {getAspectDisplayName(assessment.category)}
+                          </span>
                         </div>
                       </TableCell>
                       <TableCell>
-                        <Badge variant="outline" className="bg-slate-50 font-normal">
-                          {getAspectDisplayName(assessment.category)}
-                        </Badge>
-                      </TableCell>
-                      <TableCell>
-                        <div className="flex flex-col space-y-1">
-                          <div className="flex items-center gap-2">
-                            <div className="h-2 w-full bg-slate-100 rounded-full overflow-hidden">
-                              <div
-                                className={cn(
-                                  "h-full", 
-                                  assessment.status === "Completed" ? "bg-emerald-500" :
-                                  assessment.status === "Overdue" ? "bg-rose-500" : "bg-indigo-500"
-                                )}
-                                style={{
-                                  width: `${(assessment.completedStandards / assessment.totalStandards) * 100}%`,
-                                }}
-                              />
-                            </div>
-                            <span className="text-sm">
-                              {assessment.completedStandards}/{assessment.totalStandards}
-                            </span>
-                          </div>
+                        <div className="flex items-center justify-center space-x-2">
+                          <span className="text-sm font-medium">{assessment.completedStandards}/{assessment.totalStandards}</span>
+                          <Progress value={(assessment.completedStandards / assessment.totalStandards) * 100} className="w-16 h-2" />
                         </div>
                       </TableCell>
                       <TableCell>
@@ -444,34 +534,11 @@ export function AssessmentsPage() {
                         </Badge>
                       </TableCell>
                       <TableCell className="text-right">
-                        {assessment.status === "Completed" ? (
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            className="gap-1 group-hover:border-primary group-hover:text-primary transition-colors"
-                            asChild
-                          >
-                            <Link to={`/assessments/${assessment.id}`}>
-                              View
-                              <ChevronRight className="h-4 w-4" />
-                            </Link>
-                          </Button>
-                        ) : (
-                          <Button
-                            variant={assessment.status === "Overdue" ? "default" : "outline"}
-                            size="sm"
-                            className={cn(
-                              "gap-1",
-                              assessment.status !== "Overdue" && "group-hover:border-primary group-hover:text-primary transition-colors"
-                            )}
-                            asChild
-                          >
-                            <Link to={`/assessments/${assessment.id}`}>
-                              Continue
-                              <ChevronRight className="h-4 w-4" />
-                            </Link>
-                          </Button>
-                        )}
+                        <Button asChild size="sm" className="h-8">
+                          <Link to={`/assessments/${assessment.id}`}>
+                            {assessment.status === "Completed" ? "View" : "Continue"}
+                          </Link>
+                        </Button>
                       </TableCell>
                     </TableRow>
                   ))
@@ -479,54 +546,14 @@ export function AssessmentsPage() {
               </TableBody>
             </Table>
           </CardContent>
-          {/* Modern Pagination Component */}
-          {totalPages > 1 && (
-            <div className="border-t bg-slate-50/50">
-              <div className="flex items-center justify-between px-6 py-4">
-                <div className="flex items-center text-sm text-muted-foreground">
-                  <span>
-                    Showing {startIndex + 1} to {Math.min(endIndex, filteredAssessments.length)} of{" "}
-                    {filteredAssessments.length} results
-                  </span>
-                </div>
-                <div className="flex items-center space-x-2">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
-                    disabled={currentPage === 1}
-                  >
-                    Previous
-                  </Button>
-                  <div className="flex items-center space-x-1">
-                    {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
-                      const pageNumber = i + 1;
-                      return (
-                        <Button
-                          key={pageNumber}
-                          variant={currentPage === pageNumber ? "default" : "outline"}
-                          size="sm"
-                          className="w-9"
-                          onClick={() => setCurrentPage(pageNumber)}
-                        >
-                          {pageNumber}
-                        </Button>
-                      );
-                    })}
-                  </div>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
-                    disabled={currentPage === totalPages}
-                  >
-                    Next
-                  </Button>
-                </div>
-              </div>
-            </div>
-          )}
         </Card>
+
+        {/* 🚀 OPTIMIZED: Background refresh indicator */}
+        {isRefreshing && (
+          <div className="fixed bottom-4 right-4 bg-blue-50 border border-blue-200 text-blue-700 px-3 py-2 rounded-lg shadow-sm text-sm">
+            Refreshing data...
+          </div>
+        )}
       </div>
     </div>
   );

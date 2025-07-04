@@ -17,7 +17,7 @@ export function HomePage() {
               Welcome to <span className="text-transparent bg-clip-text bg-gradient-to-r from-indigo-600 to-indigo-400">Assurly</span>
             </h1>
             <p className="text-xl text-muted-foreground">
-              A comprehensive platform for Multi-Academy Trusts to manage school maturity assessments
+              A comprehensive platform for Multi-Academy Trusts to manage school maturity ratings
             </p>
           </div>
         </div>
@@ -41,14 +41,14 @@ export function HomePage() {
                   </div>
                   <div>
                     <CardTitle>MAT Management</CardTitle>
-                    <CardDescription>Trust-level assessment management</CardDescription>
+                    <CardDescription>Trust-level rating management</CardDescription>
                   </div>
                 </div>
               </CardHeader>
               <CardContent>
                 <div className="space-y-4">
                   <p className="text-sm text-muted-foreground">
-                    As a Multi-Academy Trust administrator, you can oversee assessments across all schools,
+                    As a Multi-Academy Trust administrator, you can oversee ratings across all schools,
                     track progress, and gain insights from aggregated data.
                   </p>
                   <div className="pt-2">
@@ -71,14 +71,14 @@ export function HomePage() {
                   </div>
                   <div>
                     <CardTitle>Department Head</CardTitle>
-                    <CardDescription>School-level assessment completion</CardDescription>
+                    <CardDescription>School-level rating completion</CardDescription>
                   </div>
                 </div>
               </CardHeader>
               <CardContent>
                 <div className="space-y-4">
                   <p className="text-sm text-muted-foreground">
-                    As a School Department Head, you can complete assessments for your areas of responsibility,
+                    As a School Department Head, you can complete ratings for your areas of responsibility,
                     provide evidence, and track your school's progress.
                   </p>
                   <div className="pt-2">
@@ -112,7 +112,7 @@ export function HomePage() {
               <h3 className="text-xl font-semibold">Key Features</h3>
               <ul className="space-y-3">
                 {[
-                  "School self-assessment against defined standards",
+                  "School self-rating against defined standards",
                   "Centralized dashboard for MAT administrators",
                   "Rating scales with clear descriptors",
                   "Evidence collection and documentation",
@@ -134,7 +134,7 @@ export function HomePage() {
           <h2 className="text-2xl font-bold">Ready to explore?</h2>
           <Button asChild size="lg" className="gap-2">
             <Link to="/assessments">
-              View Assessments <ArrowRight className="h-4 w-4" />
+                                  View Ratings <ArrowRight className="h-4 w-4" />
             </Link>
           </Button>
         </div>

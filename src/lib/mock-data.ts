@@ -95,7 +95,7 @@ export const itInformationStandards: Standard[] = [
 ];
 
 export const itStrategyStandards: Standard[] = [
-  { id: "it1", code: "IT1", title: "IT & Digital Strategy", description: "A trust-wide strategy that aligns IT investment with educational, operational, and transformation priorities. Reviewed regularly and board-approved.", rating: null },
+  { id: "it1", code: "IT1", title: "IT & Digital Aspects", description: "A trust-wide strategy that aligns IT investment with educational, operational, and transformation priorities. Reviewed regularly and board-approved.", rating: null },
   { id: "it2", code: "IT2", title: "IT Service Management & Support", description: "Reliable, efficient IT support that meets user needs. Includes helpdesk data, uptime reporting, SLAs, and continuous service improvement.", rating: null },
   { id: "it3", code: "IT3", title: "Compliance with DfE Technology Standards", description: "Systems and infrastructure aligned with Department for Education standards for broadband, devices, cybersecurity, and cloud services.", rating: null },
   { id: "it4", code: "IT4", title: "IT Asset & Lifecycle Management", description: "Central register of IT assets, with lifecycle planning, secure disposal, and cost-effective procurement and maintenance processes.", rating: null },

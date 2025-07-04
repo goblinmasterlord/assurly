@@ -296,7 +296,7 @@ export function AssessmentDetailPage() {
             className="mr-2"
           >
             <ArrowLeft className="mr-2 h-4 w-4" />
-            Back to Assessments
+            Back to Ratings
           </Button>
         </div>
         <Card>
@@ -308,7 +308,7 @@ export function AssessmentDetailPage() {
           </CardHeader>
           <CardFooter>
             <Button asChild>
-              <Link to="/assessments">Return to Assessments</Link>
+              <Link to="/assessments">Return to Ratings</Link>
             </Button>
           </CardFooter>
         </Card>
@@ -511,7 +511,7 @@ export function AssessmentDetailPage() {
           onClick={() => navigate("/assessments")}
         >
           <ArrowLeft className="mr-2 h-4 w-4" />
-          Back to Assessments
+          Back to Ratings
         </Button>
         
         <div className="flex items-center gap-4">
@@ -1289,14 +1289,14 @@ export function AssessmentDetailPage() {
           
           <p className="text-sm">
             Your assessment has been submitted and will be reviewed by the MAT administrators.
-            You can view your submission at any time from the assessments dashboard.
+                          You can view your submission at any time from the ratings dashboard.
           </p>
           <DialogFooter>
             <Button onClick={() => {
               setShowSuccessDialog(false);
               navigate("/assessments");
             }}>
-              Return to Assessments
+                              Return to Ratings
             </Button>
           </DialogFooter>
         </DialogContent>
