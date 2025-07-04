@@ -31,6 +31,7 @@ import { cn } from "@/lib/utils";
 import { assessmentCategories } from "@/lib/mock-data";
 import { getSchools, createAssessments } from "@/services/assessment-service";
 import { useToast } from "@/hooks/use-toast";
+import { getAspectDisplayName } from "@/lib/assessment-utils";
 import type { AssessmentCategory, School, AcademicTerm, AcademicYear } from "@/types/assessment";
 
 type AssessmentInvitationSheetProps = {
@@ -281,19 +282,17 @@ export function AssessmentInvitationSheet({ open, onOpenChange, onSuccess }: Ass
         academicYear,
       });
 
-      if (assessmentIds.length > 0) {
-        toast({
-          title: "Assessments created successfully!",
-          description: `Successfully created ${assessmentIds.length} assessment(s).`,
-        });
+      toast({
+        title: "Assessments created successfully!",
+        description: `Successfully created ${assessmentIds.length} assessment(s).`,
+      });
 
-        onSuccess?.();
-        onOpenChange(false);
-        setCategory("");
-        setSelectedSchools([]);
-        setDueDate(undefined);
-        setSearchTerm("");
-      }
+      onSuccess?.();
+      onOpenChange(false);
+      setCategory("");
+      setSelectedSchools([]);
+      setDueDate(undefined);
+      setSearchTerm("");
     } catch (error) {
       console.error('Error in assessment creation:', error);
       toast({
@@ -332,7 +331,7 @@ export function AssessmentInvitationSheet({ open, onOpenChange, onSuccess }: Ass
               <SelectContent>
                 {assessmentCategories.map((cat) => (
                   <SelectItem key={cat.value} value={cat.value}>
-                    {cat.value}
+                    {getAspectDisplayName(cat.value)}
                   </SelectItem>
                 ))}
               </SelectContent>
@@ -510,7 +509,7 @@ export function AssessmentInvitationSheet({ open, onOpenChange, onSuccess }: Ass
                 <div className="space-y-1.5">
                   <p className="text-sm font-medium text-blue-700">Ready to send</p>
                   <p className="text-sm text-blue-600">
-                    Requesting {selectedSchools.length} {selectedSchools.length === 1 ? 'school' : 'schools'} to complete the {category} assessment
+                    Requesting {selectedSchools.length} {selectedSchools.length === 1 ? 'school' : 'schools'} to complete the {getAspectDisplayName(category)} assessment
                     {dueDate ? ` by ${format(dueDate, "PPP")}` : ''}.
                   </p>
                 </div>

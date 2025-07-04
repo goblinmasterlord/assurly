@@ -180,6 +180,7 @@ export const createAssessments = async (request: CreateAssessmentRequest): Promi
 
     // The backend returns assessment_ids array (filtering out null values)
     const assessmentIds = response.data?.assessment_ids?.filter(Boolean) || [];
+
     return assessmentIds;
   } catch (error: any) {
     console.error('Failed to create assessments:', error.response?.data || error.message);

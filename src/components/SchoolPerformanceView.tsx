@@ -65,7 +65,7 @@ import {
 import { AssessmentInvitationSheet } from "@/components/AssessmentInvitationSheet";
 import { MiniTrendChart, type TrendDataPoint } from "@/components/ui/mini-trend-chart";
 import { SchoolPerformanceTableSkeleton } from "@/components/ui/table-skeleton";
-import { getStrategyDisplayName } from "@/lib/assessment-utils";
+import { getAspectDisplayName } from "@/lib/assessment-utils";
 import { FilterBar } from "@/components/ui/filter-bar";
 
 type SchoolPerformanceViewProps = {
@@ -219,33 +219,22 @@ export function SchoolPerformanceView({ assessments, refreshAssessments, isLoadi
 
   const uniqueCategories = [...new Set(filteredByTermAssessments.map(a => a.category))];
   const categoryOptions: MultiSelectOption[] = uniqueCategories.map(category => ({
-    label: getStrategyDisplayName(category),
+    label: getAspectDisplayName(category),
     value: category
   }));
 
   // DEBUG: Add debugging wrappers for filter state changes
   const handlePerformanceFilterChange = (newValue: string[]) => {
-    console.log('🔍 MAT Admin PerformanceFilter changed:', { from: performanceFilter, to: newValue });
     setPerformanceFilter(newValue);
   };
 
   const handleStatusFilterChange = (newValue: string[]) => {
-    console.log('🔍 MAT Admin StatusFilter changed:', { from: statusFilter, to: newValue });
     setStatusFilter(newValue);
   };
 
   const handleCategoryFilterChange = (newValue: string[]) => {
-    console.log('🔍 MAT Admin CategoryFilter changed:', { from: categoryFilter, to: newValue });
     setCategoryFilter(newValue);
   };
-
-  // DEBUG: Log filter options
-  console.log('🔍 MAT Admin Filter Options Debug:', {
-    performanceOptions: performanceOptions.length,
-    statusOptions: statusOptions.length, 
-    categoryOptions: categoryOptions.length,
-    currentFilters: { performanceFilter, statusFilter, categoryFilter }
-  });
 
   // Group assessments by school and calculate performance metrics
   const schoolPerformanceData = useMemo(() => {
@@ -508,7 +497,7 @@ export function SchoolPerformanceView({ assessments, refreshAssessments, isLoadi
             },
             {
               type: 'multiselect',
-              placeholder: 'Category',
+                              placeholder: 'Aspect',
               value: categoryFilter,
               onChange: handleCategoryFilterChange,
               options: categoryOptions
@@ -692,10 +681,10 @@ export function SchoolPerformanceView({ assessments, refreshAssessments, isLoadi
                               <Table>
                                 <TableHeader>
                                   <TableRow className="bg-slate-50">
-                                    <TableHead>Category</TableHead>
+                                    <TableHead>Aspect</TableHead>
                                     <TableHead className="text-center">Status</TableHead>
                                     <TableHead className="text-center">Score</TableHead>
-                                    <TableHead className="text-center">Progress</TableHead>
+                                    <TableHead className="text-center">Completion Rate</TableHead>
                                     <TableHead className="text-center">Critical</TableHead>
                                     <TableHead className="text-center">Actions</TableHead>
                                   </TableRow>

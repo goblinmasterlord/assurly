@@ -133,55 +133,99 @@ export const countCriticalStandards = (assessment: Assessment) => {
 };
 
 export const getCategoryIcon = (category: string) => {
-  switch (category) {
+  // Normalize to display name first
+  const displayName = getAspectDisplayName(category);
+  
+  switch (displayName) {
     case "Education":
       return <BookOpen className="h-4 w-4" />;
     case "Human Resources":
       return <Users className="h-4 w-4" />;
-    case "Finance & Procurement":
+    case "Finance":
       return <FileText className="h-4 w-4" />;
     case "Governance":
       return <ClipboardCheck className="h-4 w-4" />;
+    case "Estates":
+      return <ClipboardCheck className="h-4 w-4" />;
+    case "Information Standards":
+      return <ClipboardCheck className="h-4 w-4" />;
+    case "IT":
+      return <ClipboardCheck className="h-4 w-4" />;
     default:
-      return null;
+      return <ClipboardCheck className="h-4 w-4" />;
   }
 };
 
 /**
- * Maps strategy category codes to their full display names
+ * Maps aspect category codes to their full display names
+ * Updated to match backend API exactly
  */
-export const getStrategyDisplayName = (category: string): string => {
-  const strategyMap: Record<string, string> = {
-    "Hr": "Human Resources",
-    "It": "IT & Information Services", 
-    "Is": "IT (Digital Strategy)",
+export const getAspectDisplayName = (category: string): string => {
+  const aspectMap: Record<string, string> = {
+    // Backend API category mappings (lowercase codes to display names)
+    "education": "Education",
+    "estates": "Estates", 
+    "finance": "Finance",
+    "governance": "Governance",
+    "hr": "Human Resources",
+    "is": "Information Standards",
+    "it": "IT",
+    
+    // Display name variations (case-insensitive support)
     "Education": "Education",
-    "Finance & Procurement": "Finance & Procurement",
     "Estates": "Estates",
+    "Finance": "Finance", 
     "Governance": "Governance",
     "Human Resources": "Human Resources",
-    "IT & Information Services": "IT & Information Services",
-    "IT (Digital Strategy)": "IT (Digital Strategy)",
+    "Information Standards": "Information Standards",
+    "IT": "IT",
+    
+    // Legacy support for existing data
+    "Finance & Procurement": "Finance",
+    "IT & Information Services": "IT",
+    "IT (Digital Strategy)": "Information Standards",
+    "Hr": "Human Resources",
+    "It": "IT",
+    "Is": "Information Standards",
   };
   
-  return strategyMap[category] || category;
+  return aspectMap[category] || category;
 };
 
 /**
- * Gets the short display code for a strategy category
+ * Gets the short display code for an aspect category
  */
-export const getStrategyShortCode = (category: string): string => {
+export const getAspectShortCode = (category: string): string => {
   const codeMap: Record<string, string> = {
-    "Education": "Education",
+    // Backend API category codes to short codes
+    "education": "ED",
+    "estates": "ES", 
+    "finance": "FN",
+    "governance": "GV",
+    "hr": "HR",
+    "is": "IS",
+    "it": "IT",
+    
+    // Display name to short codes
+    "Education": "ED",
+    "Estates": "ES",
+    "Finance": "FN",
+    "Governance": "GV",
     "Human Resources": "HR",
-    "Finance & Procurement": "Finance",
-    "Estates": "Estates", 
-    "Governance": "Governance",
+    "Information Standards": "IS",
+    "IT": "IT",
+    
+    // Legacy support
+    "Finance & Procurement": "FN",
     "IT & Information Services": "IT",
     "IT (Digital Strategy)": "IS",
   };
   
   return codeMap[category] || category;
 };
+
+// Backward compatibility aliases
+export const getStrategyDisplayName = getAspectDisplayName;
+export const getStrategyShortCode = getAspectShortCode;
 
 // #endregion

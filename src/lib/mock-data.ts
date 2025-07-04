@@ -26,13 +26,13 @@ export const mockUsers: User[] = [
 ];
 
 export const assessmentCategories: { value: AssessmentCategory; description: string }[] = [
-  { value: "Education", description: "Quality of education, behavior, leadership & management, etc." },
-  { value: "Human Resources", description: "Recruitment, absence management, staff retention, etc." },
-  { value: "Finance & Procurement", description: "Financial governance, planning, monitoring, etc." },
-  { value: "Estates", description: "Health & safety, estate management, asset planning, etc." },
-  { value: "Governance", description: "Strategic leadership, accountability, governance structures, etc." },
-  { value: "IT & Information Services", description: "Data security, breach management, GDPR compliance, etc." },
-  { value: "IT (Digital Strategy)", description: "IT strategy, service management, asset management, etc." },
+  { value: "education", description: "Quality of education, behavior, leadership & management, etc." },
+  { value: "hr", description: "Recruitment, absence management, staff retention, etc." },
+  { value: "finance", description: "Financial governance, planning, monitoring, etc." },
+  { value: "estates", description: "Health & safety, estate management, asset planning, etc." },
+  { value: "governance", description: "Strategic leadership, accountability, governance structures, etc." },
+  { value: "is", description: "Data security, breach management, GDPR compliance, etc." },
+  { value: "it", description: "IT strategy, service management, asset management, etc." },
 ];
 
 // #endregion
@@ -102,13 +102,13 @@ export const itStrategyStandards: Standard[] = [
 ];
 
 const allStandards = {
-  "Education": educationStandards,
-  "Human Resources": hrStandards,
-  "Finance & Procurement": financeStandards,
-  "Estates": estatesStandards,
-  "Governance": governanceStandards,
-  "IT & Information Services": itInformationStandards,
-  "IT (Digital Strategy)": itStrategyStandards,
+  "education": educationStandards,
+  "hr": hrStandards,
+  "finance": financeStandards,
+  "estates": estatesStandards,
+  "governance": governanceStandards,
+  "is": itInformationStandards,
+  "it": itStrategyStandards,
 };
 
 // #endregion
@@ -162,7 +162,7 @@ const generateAssessmentsForSchool = (school: School, term: AcademicTerm = "Summ
             return 3;
           });
           // Add a few critical issues for Willow High School only
-          if (school.id === "4" && ["Education", "Governance"].includes(categoryInfo.value)) {
+          if (school.id === "4" && ["education", "governance"].includes(categoryInfo.value)) {
             ratings = ratings.map((rating, idx) => idx < 2 ? 1 : rating); // First 2 standards are critical
           }
           break;

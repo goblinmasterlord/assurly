@@ -188,6 +188,12 @@ export function AssessmentDetailPage() {
   const [showSuccessDialog, setShowSuccessDialog] = useState(false);
   const [activeStandardIndex, setActiveStandardIndex] = useState(0);
   
+  // Edit mode state for completed assessments
+  const [isEditMode, setIsEditMode] = useState(false);
+  const [originalRatings, setOriginalRatings] = useState<Record<string, Rating>>({});
+  const [originalEvidence, setOriginalEvidence] = useState<Record<string, string>>({});
+  const [originalAttachments, setOriginalAttachments] = useState<Record<string, FileAttachment[]>>({});
+  
   useEffect(() => {
     if (assessment?.standards && activeStandard) {
       const index = assessment.standards.findIndex(s => s.id === activeStandard.id);
@@ -208,12 +214,52 @@ export function AssessmentDetailPage() {
       setActiveStandard(assessment.standards[activeStandardIndex - 1]);
     }
   };
+
+  // Edit mode functions
+  const handleEnterEditMode = () => {
+    // Store original values for cancellation
+    setOriginalRatings({ ...ratings });
+    setOriginalEvidence({ ...evidence });
+    setOriginalAttachments({ ...attachments });
+    setIsEditMode(true);
+    
+    toast({
+      title: "Edit mode enabled",
+      description: "You can now modify this completed assessment. Don't forget to save your changes.",
+    });
+  };
+
+  const handleCancelEdit = () => {
+    // Restore original values
+    setRatings(originalRatings);
+    setEvidence(originalEvidence);
+    setAttachments(originalAttachments);
+    setIsEditMode(false);
+    
+    toast({
+      title: "Changes cancelled",
+      description: "All modifications have been reverted to the original values.",
+    });
+  };
+
+  const handleSaveEdit = async () => {
+    await handleSave();
+    setIsEditMode(false);
+    
+    // Refresh assessment data
+    await fetchAssessment(false);
+    
+    toast({
+      title: "Assessment updated",
+      description: "Your changes have been saved successfully.",
+    });
+  };
   
   // Add keyboard navigation
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       // Only activate keyboard shortcuts when we're in the assessment detail view
-      if (!activeStandard || role !== "department-head" || assessment?.status === "Completed") return;
+      if (!activeStandard || !canEdit) return;
 
       // Arrow right or 'j': Next standard
       if ((e.key === "ArrowRight" || e.key.toLowerCase() === "j") && !e.ctrlKey && !e.metaKey) {
@@ -473,7 +519,8 @@ export function AssessmentDetailPage() {
   };
 
   const isCompleted = progressPercentage === 100;
-  const canSubmit = isCompleted && role === "department-head" && assessment.status !== "Completed";
+  const canSubmit = isCompleted && role === "department-head" && (assessment.status !== "Completed" || isEditMode);
+  const canEdit = role === "department-head" && (assessment.status !== "Completed" || isEditMode);
   
   return (
     <div className="container max-w-7xl py-6 md:py-10">
@@ -487,27 +534,42 @@ export function AssessmentDetailPage() {
           Back to Assessments
         </Button>
         
-        {/* Related assessments dropdown for department heads */}
-        {role === "department-head" && relatedAssessments.length > 0 && (
-          <div className="flex items-center">
-            <p className="text-sm text-muted-foreground mr-2 hidden sm:block">Switch to another school:</p>
-            <Select 
-              onValueChange={(value) => navigate(`/assessments/${value}`)}
+        <div className="flex items-center gap-4">
+          {/* Related assessments dropdown for department heads */}
+          {role === "department-head" && relatedAssessments.length > 0 && (
+            <div className="flex items-center">
+              <p className="text-sm text-muted-foreground mr-2 hidden sm:block">Switch to another school:</p>
+              <Select 
+                onValueChange={(value) => navigate(`/assessments/${value}`)}
+              >
+                <SelectTrigger className="w-[180px] h-9">
+                  <School className="mr-2 h-4 w-4" />
+                  <SelectValue placeholder="Change School" />
+                </SelectTrigger>
+                <SelectContent>
+                  {relatedAssessments.map(ra => (
+                    <SelectItem key={ra.id} value={ra.id}>
+                      {ra.school.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          )}
+          
+          {/* Edit Assessment Button for Department Heads */}
+          {role === "department-head" && assessment.status === "Completed" && !isEditMode && !isAdminView && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleEnterEditMode}
+              className="gap-2"
             >
-              <SelectTrigger className="w-[180px] h-9">
-                <School className="mr-2 h-4 w-4" />
-                <SelectValue placeholder="Change School" />
-              </SelectTrigger>
-              <SelectContent>
-                {relatedAssessments.map(ra => (
-                  <SelectItem key={ra.id} value={ra.id}>
-                    {ra.school.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-        )}
+              <span className="text-xs">✏️</span>
+              Edit Assessment
+            </Button>
+          )}
+        </div>
       </div>
       
       {/* Assessment Header */}
@@ -755,11 +817,11 @@ export function AssessmentDetailPage() {
                                 isSelected 
                                   ? "border-primary bg-primary/5" 
                                   : "hover:border-slate-400",
-                                role !== "department-head" || assessment.status === "Completed" 
+                                !canEdit
                                   ? "opacity-60 pointer-events-none" 
                                   : ""
                               )}
-                              onClick={() => role === "department-head" && assessment.status !== "Completed" && 
+                              onClick={() => canEdit && 
                                 handleRatingChange(activeStandard.id, rating as Rating)}
                             >
                               <div className="flex items-center justify-between">
@@ -797,7 +859,7 @@ export function AssessmentDetailPage() {
                         onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => 
                           handleEvidenceChange(activeStandard.id, e.target.value)
                         }
-                        disabled={role !== "department-head" || assessment.status === "Completed"}
+                        disabled={!canEdit}
                         className="min-h-[150px] resize-y"
                         maxLength={500}
                       />
@@ -808,7 +870,7 @@ export function AssessmentDetailPage() {
                     </div>
 
                     {/* File Upload Section */}
-                    {role === "department-head" && assessment.status !== "Completed" && (
+                    {canEdit && (
                       <div>
                         <h3 className="text-base font-medium mb-3">Supporting Documents <span className="text-xs text-muted-foreground">(Optional)</span></h3>
                         <FileUpload
@@ -861,7 +923,7 @@ export function AssessmentDetailPage() {
                   </div>
                 </CardContent>
                 
-                {role === "department-head" && assessment.status !== "Completed" && (
+                {role === "department-head" && (assessment.status !== "Completed" || isEditMode) && (
                   <div className="pb-24">
                     {/* Add padding to account for sticky bottom bar */}
                   </div>
@@ -873,7 +935,7 @@ export function AssessmentDetailPage() {
       )}
       
       {/* Sticky Bottom Navigation Bar for Department Heads */}
-      {role === "department-head" && assessment.status !== "Completed" && !isAdminView && (
+      {role === "department-head" && (assessment.status !== "Completed" || isEditMode) && !isAdminView && (
         <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-slate-200/60 shadow-lg z-50">
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
             <div className="flex items-center justify-between py-4">
@@ -956,7 +1018,33 @@ export function AssessmentDetailPage() {
                 </Button>
 
                 {/* Primary action */}
-                {activeStandardIndex < totalCount - 1 ? (
+                {isEditMode ? (
+                  // Edit mode buttons
+                  <>
+                    <Button 
+                      variant="outline"
+                      onClick={handleCancelEdit}
+                      disabled={saving}
+                      className="gap-2"
+                    >
+                      Cancel
+                    </Button>
+                    <Button 
+                      onClick={handleSaveEdit}
+                      disabled={saving}
+                      className="gap-2"
+                    >
+                      {saving ? (
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                      ) : (
+                        <>
+                          <Save className="h-4 w-4" />
+                          Save Changes
+                        </>
+                      )}
+                    </Button>
+                  </>
+                ) : activeStandardIndex < totalCount - 1 ? (
                   <Button 
                     onClick={() => {
                       handleSave();

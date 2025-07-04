@@ -47,7 +47,7 @@ import { cn } from "@/lib/utils";
 import { SchoolPerformanceView } from "@/components/SchoolPerformanceView";
 import { DepartmentHeadTableSkeleton } from "@/components/ui/table-skeleton";
 import { Skeleton } from "@/components/ui/skeleton";
-import { getStrategyDisplayName } from "@/lib/assessment-utils";
+import { getAspectDisplayName } from "@/lib/assessment-utils";
 
 export function AssessmentsPage() {
   const { role } = useUser();
@@ -151,7 +151,7 @@ export function AssessmentsPage() {
   
   // Create filter options for multi-select components
   const categoryOptions: MultiSelectOption[] = uniqueCategories.map(category => ({
-    label: getStrategyDisplayName(category),
+    label: getAspectDisplayName(category),
     value: category
   }));
 
@@ -168,30 +168,6 @@ export function AssessmentsPage() {
     icon: <SchoolIcon className="h-4 w-4" />
   }));
   
-  // DEBUG: Add debugging wrappers for filter state changes
-  const handleCategoryFilterChange = (newValue: string[]) => {
-    console.log('🔍 CategoryFilter changed:', { from: categoryFilter, to: newValue });
-    setCategoryFilter(newValue);
-  };
-
-  const handleStatusFilterChange = (newValue: string[]) => {
-    console.log('🔍 StatusFilter changed:', { from: statusFilter, to: newValue });
-    setStatusFilter(newValue);
-  };
-
-  const handleSchoolFilterChange = (newValue: string[]) => {
-    console.log('🔍 SchoolFilter changed:', { from: schoolFilter, to: newValue });
-    setSchoolFilter(newValue);
-  };
-
-  // DEBUG: Log filter options
-  console.log('🔍 Filter Options Debug:', {
-    categoryOptions: categoryOptions.length,
-    statusOptions: statusOptions.length, 
-    schoolOptions: schoolOptions.length,
-    currentFilters: { categoryFilter, statusFilter, schoolFilter }
-  });
-
   // Pagination state
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 10; // Optimal for table view UX
@@ -353,21 +329,21 @@ export function AssessmentsPage() {
               type: 'multiselect' as const,
               placeholder: 'Schools',
               value: schoolFilter,
-              onChange: handleSchoolFilterChange,
+              onChange: setSchoolFilter,
               options: schoolOptions
             }] : []),
             {
               type: 'multiselect' as const,
               placeholder: 'Strategies',
               value: categoryFilter,
-              onChange: handleCategoryFilterChange,
+              onChange: setCategoryFilter,
               options: categoryOptions
             },
             {
               type: 'multiselect' as const,
               placeholder: 'Status',
               value: statusFilter,
-              onChange: handleStatusFilterChange,
+              onChange: setStatusFilter,
               options: statusOptions
             }
           ]}
@@ -381,8 +357,8 @@ export function AssessmentsPage() {
                 <TableRow className="bg-slate-50">
                   <TableHead className="py-3">Assessment</TableHead>
                   <TableHead>School</TableHead>
-                  <TableHead>Strategy</TableHead>
-                  <TableHead>Progress</TableHead>
+                  <TableHead>Aspect</TableHead>
+                  <TableHead>Completion Rate</TableHead>
                   <TableHead>Due Date</TableHead>
                   <TableHead>Status</TableHead>
                   <TableHead className="text-right">Actions</TableHead>
@@ -433,7 +409,7 @@ export function AssessmentsPage() {
                       </TableCell>
                       <TableCell>
                         <Badge variant="outline" className="bg-slate-50 font-normal">
-                          {getStrategyDisplayName(assessment.category)}
+                          {getAspectDisplayName(assessment.category)}
                         </Badge>
                       </TableCell>
                       <TableCell>

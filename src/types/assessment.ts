@@ -1,12 +1,12 @@
-// Assessment categories
+// Assessment categories (matching backend API exactly)
 export type AssessmentCategory = 
-  | "Education"
-  | "Human Resources"
-  | "Finance & Procurement"
-  | "Estates"
-  | "Governance"
-  | "IT & Information Services"
-  | "IT (Digital Strategy)";
+  | "education"
+  | "hr"
+  | "finance"
+  | "estates"
+  | "governance"
+  | "is"
+  | "it";
 
 // Academic terms
 export type AcademicTerm = 

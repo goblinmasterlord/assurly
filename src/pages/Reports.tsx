@@ -64,7 +64,7 @@ export function ReportsPage() {
         <div className="rounded-md border">
           <div className="grid grid-cols-6 bg-muted px-4 py-3 text-sm font-medium">
             <div>Report Name</div>
-            <div>Category</div>
+                            <div>Aspect</div>
             <div>Schools Included</div>
             <div>Generated Date</div>
             <div>Author</div>
