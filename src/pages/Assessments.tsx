@@ -51,6 +51,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { getAspectDisplayName } from "@/lib/assessment-utils";
 import { Progress } from "@/components/ui/progress";
 import { SortableTableHead, type SortDirection } from "@/components/ui/sortable-table-head";
+import { assessmentCategories } from "@/lib/mock-data";
 
 export function AssessmentsPage() {
   const { role } = useUser();
@@ -135,10 +136,10 @@ export function AssessmentsPage() {
   
   const uniqueCategories = [...new Set(termFilteredAssessments.map(a => a.category))];
   
-  // Create filter options for multi-select components
-  const categoryOptions: MultiSelectOption[] = uniqueCategories.map(category => ({
-    label: getAspectDisplayName(category),
-    value: category
+  // Create filter options for multi-select components - SHOW ALL ASPECTS
+  const categoryOptions: MultiSelectOption[] = assessmentCategories.map(categoryInfo => ({
+    label: getAspectDisplayName(categoryInfo.value),
+    value: categoryInfo.value
   }));
 
   const statusOptions: MultiSelectOption[] = [

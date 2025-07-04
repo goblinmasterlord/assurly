@@ -485,8 +485,8 @@ export function AssessmentInvitationSheet({ open, onOpenChange, onSuccess }: Ass
                       onCheckedChange={() => toggleSchool(school.id)}
                     />
                     <div className="flex items-center gap-2.5 flex-1 min-w-0">
-                      <div className="flex h-7 w-7 items-center justify-center rounded-full bg-indigo-50 border border-indigo-100">
-                        <SchoolIcon className="h-3.5 w-3.5 text-indigo-500" />
+                      <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-slate-50 border border-slate-100">
+                        <SchoolIcon className="h-3.5 w-3.5 text-slate-600" />
                       </div>
                       <span className="text-sm truncate">{school.name}</span>
                     </div>
