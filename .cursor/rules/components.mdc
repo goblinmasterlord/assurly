@@ -112,57 +112,33 @@ This document provides a functional description of the frontend components in th
 ## Custom Components
 
 ### `src/components/AssessmentInvitationSheet.tsx`
-- **Description:** A UI component that renders a "sheet" (a slide-in panel) for inviting schools to complete an assessment. It includes a form to select an assessment category, set an optional due date (using a custom `SimpleDatePicker`), and choose multiple schools from a searchable list.
+- **Description:** A side sheet component for requesting new assessments with school and category selection.
 - **Key Properties/Functionality:**
-    - Props: `open` (boolean to control visibility), `onOpenChange` (callback for when the sheet's open state changes).
-    - State: Manages selected category, search term for schools, selected schools, due date, and visibility of sub-components like the date picker and "select all" options.
-    - Features:
-        - Assessment category selection (dropdown).
-        - Due date selection (popover with `SimpleDatePicker`).
-        - School selection (searchable list with checkboxes, select/deselect all).
-        - Handles invitation sending (currently logs to console).
-    - Internal `SimpleDatePicker`: A custom calendar component for selecting dates, avoiding external dependencies. It handles month navigation, highlighting the current day, disabling past dates, and selecting a date.
+    - Props: `open` (boolean), `onOpenChange` (callback), `onAssessmentCreated` (callback).
+    - Features: Multi-school selection, category selection, academic term/year selectors with intelligent defaults.
+    - **Term Selection**: Automatically defaults to current academic term and year based on date logic.
+    - Form validation for required fields, loading states during submission.
+    - Integration with assessment service for creating new assessments.
 
 ### `src/components/SchoolPerformanceView.tsx`
-- **Description:** The primary dashboard component for Multi-Academy Trust (MAT) administrators to gain a school-centric overview of assessment performance and progress across the trust. It allows for viewing both current and historical data, with clear indicators of performance changes over time.
+- **Description:** MAT admin dashboard view showing school performance metrics and assessment overview.
 - **Key Properties/Functionality:**
-    - Props: `assessments` (array of `Assessment` objects, including data from multiple terms).
-    - State: Manages `searchTerm`, `performanceFilter`, `statusFilter`, `categoryFilter`, `criticalFilter`, `selectedTerm` (e.g., "Summer 2024-2025"), `expandedSchools`, `invitationSheetOpen`.
-    - Data Display:
-        - Presents a table overview of all schools, showing:
-            - School name and code.
-            - Current overall score with a visual change indicator (arrow up/down/neutral) compared to the previous selected term.
-            - Number of completed assessments vs. total for the selected term.
-            - Total count of critical/intervention-required standards.
-            - A general performance trend label (e.g., "Excellent", "Needs Attention").
-            - Last updated date for the school's assessments in the selected term.
-        - Rows are expandable to show a detailed breakdown of assessments by strategy category for the selected school and term.
-            - Each category shows its status, average score (also with a change indicator from the previous term), completion progress, and critical standard count.
-            - Direct links to view the full details of each category assessment.
-    - Filtering & Navigation:
-        - **Academic Term Selector:** Allows users to choose an academic term (e.g., "Summer 2024-2025", "Spring 2024-2025") to load and analyze data for that specific period.
-        - Search by school name.
-        - Filter by overall school performance (High, Medium, Low).
-        - Filter by assessment status (Completed, In Progress, etc., for categories within a school).
-        - Filter by strategy category.
-        - Filter for schools with "Intervention Required" issues.
-        - "Clear All Filters" option.
-    - Actions:
-        - Integrates the `AssessmentInvitationSheet` component to allow admins to request new assessments.
-    - UI Components: `Card`, `Table`, `Input`, `Select`, `Badge`, `Progress`, `Tooltip`, `Collapsible`, `Button`.
-    - Helper Functions: For calculating scores, determining change indicators, status colors, category icons, and performance trends.
+    - Props: `assessments` (Assessment[]), `refreshAssessments` (callback), `isLoading` (boolean).
+    - Features: Expandable school rows, performance trends, filtering with FilterBar, term navigation.
+    - **Filter Integration**: Uses FilterBar with 'mat-admin' layout including performance, status, category filters plus intervention checkbox.
+    - **Data Display**: School cards with scores, trends, progress bars, expandable assessment details by category.
+    - Performance trend calculation with color-coded badges and change indicators.
 
 ### `src/components/MatAdminAssessmentsView.tsx`
 - **Description:** **(Obsolete)** This component is no longer in use and has been replaced by `SchoolPerformanceView.tsx`.
 
 
 ### `src/components/RoleSwitcher.tsx`
-- **Description:** A dropdown menu component that allows users to switch between predefined roles (e.g., "MAT Administrator", "School Dept. Head"). The selected role is managed via the `UserContext`.
+- **Description:** Development utility component for switching between user roles (MAT Admin, Department Head, etc.).
 - **Key Properties/Functionality:**
-    - Uses `useUser` hook from `UserContext` to get and set the current role.
-    - Displays the currently active role with an associated icon.
-    - Provides a dropdown list of available roles, each with an icon and label.
-    - Updates the global user role upon selection.
+    - Props: Takes user context and provides role switching functionality.
+    - Only shown in development mode for testing different user perspectives.
+    - Allows easy testing of role-based UI changes without authentication system changes.
 
 ## UI Library (`src/components/ui/`)
 
@@ -431,22 +407,51 @@ This section details the reusable UI components, many of which are based on Radi
 - **Description:** A reusable multi-select dropdown component with search and badge display. Built on top of Radix Popover and the Command (cmdk) list for powerful filtering and keyboard navigation.
 - **Key Properties/Functionality:**
     - Props: `options` (array of `{ label, value, icon? }`), `selected` (string[]), `onChange` (callback), various text placeholders.
-    - Features: Type-ahead search, keyboard navigation, clear-all option, badge display for selected items (up to configurable max), optional icons, fully accessible keyboard support.
-    - UX: Clicking the badge "x" removes an item; Backspace in the search input removes the last selected item.
+    - Features: Type-ahead search, keyboard navigation, clear-all option (at bottom with separator), optional icons, fully accessible keyboard support.
+    - **UX Design**: Fixed height trigger (h-9) that shows "X selected" for multiple items or the single item name. No badge stacking to prevent layout jumping.
+    - **Clear All**: Positioned at bottom of dropdown with separator, only shows when items are selected, includes count "Clear all (X)".
+    - **Trigger Display**: Shows placeholder when empty, single item name when one selected, "X selected" format for multiple items.
 
 ### `src/components/ui/term-stepper.tsx`
-- **Description:** An academic term navigator that combines previous / next arrow buttons with a dropdown selector to jump between terms in chronological order.
+- **Description:** Academic term navigation component with previous/next buttons and dropdown selector for terms.
 - **Key Properties/Functionality:**
-    - Props: `terms` (string[] in chrono-sorted order), `currentTerm`, `onTermChange`, optional `showDropdown`.
-    - Button state automatically disables when at first / last term.
-    - Displays relative position (e.g., "2 of 5").
-    - Uses a fixed-width trigger with `truncate` to avoid layout shift when terms have varying length.
+    - Props: `terms` (string[]), `currentTerm` (string), `onTermChange` (callback), `showDropdown` (boolean), `className`.
+    - Features: Chronological term ordering (Autumn > Summer > Spring within academic years), navigation buttons, dropdown fallback.
+    - **UX Design**: Fixed width (220px) to prevent layout jumping, truncation for long terms, consistent styling between button and dropdown modes.
+    - Layout: Shows "X of Y" counter, supports both interactive (with dropdown) and display-only modes.
 
-### Updated `src/components/AssessmentInvitationSheet.tsx`
-- **New Feature:** Added dual selector (Term + Academic Year) so admins can decide which academic window the request belongs to. Defaults to the current term/year based on today's date.
-- **API Payload:** `createAssessments` now receives `term` and `academicYear` from user selection instead of hard-coded values.
+### `src/components/ui/filter-bar.tsx`
+- **Description:** Professional, reusable filter container component with intelligent layout system for different view contexts.
+- **Key Properties/Functionality:**
+    - Props: `title`, `filters` (FilterConfig[]), `onClearAll`, `layout` ('mat-admin' | 'department-head'), `className`.
+    - **Filter Types**: 'search' (with icon), 'multiselect' (using MultiSelect component), 'checkbox' (with label).
+    - **Intelligent Layouts**: 
+      - MAT Admin: 12-column grid (Search: 4 cols, MultiSelects: 2 cols each, Checkbox: 2 cols)
+      - Department Head: 8-10 column grid (Search: 4 cols, MultiSelects: 2 cols each)
+    - **Professional Design**: Consistent h-9 height, gap-4 spacing, responsive breakpoints, conditional Clear All button.
+    - **Smart Features**: Clear All only shows when filters have values, automatic column span calculation, responsive grid collapse.
 
-        - `TooltipTrigger`: The element that, when interacted with (hover/focus), shows the tooltip.
-        - `TooltipContent`: The actual content of the tooltip message.
-    - Behavior: Manages the appearance and disappearance of the tooltip content based on interaction with the trigger.
-    - Props: `TooltipContent` has `sideOffset` to control distance from the trigger.
+## Utility Functions (`src/lib/`)
+
+### `src/lib/assessment-utils.tsx`
+- **Description:** Utility functions for assessment data processing and display.
+- **Key Functions:**
+    - `getStrategyDisplayName(category)`: Maps strategy codes to full display names (Hr → Human Resources, It → IT & Information Services, etc.).
+    - `getStrategyShortCode(category)`: Converts full names back to short codes for consistency.
+    - Handles various input formats and provides fallback display names.
+
+### `src/lib/category-utils.tsx`
+- **Description:** Category-specific utility functions and constants.
+- **Key Properties/Functionality:**
+    - Category mapping and validation functions.
+    - Integration with assessment-utils for strategy name handling.
+    - Category-specific styling and icon mappings.
+
+### Key Design Principles Applied:
+1. **Consistent Heights**: All interactive elements use h-9 (36px) for perfect alignment
+2. **Professional Spacing**: gap-4 (16px) standard, with contextual adjustments
+3. **Responsive Design**: Mobile-first with intelligent breakpoints
+4. **Conditional UI**: Clear buttons, filters, and features only show when relevant
+5. **Fixed Layouts**: Prevents layout jumping with fixed widths and consistent sizing
+6. **Type Safety**: Full TypeScript support with proper interfaces
+7. **Accessibility**: ARIA labels, keyboard navigation, screen reader support
