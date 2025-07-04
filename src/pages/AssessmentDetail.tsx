@@ -26,7 +26,8 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { useUser } from "@/contexts/UserContext";
-import { getAssessmentById, submitAssessment } from "@/services/assessment-service";
+import { submitAssessment } from "@/services/assessment-service"; // Keep submit function
+import { useAssessment } from "@/hooks/use-assessments"; // Optimized assessment fetching
 import {
   AlertCircle,
   AlertTriangle,
@@ -106,46 +107,25 @@ export function AssessmentDetailPage() {
   const { role } = useUser();
   const { toast } = useToast();
   
-  // State for assessment data
-  const [assessment, setAssessment] = useState<Assessment | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  
   // Check for admin view mode from URL params
   const searchParams = new URLSearchParams(window.location.search);
   const isAdminView = searchParams.get('view') === 'admin' || role === 'mat-admin';
   
-  // Fetch assessment data
+  // 🚀 OPTIMIZED: Using enhanced assessment hook with caching and automatic refresh
+  const { 
+    assessment, 
+    isLoading, 
+    error, 
+    refreshAssessment 
+  } = useAssessment(id || '');
+  
+  // Legacy fetchAssessment function for compatibility (just calls refreshAssessment)
   const fetchAssessment = useCallback(async (showLoading = true) => {
-    if (!id) {
-      setError("No assessment ID provided");
-      setIsLoading(false);
-      return;
+    // The hook already handles loading states, so we just trigger refresh
+    if (id) {
+      await refreshAssessment();
     }
-
-    try {
-      if (showLoading) {
-        setIsLoading(true);
-      }
-      const data = await getAssessmentById(id);
-      if (data) {
-        setAssessment(data);
-      } else {
-        setError("Assessment not found");
-      }
-    } catch (err) {
-      setError("Failed to load assessment");
-      console.error(err);
-    } finally {
-      if (showLoading) {
-        setIsLoading(false);
-      }
-    }
-  }, [id]);
-
-  useEffect(() => {
-    fetchAssessment();
-  }, [fetchAssessment]);
+  }, [id, refreshAssessment]);
   
   // Get other assessments for the same category but different schools (for department heads)
   // This will need to be updated later to also use API data

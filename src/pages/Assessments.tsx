@@ -22,7 +22,8 @@ import { useUser } from "@/contexts/UserContext";
 import {
   mockSchools,
 } from "@/lib/mock-data";
-import { getAssessments } from "@/services/assessment-service";
+// import { getAssessments } from "@/services/assessment-service"; // REPLACED with optimized hook
+import { useAssessments } from "@/hooks/use-assessments";
 import { 
   AlertTriangle,
   Calendar, 
@@ -53,35 +54,14 @@ export function AssessmentsPage() {
   const { role } = useUser();
   const isMatAdmin = role === "mat-admin";
 
-  const [assessments, setAssessments] = useState<Assessment[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-
-  const fetchAssessments = async () => {
-    try {
-      setIsLoading(true);
-      const data = await getAssessments();
-      setAssessments(data);
-    } catch (err) {
-      setError("Failed to load assessments. Please try again later.");
-      console.error(err);
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  const refreshAssessments = async () => {
-    try {
-      const data = await getAssessments();
-      setAssessments(data);
-    } catch (err) {
-      console.error("Failed to refresh assessments:", err);
-    }
-  };
-
-  useEffect(() => {
-    fetchAssessments();
-  }, []);
+  // 🚀 OPTIMIZED: Using enhanced assessments hook with caching, deduplication, and background refresh
+  const { 
+    assessments, 
+    isLoading, 
+    error, 
+    refreshAssessments,
+    isRefreshing 
+  } = useAssessments();
   
   // Define all hooks unconditionally here
   const [searchTerm, setSearchTerm] = useState("");
@@ -278,6 +258,12 @@ export function AssessmentsPage() {
           refreshAssessments={refreshAssessments} 
           isLoading={isLoading}
         />
+        {/* 🚀 OPTIMIZED: Background refresh indicator */}
+        {isRefreshing && (
+          <div className="fixed bottom-4 right-4 bg-blue-50 border border-blue-200 text-blue-700 px-3 py-2 rounded-lg shadow-sm text-sm">
+            Refreshing data...
+          </div>
+        )}
       </div>
     );
   }
