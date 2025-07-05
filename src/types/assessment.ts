@@ -78,12 +78,20 @@ export interface SchoolPerformance {
   overallScore: number;
   assessmentsByCategory: Array<{
     category: AssessmentCategory;
-    assessment: Assessment;
-    averageScore: number;
-    criticalStandardsCount: number;
+    name: string;
+    status: AssessmentStatus;
+    completedStandards: number;
+    totalStandards: number;
+    overallScore: number;
+    lastUpdated: string;
+    dueDate?: string;
+    assignedTo?: User[];
+    id: string;
   }>;
   criticalStandardsTotal: number;
   lastUpdated: string;
+  completedAssessments: number;
+  totalAssessments: number;
 }
 
 // Assessment model

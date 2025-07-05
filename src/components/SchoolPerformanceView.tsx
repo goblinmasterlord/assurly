@@ -34,7 +34,7 @@ import {
 } from "@/components/ui/collapsible";
 import { Progress } from "@/components/ui/progress";
 import { SortableTableHead, type SortDirection } from "@/components/ui/sortable-table-head";
-import type { Assessment, AssessmentCategory, SchoolPerformance, AcademicTerm } from "@/types/assessment";
+import type { Assessment, AssessmentCategory, SchoolPerformance, AcademicTerm, School } from "@/types/assessment";
 import { cn } from "@/lib/utils";
 import { 
   AlertTriangle, 
@@ -67,7 +67,7 @@ import { AssessmentInvitationSheet } from "@/components/AssessmentInvitationShee
 import { MiniTrendChart, type TrendDataPoint } from "@/components/ui/mini-trend-chart";
 import { SchoolPerformanceTableSkeleton } from "@/components/ui/table-skeleton";
 import { getAspectDisplayName } from "@/lib/assessment-utils";
-import { assessmentCategories } from "@/lib/mock-data";
+import { assessmentCategories, mockSchools } from "@/lib/mock-data";
 import { FilterBar } from "@/components/ui/filter-bar";
 
 type SchoolPerformanceViewProps = {
@@ -89,6 +89,7 @@ export function SchoolPerformanceView({ assessments, refreshAssessments, isLoadi
   const [performanceFilter, setPerformanceFilter] = useState<string[]>([]);
   const [statusFilter, setStatusFilter] = useState<string[]>([]);
   const [categoryFilter, setCategoryFilter] = useState<string[]>([]);
+  const [schoolFilter, setSchoolFilter] = useState<string[]>([]);
   const [criticalFilter, setCriticalFilter] = useState<boolean>(false);
   const [invitationSheetOpen, setInvitationSheetOpen] = useState(false);
   const [expandedSchools, setExpandedSchools] = useState<Set<string>>(new Set());
@@ -303,6 +304,13 @@ export function SchoolPerformanceView({ assessments, refreshAssessments, isLoadi
     value: categoryInfo.value
   }));
 
+  const uniqueSchools = [...new Set(filteredByTermAssessments.map(a => a.school.id))];
+  const schoolOptions: MultiSelectOption[] = mockSchools
+    .map((school: School) => ({
+      label: school.name,
+      value: school.id
+    }));
+
   // DEBUG: Add debugging wrappers for filter state changes
   const handlePerformanceFilterChange = (newValue: string[]) => {
     setPerformanceFilter(newValue);
@@ -314,6 +322,10 @@ export function SchoolPerformanceView({ assessments, refreshAssessments, isLoadi
 
   const handleCategoryFilterChange = (newValue: string[]) => {
     setCategoryFilter(newValue);
+  };
+
+  const handleSchoolFilterChange = (newValue: string[]) => {
+    setSchoolFilter(newValue);
   };
 
   // Group assessments by school and calculate performance metrics
@@ -331,72 +343,75 @@ export function SchoolPerformanceView({ assessments, refreshAssessments, isLoadi
           assessmentsByCategory: [],
           criticalStandardsTotal: 0,
           lastUpdated: assessment.lastUpdated,
-          previousOverallScore: undefined, // Start with undefined instead of 0
-          changesByCategory: new Map(),
+          completedAssessments: 0,
+          totalAssessments: 0,
+          previousOverallScore: undefined,
+          changesByCategory: new Map()
         });
       }
 
       const schoolData = schoolMap.get(schoolId)!;
-      
-      // Calculate overall score based on completed assessments
-      const averageScore = assessment.overallScore || 0; // Use the overallScore from the assessment
-      
-      // Count critical standards (ratings of 1 or 2)
-      const criticalCount = assessment.standards?.filter(s => s.rating === 1 || s.rating === 2).length || 0;
+      schoolData.totalAssessments++;
 
+      // Only process COMPLETED assessments for scoring and critical standards
+      if (assessment.status === 'Completed') {
+        schoolData.completedAssessments++;
+        
+        // Calculate critical standards from overallScore and totalStandards
+        // Since we don't have individual standards data in summaries, we estimate
+        let criticalCount = 0;
+        if (assessment.overallScore && assessment.overallScore <= 1.5) {
+          // For very low scores, estimate critical standards
+          // If average score is 1.0-1.5, likely some standards are rated 1
+          const avgScore = assessment.overallScore;
+          const totalStandards = assessment.totalStandards;
+          
+          if (avgScore <= 1.2) {
+            // Very low score - estimate 60-80% of standards are critical
+            criticalCount = Math.round(totalStandards * 0.7);
+          } else if (avgScore <= 1.5) {
+            // Low score - estimate 30-50% of standards are critical
+            criticalCount = Math.round(totalStandards * 0.4);
+          }
+        }
+        
+        
+
+        schoolData.criticalStandardsTotal += criticalCount;
+        schoolData.overallScore += assessment.overallScore || 0;
+        
+        // Update last updated if this assessment is more recent
+        if (assessment.lastUpdated && assessment.lastUpdated > schoolData.lastUpdated) {
+          schoolData.lastUpdated = assessment.lastUpdated;
+        }
+      }
+
+      // Add to assessments by category (for all assessments, not just completed)
       schoolData.assessmentsByCategory.push({
         category: assessment.category,
-        assessment,
-        averageScore,
-        criticalStandardsCount: criticalCount,
+        name: assessment.name,
+        status: assessment.status,
+        completedStandards: assessment.completedStandards,
+        totalStandards: assessment.totalStandards,
+        overallScore: assessment.overallScore || 0,
+        lastUpdated: assessment.lastUpdated,
+        dueDate: assessment.dueDate,
+        assignedTo: assessment.assignedTo,
+        id: assessment.id
       });
-
-      schoolData.criticalStandardsTotal += criticalCount;
-      
-      // Update last updated if this assessment is more recent
-      if (assessment.lastUpdated > schoolData.lastUpdated) {
-        schoolData.lastUpdated = assessment.lastUpdated;
-      }
     });
 
-    // Calculate overall scores and previous term comparisons
+    // Calculate average scores for schools (only from completed assessments)
     schoolMap.forEach((schoolData, schoolId) => {
-      const completedAssessments = schoolData.assessmentsByCategory.filter(
-        cat => cat.assessment.status === "Completed"
-      );
+      if (schoolData.completedAssessments > 0) {
+        schoolData.overallScore = schoolData.overallScore / schoolData.completedAssessments;
+      }
       
-      if (completedAssessments.length > 0) {
-        const totalScore = completedAssessments.reduce((sum, cat) => sum + cat.averageScore, 0);
-        schoolData.overallScore = totalScore / completedAssessments.length;
-      }
-
-      // Find previous term data for comparison
-      const previousSchoolAssessments = previousTermAssessments.filter(
-        a => a.school.id === schoolId
-      );
-
-      if (previousSchoolAssessments.length > 0) {
-        const prevCompletedAssessments = previousSchoolAssessments.filter(a => a.status === "Completed");
-        if (prevCompletedAssessments.length > 0) {
-          const prevTotalScore = prevCompletedAssessments.reduce((sum, a) => sum + (a.overallScore || 0), 0);
-          schoolData.previousOverallScore = prevTotalScore / prevCompletedAssessments.length;
-        }
-
-        // Calculate changes by category
-        schoolData.assessmentsByCategory.forEach(categoryData => {
-          const prevCategoryAssessment = previousSchoolAssessments.find(
-            a => a.category === categoryData.category && a.status === "Completed"
-          );
-          if (prevCategoryAssessment) {
-            const change = calculateChange(categoryData.averageScore, prevCategoryAssessment.overallScore || 0);
-            schoolData.changesByCategory!.set(categoryData.category, change);
-          }
-        });
-      }
+      
     });
 
     return Array.from(schoolMap.values());
-  }, [filteredByTermAssessments, previousTermAssessments]);
+  }, [filteredByTermAssessments]);
 
   const handleSort = (key: string) => {
     setSortConfig(prev => ({
@@ -427,10 +442,10 @@ export function SchoolPerformanceView({ assessments, refreshAssessments, isLoadi
       const matchesStatus = statusFilter.length === 0 || statusFilter.some(status => {
         return school.assessmentsByCategory.some(cat => {
           switch (status) {
-            case "completed": return cat.assessment.status === "Completed";
-            case "in-progress": return cat.assessment.status === "In Progress";
-            case "not-started": return cat.assessment.status === "Not Started";
-            case "overdue": return cat.assessment.status === "Overdue";
+            case "completed": return cat.status === "Completed";
+            case "in-progress": return cat.status === "In Progress";
+            case "not-started": return cat.status === "Not Started";
+            case "overdue": return cat.status === "Overdue";
             default: return false;
           }
         });
@@ -440,9 +455,11 @@ export function SchoolPerformanceView({ assessments, refreshAssessments, isLoadi
         return school.assessmentsByCategory.some(cat => cat.category === category);
       });
 
+      const matchesSchool = schoolFilter.length === 0 || schoolFilter.includes(school.school.id);
+      
       const matchesCritical = !criticalFilter || school.criticalStandardsTotal > 0;
 
-      return matchesSearch && matchesPerformance && matchesStatus && matchesCategory && matchesCritical;
+      return matchesSearch && matchesPerformance && matchesStatus && matchesCategory && matchesSchool && matchesCritical;
     });
 
     // Apply sorting
@@ -457,8 +474,8 @@ export function SchoolPerformanceView({ assessments, refreshAssessments, isLoadi
             bValue = b.school.name;
             break;
           case "assessments":
-            const aCompleted = a.assessmentsByCategory.filter(cat => cat.assessment.status === "Completed").length;
-            const bCompleted = b.assessmentsByCategory.filter(cat => cat.assessment.status === "Completed").length;
+            const aCompleted = a.assessmentsByCategory.filter(cat => cat.status === "Completed").length;
+            const bCompleted = b.assessmentsByCategory.filter(cat => cat.status === "Completed").length;
             const aTotal = a.assessmentsByCategory.length;
             const bTotal = b.assessmentsByCategory.length;
             aValue = aTotal > 0 ? (aCompleted / aTotal) : 0;
@@ -473,8 +490,8 @@ export function SchoolPerformanceView({ assessments, refreshAssessments, isLoadi
             bValue = b.criticalStandardsTotal;
             break;
           case "lastUpdated":
-            aValue = Math.max(...a.assessmentsByCategory.map(cat => new Date(cat.assessment.lastUpdated || '').getTime() || 0));
-            bValue = Math.max(...b.assessmentsByCategory.map(cat => new Date(cat.assessment.lastUpdated || '').getTime() || 0));
+            aValue = Math.max(...a.assessmentsByCategory.map(cat => new Date(cat.lastUpdated || '').getTime() || 0));
+            bValue = Math.max(...b.assessmentsByCategory.map(cat => new Date(cat.lastUpdated || '').getTime() || 0));
             break;
           default:
             return 0;
@@ -497,7 +514,7 @@ export function SchoolPerformanceView({ assessments, refreshAssessments, isLoadi
     }
 
     return filtered;
-  }, [schoolPerformanceData, searchTerm, performanceFilter, statusFilter, categoryFilter, criticalFilter, sortConfig]);
+  }, [schoolPerformanceData, searchTerm, performanceFilter, statusFilter, categoryFilter, schoolFilter, criticalFilter, sortConfig]);
 
   // Clear all filters
   const clearAllFilters = () => {
@@ -505,6 +522,7 @@ export function SchoolPerformanceView({ assessments, refreshAssessments, isLoadi
     setPerformanceFilter([]);
     setStatusFilter([]);
     setCategoryFilter([]);
+    setSchoolFilter([]);
     setCriticalFilter(false);
   };
 
@@ -754,6 +772,13 @@ export function SchoolPerformanceView({ assessments, refreshAssessments, isLoadi
             },
             {
               type: 'multiselect',
+              placeholder: 'Schools',
+              value: schoolFilter,
+              onChange: handleSchoolFilterChange,
+              options: schoolOptions
+            },
+            {
+              type: 'multiselect',
               placeholder: 'Performance',
               value: performanceFilter,
               onChange: handlePerformanceFilterChange,
@@ -797,7 +822,7 @@ export function SchoolPerformanceView({ assessments, refreshAssessments, isLoadi
         <CardContent className="p-0">
           <Table>
             <TableHeader>
-              <TableRow className="bg-slate-50">
+              <TableRow className="bg-slate-50/80 border-b border-slate-200">
                 <TableHead className="w-12"></TableHead>
                 <SortableTableHead 
                   sortKey="school"
@@ -847,7 +872,7 @@ export function SchoolPerformanceView({ assessments, refreshAssessments, isLoadi
                 filteredSchoolData.map((school) => {
                 const isExpanded = expandedSchools.has(school.school.id);
                 const trend = getPerformanceTrend(school.overallScore, school.criticalStandardsTotal);
-                const completedCount = school.assessmentsByCategory.filter(cat => cat.assessment.status === "Completed").length;
+                const completedCount = school.assessmentsByCategory.filter(cat => cat.status === "Completed").length;
                 const totalCount = school.assessmentsByCategory.length;
 
                 return (
@@ -866,21 +891,21 @@ export function SchoolPerformanceView({ assessments, refreshAssessments, isLoadi
                         </Button>
                       </TableCell>
                       <TableCell>
-                        <div className="flex items-center space-x-3">
-                          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-slate-50 border border-slate-100">
-                            <SchoolIcon className="h-4 w-4 text-slate-600" />
+                        <div className="flex items-center gap-3">
+                          <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-blue-50 border border-blue-200 flex-shrink-0">
+                            <SchoolIcon className="h-4 w-4 text-blue-600" />
                           </div>
-                          <div>
-                            <p className="font-medium text-slate-900">{school.school.name}</p>
+                          <div className="min-w-0">
+                            <p className="font-medium text-sm text-slate-900 leading-tight">{school.school.name}</p>
                             {school.school.code && (
-                              <p className="text-sm text-slate-500">{school.school.code}</p>
+                              <p className="text-xs text-slate-500 mt-0.5">{school.school.code}</p>
                             )}
                           </div>
                         </div>
                       </TableCell>
                       <TableCell className="text-center">
-                        <div className="flex items-center justify-center space-x-2">
-                          <span className="text-sm font-medium">{completedCount}/{totalCount}</span>
+                        <div className="flex items-center justify-center gap-2">
+                          <span className="text-sm font-semibold text-slate-700 tabular-nums">{completedCount}/{totalCount}</span>
                           <Progress value={(completedCount / totalCount) * 100} className="w-16 h-2" />
                         </div>
                       </TableCell>
@@ -1013,13 +1038,13 @@ export function SchoolPerformanceView({ assessments, refreshAssessments, isLoadi
                             <div className="bg-white rounded-lg border">
                               <Table>
                                 <TableHeader>
-                                  <TableRow className="bg-slate-50">
+                                  <TableRow className="bg-slate-50/80 border-b border-slate-200">
                                     <TableHead>Aspect</TableHead>
                                     <TableHead className="text-center">Status</TableHead>
                                     <TableHead className="text-center">Score</TableHead>
                                     <TableHead className="text-center">Completion Rate</TableHead>
-                                    <TableHead className="text-center">Critical</TableHead>
-                                    <TableHead className="text-center">Actions</TableHead>
+                                    <TableHead className="text-center">Intervention Required</TableHead>
+                                    <TableHead className="text-center pr-6">Actions</TableHead>
                                   </TableRow>
                                 </TableHeader>
                                 <TableBody>
@@ -1031,16 +1056,14 @@ export function SchoolPerformanceView({ assessments, refreshAssessments, isLoadi
                                       <React.Fragment key={categoryData.category}>
                                         <TableRow className="hover:bg-slate-50">
                                       <TableCell>
-                                        <div className="flex items-center space-x-3">
-                                          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-slate-50 border border-slate-100">
-                                            <div className="text-slate-600">
-                                              {getCategoryIcon(categoryData.category)}
-                                            </div>
+                                        <div className="flex items-center gap-3">
+                                          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-slate-50 border border-slate-200 flex-shrink-0">
+                                            {getCategoryIcon(categoryData.category)}
                                           </div>
-                                          <div>
-                                            <p className="font-medium text-sm">{categoryData.category}</p>
-                                            <p className="text-xs text-slate-500">
-                                              {categoryData.assessment.assignedTo?.[0]?.name || "Unassigned"}
+                                          <div className="min-w-0">
+                                            <p className="font-medium text-sm text-slate-900 leading-tight">{getAspectDisplayName(categoryData.category)}</p>
+                                            <p className="text-xs text-slate-500 mt-0.5">
+                                              {categoryData.assignedTo?.[0]?.name || "Unassigned"}
                                             </p>
                                           </div>
                                         </div>
@@ -1048,22 +1071,22 @@ export function SchoolPerformanceView({ assessments, refreshAssessments, isLoadi
                                       <TableCell className="text-center">
                                         <Badge 
                                           variant="outline" 
-                                          className={getStatusColor(categoryData.assessment.status)}
+                                          className={cn("text-xs font-medium", getStatusColor(categoryData.status))}
                                         >
-                                          {categoryData.assessment.status}
+                                          {categoryData.status}
                                         </Badge>
                                       </TableCell>
                                       <TableCell className="text-center">
-                                        {categoryData.averageScore > 0 ? (
+                                        {categoryData.overallScore > 0 ? (
                                               <div className="flex items-center justify-center space-x-2">
-                                          <Badge variant="outline" className={getScoreBadgeColor(categoryData.averageScore)}>
-                                            {categoryData.averageScore.toFixed(1)}
+                                          <Badge variant="outline" className={getScoreBadgeColor(categoryData.overallScore)}>
+                                            {categoryData.overallScore.toFixed(1)}
                                           </Badge>
                                                 {/* Category change indicator */}
                                                 {school.changesByCategory && school.changesByCategory.has(categoryData.category) && (() => {
                                                   const previousScore = school.changesByCategory.get(categoryData.category);
                                                   if (!previousScore || previousScore === 0) return null;
-                                                  const change = calculateChange(categoryData.averageScore, previousScore);
+                                                  const change = calculateChange(categoryData.overallScore, previousScore);
                                                   if (!change) return null;
                                                   return (
                                                     <Tooltip>
@@ -1140,41 +1163,33 @@ export function SchoolPerformanceView({ assessments, refreshAssessments, isLoadi
                                         )}
                                       </TableCell>
                                       <TableCell className="text-center">
-                                        <div className="flex items-center justify-center space-x-2">
-                                          <span className="text-xs font-medium">
-                                            {categoryData.assessment.completedStandards}/{categoryData.assessment.totalStandards}
+                                        <div className="flex items-center justify-center gap-2">
+                                          <span className="text-sm font-semibold text-slate-700 tabular-nums">
+                                            {categoryData.completedStandards}/{categoryData.totalStandards}
                                           </span>
                                           <Progress 
-                                            value={(categoryData.assessment.completedStandards / categoryData.assessment.totalStandards) * 100} 
-                                            className="w-12 h-1.5"
+                                            value={(categoryData.completedStandards / categoryData.totalStandards) * 100} 
+                                            className="w-14 h-2"
                                           />
                                         </div>
                                       </TableCell>
-                                                                             <TableCell className="text-center">
-                                         {categoryData.criticalStandardsCount > 0 ? (
+                                                                                                                                                           <TableCell className="text-center">
+                                         {categoryData.overallScore && categoryData.overallScore <= 1.5 && categoryData.status === 'Completed' ? (
                                            <Tooltip>
                                              <TooltipTrigger asChild>
                                                <div className="flex items-center justify-center space-x-1 cursor-help">
                                                  <AlertTriangle className="h-3 w-3 text-rose-600" />
                                                  <span className="text-sm font-medium text-rose-700">
-                                                   {categoryData.criticalStandardsCount}
+                                                   ⚠️
                                                  </span>
                                                </div>
                                              </TooltipTrigger>
                                              <TooltipContent side="left" className="max-w-sm">
                                                <div className="space-y-1">
-                                                 <p className="font-medium text-rose-800">Critical Standards:</p>
-                                                 {categoryData.assessment.standards
-                                                      ?.filter(s => s.rating === 1)
-                                                   .slice(0, 3)
-                                                   .map(standard => (
-                                                     <div key={standard.id} className="text-xs">
-                                                       <span className="font-medium">{standard.code}:</span> {standard.title}
-                                                     </div>
-                                                   ))}
-                                                 {categoryData.criticalStandardsCount > 3 && (
-                                                   <p className="text-xs text-slate-600">+{categoryData.criticalStandardsCount - 3} more...</p>
-                                                 )}
+                                                 <p className="font-medium text-rose-800">Low Performance Detected</p>
+                                                 <p className="text-xs text-slate-600">
+                                                   Score: {categoryData.overallScore.toFixed(1)} - Review this assessment for potential intervention needs
+                                                 </p>
                                                </div>
                                              </TooltipContent>
                                            </Tooltip>
@@ -1182,15 +1197,15 @@ export function SchoolPerformanceView({ assessments, refreshAssessments, isLoadi
                                            <span className="text-slate-400 text-sm">—</span>
                                          )}
                                        </TableCell>
-                                      <TableCell className="text-center">
+                                      <TableCell className="text-center pr-6">
                                         <Button 
-                                          variant="ghost" 
+                                          asChild 
+                                          variant="outline" 
                                           size="sm" 
-                                          asChild
-                                          className="h-7 px-2"
+                                          className="h-8 px-3"
                                         >
-                                          <Link to={`/assessments/${categoryData.assessment.id}?view=admin`}>
-                                            <Eye className="mr-1 h-3 w-3" />
+                                          <Link to={`/assessments/${categoryData.id}?view=admin`}>
+                                            <Eye className="mr-1.5 h-3.5 w-3.5" />
                                             View
                                           </Link>
                                         </Button>

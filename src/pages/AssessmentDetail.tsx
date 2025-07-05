@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useMemo } from "react";
 import { useParams, useNavigate, Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import {
@@ -72,6 +72,7 @@ import {
 } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
 import { FileUpload } from "@/components/ui/file-upload";
+import { assessmentService } from "@/services/enhanced-assessment-service";
 
 // Evidence Cell Component with smart text handling
 const EvidenceCell = ({ evidence }: { evidence: string }) => {
@@ -112,12 +113,12 @@ export function AssessmentDetailPage() {
   const isAdminView = searchParams.get('view') === 'admin' || role === 'mat-admin';
   
   // 🚀 OPTIMIZED: Using enhanced assessment hook with caching and automatic refresh
-  const { 
-    assessment, 
-    isLoading, 
-    error, 
-    refreshAssessment 
-  } = useAssessment(id || '');
+      const { 
+      assessment, 
+      isLoading, 
+      error, 
+      refreshAssessment
+    } = useAssessment(id || '');
   
   // Legacy fetchAssessment function for compatibility (just calls refreshAssessment)
   const fetchAssessment = useCallback(async (showLoading = true) => {
@@ -382,8 +383,9 @@ export function AssessmentDetailPage() {
 
       await submitAssessment(id, standards);
       
-      // No need to refetch - the save operation confirms data is persisted
-      // and we already have the latest state in our local forms
+      // Force refresh of assessments cache to ensure immediate updates
+      await assessmentService.refreshAllData();
+      
       toast({
         title: "Progress saved",
         description: `Successfully saved progress for ${standards.length} standard${standards.length > 1 ? 's' : ''}`,
@@ -404,52 +406,36 @@ export function AssessmentDetailPage() {
   const handleSubmit = async () => {
     if (!assessment || !id) return;
     
+    const standardIds = assessment.standards?.map(s => s.id) || [];
+    const unratedStandards = standardIds.filter(id => ratings[id] === null || ratings[id] === undefined);
+    
+    if (unratedStandards.length > 0) {
+      toast({
+        title: "Cannot submit",
+        description: "Please rate all standards before submitting the assessment.",
+        variant: "destructive",
+      });
+      return;
+    }
+
     setSaving(true);
     try {
-      // Convert the ratings and evidence into the format expected by the new API
-      const standards = Object.entries(ratings)
-        .filter(([standardId, rating]) => rating !== null)
-        .map(([standardId, rating]) => ({
-          standardId,
-          rating,
-          evidence: evidence[standardId] || '',
-        }));
-
-      if (standards.length === 0) {
-        toast({
-          title: "Cannot submit",
-          description: "Please rate all standards before submitting the assessment.",
-          variant: "destructive",
-        });
-        return;
-      }
-      
-      // Check if all standards have ratings for submission
-      const totalStandards = assessment.standards?.length || 0;
-      if (standards.length < totalStandards) {
-        toast({
-          title: "Cannot submit",
-          description: `Please rate all ${totalStandards} standards before submitting. Currently ${standards.length} are rated.`,
-          variant: "destructive",
-        });
-        return;
-      }
+      const standards = standardIds.map(standardId => ({
+        standardId,
+        rating: ratings[standardId] || null,
+        evidence: evidence[standardId] || '',
+      }));
 
       await submitAssessment(id, standards);
       
-      // For submission, we do want to refetch to get updated status
-      // but without showing the loading spinner to avoid the "reload" effect
-      await fetchAssessment(false);
+      // Force refresh of assessments cache to ensure immediate updates
+      await assessmentService.refreshAllData();
+      
       setShowSuccessDialog(true);
-      toast({
-        title: "Assessment submitted",
-        description: "Your assessment has been submitted successfully",
-        variant: "default",
-      });
     } catch (error) {
       console.error('Submit error:', error);
       toast({
-        title: "Submission failed",
+        title: "Submit failed",
         description: "There was an error submitting your assessment. Please try again.",
         variant: "destructive",
       });

@@ -52,13 +52,19 @@ This document provides a functional description of the frontend components in th
             - Displays a tailored view for the department head.
             - Shows a summary of overdue and in-progress assessments.
             - Provides a filterable table view of their assessments.
-            - Filtering: By search term, category, status, and school (if they are associated with multiple).
-            - Table Display: Shows assessment name, school, category, progress, due date, status, and action buttons (View/Continue).
+            - **Table Column Order**: School → Aspect → Status → Progress → Due Date → Actions
+            - **Table Design Patterns**:
+                - School cells: 8x8 icon container with bg-slate-50
+                - Aspect cells: 8x8 icon container showing category with name/description
+                - Status badges: variant="outline" with color-coded backgrounds
+                - Progress cells: Numeric display with Progress bar (w-16)
+                - Action buttons: variant="outline" h-8 px-3 with icons (Eye/ChevronRight)
+            - Filtering: By search term, category, status, and school (3 filters in single row on desktop).
             - Status indicators and colors are used for clarity.
-    - State Management (for Department Head view): `searchTerm`, `categoryFilter`, `statusFilter`, `schoolFilter`, `view` (though `view` state for cards/table seems to be primarily for `MatAdminAssessmentsView`).
+    - State Management (for Department Head view): `searchTerm`, `categoryFilter`, `statusFilter`, `schoolFilter`, `sortConfig`.
     - Data: Uses `mockAssessmentsAdmin` or `mockAssessmentsForDeptHead` based on role.
-    - UI Components: `Badge`, `Button`, `Card`, `Table`, `Input`, `Select`.
-    - Helper Functions: `getStatusColor`, `getStatusIcon` for styling based on assessment status.
+    - UI Components: `Badge`, `Button`, `Card`, `Table`, `Input`, `Select`, `Progress`, `SortableTableHead`.
+    - Helper Functions: `getStatusColor`, `getStatusIcon`, `getCategoryIcon` for consistent styling.
 
 ### `src/pages/AssessmentDetail.tsx`
 - **Description:** This page displays the detailed view of a specific assessment. Its content and functionality adapt based on the user's role (MAT Administrator vs. School Department Head) and the assessment's status. Department heads can interact with the assessment to provide ratings and evidence for standards, while MAT admins typically see a read-only view of completed assessments.
@@ -341,18 +347,22 @@ This section details the reusable UI components, many of which are based on Radi
     - Styling: Uses `cva` for side variants, controlling slide-in/out animations and positioning.
 
 ### `src/components/ui/table.tsx`
-- **Description:** A set of components for rendering styled HTML tables.
+- **Description:** A set of components for rendering styled HTML tables with enhanced UX design.
 - **Key Properties/Functionality:**
     - Exports:
         - `Table`: The `<table>` element wrapper, typically within a `div` for overflow handling.
-        - `TableHeader`: The `<thead>` element.
+        - `TableHeader`: The `<thead>` element with border styling.
         - `TableBody`: The `<tbody>` element.
         - `TableFooter`: The `<tfoot>` element.
-        - `TableRow`: The `<tr>` element.
-        - `TableHead`: The `<th>` element (for header cells).
-        - `TableCell`: The `<td>` element (for body/footer cells).
+        - `TableRow`: The `<tr>` element with hover states.
+        - `TableHead`: The `<th>` element with enhanced styling: `h-12 px-4 py-3 font-semibold text-xs uppercase tracking-wider text-slate-600`.
+        - `TableCell`: The `<td>` element with consistent padding: `px-4 py-3`.
         - `TableCaption`: The `<caption>` element.
-    - Styling: Provides consistent padding, borders, and hover states for table elements.
+    - **Recent UX Improvements**:
+        - Increased padding from 8px to 16px for better readability
+        - Headers use uppercase with wider letter spacing for visual hierarchy
+        - Consistent vertical spacing with h-12 headers and py-3 cells
+        - Professional typography with font-semibold headers
 
 ### `src/components/ui/tabs.tsx`
 - **Description:** Components for creating tabbed interfaces, allowing users to switch between different views or sections of content. Based on Radix UI's Tabs primitive.

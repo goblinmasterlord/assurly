@@ -30,13 +30,22 @@ import {
   CheckCircle2, 
   ChevronRight, 
   Clock,
+  Eye,
   Filter, 
   Layers,
   ListChecks, 
   PlusCircle, 
   School as SchoolIcon, 
   Search,
-  XCircle
+  XCircle,
+  BookOpen,
+  Users,
+  DollarSign,
+  Building,
+  Shield,
+  Monitor,
+  Settings,
+  ClipboardCheck
 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -274,6 +283,27 @@ export function AssessmentsPage() {
     return termFilteredAssessments.filter(a => a.status === "In Progress").length;
   }, [termFilteredAssessments]);
   
+  const getCategoryIcon = (category: string) => {
+    switch (category) {
+      case "education":
+        return <BookOpen className="h-4 w-4" />;
+      case "hr":
+        return <Users className="h-4 w-4" />;
+      case "finance":
+        return <DollarSign className="h-4 w-4" />;
+      case "estates":
+        return <Building className="h-4 w-4" />;
+      case "governance":
+        return <Shield className="h-4 w-4" />;
+      case "is":
+        return <Monitor className="h-4 w-4" />;
+      case "it":
+        return <Settings className="h-4 w-4" />;
+      default:
+        return <ClipboardCheck className="h-4 w-4" />;
+    }
+  };
+
   const getStatusColor = (status: string) => {
     switch (status) {
       case "Completed":
@@ -381,13 +411,13 @@ export function AssessmentsPage() {
               value: searchTerm,
               onChange: setSearchTerm
             },
-            ...(uniqueSchools.length > 1 ? [{
+            {
               type: 'multiselect' as const,
               placeholder: 'Schools',
               value: schoolFilter,
               onChange: setSchoolFilter,
               options: schoolOptions
-            }] : []),
+            },
             {
               type: 'multiselect' as const,
               placeholder: 'Aspects',
@@ -410,15 +440,7 @@ export function AssessmentsPage() {
           <CardContent className="p-0">
             <Table>
               <TableHeader>
-                <TableRow className="bg-slate-50">
-                  <SortableTableHead 
-                    className="py-3"
-                    sortKey="assessment"
-                    currentSort={sortConfig}
-                    onSort={handleSort}
-                  >
-                    Rating
-                  </SortableTableHead>
+                <TableRow className="bg-slate-50/80 border-b border-slate-200">
                   <SortableTableHead 
                     sortKey="school"
                     currentSort={sortConfig}
@@ -434,27 +456,30 @@ export function AssessmentsPage() {
                     Aspect
                   </SortableTableHead>
                   <SortableTableHead 
-                    sortKey="completion"
-                    currentSort={sortConfig}
-                    onSort={handleSort}
-                  >
-                    Completion Rate
-                  </SortableTableHead>
-                  <SortableTableHead 
-                    sortKey="dueDate"
-                    currentSort={sortConfig}
-                    onSort={handleSort}
-                  >
-                    Due Date
-                  </SortableTableHead>
-                  <SortableTableHead 
+                    className="text-center"
                     sortKey="status"
                     currentSort={sortConfig}
                     onSort={handleSort}
                   >
                     Status
                   </SortableTableHead>
-                  <TableHead className="text-right">Actions</TableHead>
+                  <SortableTableHead 
+                    className="text-center"
+                    sortKey="completion"
+                    currentSort={sortConfig}
+                    onSort={handleSort}
+                  >
+                    Progress
+                  </SortableTableHead>
+                  <SortableTableHead 
+                    className="text-center"
+                    sortKey="dueDate"
+                    currentSort={sortConfig}
+                    onSort={handleSort}
+                  >
+                    Due Date
+                  </SortableTableHead>
+                  <TableHead className="text-right pr-6">Actions</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -483,34 +508,43 @@ export function AssessmentsPage() {
                   paginatedAssessments.map((assessment) => (
                     <TableRow key={assessment.id} className="hover:bg-slate-50">
                       <TableCell>
-                        <div className="space-y-1">
-                          <p className="font-medium text-slate-900">
-                            {assessment.name}
-                          </p>
-                          <p className="text-sm text-slate-500">
-                            {assessment.category}
-                          </p>
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        <span className="text-sm text-slate-700">
-                          {assessment.school.name}
-                        </span>
-                      </TableCell>
-                      <TableCell>
-                        <div className="flex items-center gap-2">
-                          <span className="text-sm">
-                            {getAspectDisplayName(assessment.category)}
+                        <div className="flex items-center gap-3">
+                          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-slate-50 border border-slate-200 flex-shrink-0">
+                            <SchoolIcon className="h-4 w-4 text-slate-600" />
+                          </div>
+                          <span className="text-sm text-slate-700 font-medium truncate">
+                            {assessment.school.name}
                           </span>
                         </div>
                       </TableCell>
                       <TableCell>
-                        <div className="flex items-center justify-center space-x-2">
-                          <span className="text-sm font-medium">{assessment.completedStandards}/{assessment.totalStandards}</span>
+                        <div className="flex items-center gap-3">
+                          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-slate-50 border border-slate-200 flex-shrink-0">
+                            {getCategoryIcon(assessment.category)}
+                          </div>
+                          <div className="min-w-0">
+                            <p className="font-medium text-sm text-slate-900 leading-tight">
+                              {getAspectDisplayName(assessment.category)}
+                            </p>
+                            <p className="text-xs text-slate-500 mt-0.5">
+                              {assessment.name}
+                            </p>
+                          </div>
+                        </div>
+                      </TableCell>
+                      <TableCell className="text-center">
+                        <Badge variant="outline" className={cn("gap-1.5 font-medium text-xs", getStatusColor(assessment.status))}>
+                          {getStatusIcon(assessment.status)}
+                          {assessment.status}
+                        </Badge>
+                      </TableCell>
+                      <TableCell className="text-center">
+                        <div className="flex items-center justify-center gap-2">
+                          <span className="text-sm font-semibold text-slate-700 tabular-nums">{assessment.completedStandards}/{assessment.totalStandards}</span>
                           <Progress value={(assessment.completedStandards / assessment.totalStandards) * 100} className="w-16 h-2" />
                         </div>
                       </TableCell>
-                      <TableCell>
+                      <TableCell className="text-center">
                         {assessment.dueDate ? (
                           <div 
                             className={cn(
@@ -528,16 +562,20 @@ export function AssessmentsPage() {
                           <span className="text-sm text-muted-foreground">No deadline</span>
                         )}
                       </TableCell>
-                      <TableCell>
-                        <Badge className={cn("gap-1 font-medium", getStatusColor(assessment.status))}>
-                          {getStatusIcon(assessment.status)}
-                          {assessment.status}
-                        </Badge>
-                      </TableCell>
-                      <TableCell className="text-right">
-                        <Button asChild size="sm" className="h-8">
+                      <TableCell className="text-right pr-6">
+                        <Button asChild variant="outline" size="sm" className="h-8 px-3">
                           <Link to={`/assessments/${assessment.id}`}>
-                            {assessment.status === "Completed" ? "View" : "Continue"}
+                            {assessment.status === "Completed" ? (
+                              <>
+                                <Eye className="mr-1.5 h-3.5 w-3.5" />
+                                View
+                              </>
+                            ) : (
+                              <>
+                                <ChevronRight className="mr-1 h-3.5 w-3.5" />
+                                Continue
+                              </>
+                            )}
                           </Link>
                         </Button>
                       </TableCell>

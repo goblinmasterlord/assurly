@@ -1,9 +1,10 @@
-import React from 'react'
-import { Filter, Search } from 'lucide-react'
+import React, { useState } from 'react'
+import { Filter, Search, ChevronDown, ChevronUp, TrendingUp, Users, School, BookOpen, DollarSign, Building, Shield, Monitor, Settings, AlertTriangle, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { MultiSelect, type MultiSelectOption } from '@/components/ui/multi-select'
+import { cn } from '@/lib/utils'
 
 interface FilterConfig {
   type: 'search' | 'multiselect' | 'checkbox'
@@ -14,6 +15,7 @@ interface FilterConfig {
   options?: MultiSelectOption[]
   id?: string
   className?: string
+  icon?: React.ReactNode
 }
 
 interface FilterBarProps {
@@ -21,7 +23,7 @@ interface FilterBarProps {
   filters: FilterConfig[]
   onClearAll?: () => void
   className?: string
-  layout?: 'mat-admin' | 'department-head' // Different layouts for different views
+  layout?: 'mat-admin' | 'department-head'
 }
 
 export function FilterBar({ 
@@ -31,6 +33,8 @@ export function FilterBar({
   className,
   layout = 'department-head'
 }: FilterBarProps) {
+  const [isSearchExpanded, setIsSearchExpanded] = useState(false)
+  
   // Check if any filters have values to show clear all button
   const hasActiveFilters = filters.some(filter => {
     if (filter.type === 'search' && typeof filter.value === 'string') {
@@ -45,33 +49,74 @@ export function FilterBar({
     return false
   })
 
+  // Auto-expand search if there's a search value
+  React.useEffect(() => {
+    const searchFilter = filters.find(f => f.type === 'search')
+    if (searchFilter && typeof searchFilter.value === 'string' && searchFilter.value.length > 0) {
+      setIsSearchExpanded(true)
+    }
+  }, [filters])
+
+  const getFilterIcon = (placeholder?: string) => {
+    switch (placeholder?.toLowerCase()) {
+      case 'schools':
+        return <School className="h-4 w-4 text-slate-500" />
+      case 'aspects':
+      case 'aspect':
+        return <BookOpen className="h-4 w-4 text-slate-500" />
+      case 'status':
+        return <TrendingUp className="h-4 w-4 text-slate-500" />
+      case 'performance':
+        return <TrendingUp className="h-4 w-4 text-slate-500" />
+      default:
+        return <Filter className="h-4 w-4 text-slate-500" />
+    }
+  }
+
   const renderFilter = (filter: FilterConfig, index: number) => {
     switch (filter.type) {
       case 'search':
+        if (!isSearchExpanded) return null
         return (
-          <div key={index} className={filter.className || ""}>
+          <div key={index} className={cn("col-span-full", filter.className)}>
             <div className="relative">
               <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-slate-400 h-4 w-4" />
               <Input
                 placeholder={filter.placeholder || "Search..."}
                 value={filter.value as string || ""}
                 onChange={(e) => filter.onChange?.(e.target.value)}
-                className="pl-10 h-9"
+                className="pl-10 h-9 bg-white"
               />
+              <Button
+                variant="ghost"
+                size="sm"
+                className="absolute right-1 top-1/2 transform -translate-y-1/2 h-7 w-7 p-0 hover:bg-slate-100"
+                onClick={() => {
+                  setIsSearchExpanded(false)
+                  filter.onChange?.("")
+                }}
+              >
+                <X className="h-3 w-3" />
+              </Button>
             </div>
           </div>
         )
       
       case 'multiselect':
         return (
-          <MultiSelect
-            key={index}
-            options={filter.options || []}
-            selected={filter.value as string[] || []}
-            onChange={filter.onChange || (() => {})}
-            placeholder={filter.placeholder || "Select..."}
-            className="h-9 w-full"
-          />
+          <div key={index} className="flex flex-col space-y-2">
+            <div className="flex items-center space-x-2">
+              {getFilterIcon(filter.placeholder)}
+              <span className="text-sm font-medium text-slate-600">{filter.placeholder}</span>
+            </div>
+            <MultiSelect
+              options={filter.options || []}
+              selected={filter.value as string[] || []}
+              onChange={filter.onChange || (() => {})}
+              placeholder={`Select ${filter.placeholder?.toLowerCase()}...`}
+              className="h-9 w-full"
+            />
+          </div>
         )
       
       case 'checkbox':
@@ -87,9 +132,10 @@ export function FilterBar({
               />
               <label 
                 htmlFor={filter.id} 
-                className="text-sm font-medium text-slate-700 whitespace-nowrap cursor-pointer"
+                className="text-sm font-medium text-slate-700 whitespace-nowrap cursor-pointer flex items-center space-x-2"
               >
-                {filter.label}
+                <AlertTriangle className="h-4 w-4 text-rose-500" />
+                <span>{filter.label}</span>
               </label>
             </div>
           </div>
@@ -100,63 +146,83 @@ export function FilterBar({
     }
   }
 
-  // Get grid layout based on view type
+  // Get grid layout based on view type and filter count
   const getGridLayout = () => {
+    const multiselectCount = filters.filter(f => f.type === 'multiselect').length
+    
     if (layout === 'mat-admin') {
-      // MAT admin: Search (larger) + 3 filters + checkbox
-      return "grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-12 gap-4"
-    } else {
-      // Department head: Search + 2-3 filters (no checkbox)
-      const filterCount = filters.filter(f => f.type === 'multiselect').length
-      if (filterCount === 2) {
-        return "grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-8 gap-4"
-      } else {
-        return "grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-10 gap-4"
+      // MAT admin: 4 dropdowns + 1 checkbox
+      if (multiselectCount === 4) {
+        return "grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4"
+      } else if (multiselectCount === 3) {
+        return "grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4"
       }
+      return "grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4"
+    } else {
+      // Department head: 3 dropdowns should be in single row
+      return "grid grid-cols-1 md:grid-cols-3 gap-4"
     }
   }
 
-  // Get column spans for each element type
-  const getColumnSpan = (filter: FilterConfig, index: number) => {
-    if (layout === 'mat-admin') {
-      if (filter.type === 'search') return 'lg:col-span-4'
-      if (filter.type === 'multiselect') return 'lg:col-span-2'
-      if (filter.type === 'checkbox') return 'lg:col-span-2'
-    } else {
-      // department-head
-      if (filter.type === 'search') return 'lg:col-span-4'
-      if (filter.type === 'multiselect') {
-        const multiselectCount = filters.filter(f => f.type === 'multiselect').length
-        return multiselectCount === 2 ? 'lg:col-span-2' : 'lg:col-span-2'
-      }
-    }
-    return ''
-  }
+  const searchFilter = filters.find(f => f.type === 'search')
+  const otherFilters = filters.filter(f => f.type !== 'search')
 
   return (
     <Card className={className}>
       <CardHeader className="pb-4">
         <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-3">
             <Filter className="h-4 w-4 text-slate-600" />
             <CardTitle className="text-base font-semibold">{title}</CardTitle>
           </div>
-          {hasActiveFilters && onClearAll && (
-            <Button 
-              variant="ghost" 
-              size="sm" 
-              onClick={onClearAll}
-              className="text-xs text-slate-500 hover:text-slate-700 h-7 px-2"
-            >
-              Clear All
-            </Button>
-          )}
+          
+          <div className="flex items-center gap-2">
+            {/* Search Toggle Button */}
+            {searchFilter && (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setIsSearchExpanded(!isSearchExpanded)}
+                className={cn(
+                  "h-8 px-2 text-xs transition-all duration-200",
+                  isSearchExpanded ? "bg-slate-100 text-slate-700" : "text-slate-500 hover:text-slate-700"
+                )}
+              >
+                <Search className="h-3 w-3 mr-1" />
+                Search
+                {isSearchExpanded ? (
+                  <ChevronUp className="h-3 w-3 ml-1" />
+                ) : (
+                  <ChevronDown className="h-3 w-3 ml-1" />
+                )}
+              </Button>
+            )}
+            
+            {hasActiveFilters && onClearAll && (
+              <Button 
+                variant="ghost" 
+                size="sm" 
+                onClick={onClearAll}
+                className="text-xs text-slate-500 hover:text-slate-700 h-7 px-2"
+              >
+                Clear all
+              </Button>
+            )}
+          </div>
         </div>
       </CardHeader>
-      <CardContent className="pt-0">
+      <CardContent className="pt-0 space-y-4">
+        {/* Search Filter (when expanded) */}
+        {isSearchExpanded && searchFilter && (
+          <div className="animate-in slide-in-from-top-2 duration-200">
+            {renderFilter(searchFilter, 0)}
+          </div>
+        )}
+        
+        {/* Other Filters */}
         <div className={getGridLayout()}>
-          {filters.map((filter, index) => (
-            <div key={index} className={getColumnSpan(filter, index)}>
+          {otherFilters.map((filter, index) => (
+            <div key={index}>
               {renderFilter(filter, index)}
             </div>
           ))}
