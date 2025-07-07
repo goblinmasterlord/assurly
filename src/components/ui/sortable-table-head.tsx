@@ -41,7 +41,8 @@ const SortableTableHead = React.forwardRef<HTMLTableCellElement, SortableTableHe
           variant="ghost"
           onClick={handleSort}
           className={cn(
-            "h-10 px-2 font-medium text-muted-foreground hover:text-foreground justify-start w-full",
+            "h-12 px-4 font-semibold text-xs uppercase tracking-wider text-slate-600 hover:text-foreground w-full",
+            className?.includes("text-center") ? "justify-center" : className?.includes("text-right") ? "justify-end" : "justify-start",
             isActive && "text-foreground"
           )}
         >

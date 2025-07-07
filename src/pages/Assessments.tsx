@@ -19,11 +19,10 @@ import {
 } from "@/components/ui/table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useUser } from "@/contexts/UserContext";
-import {
-  mockSchools,
-} from "@/lib/mock-data";
 // import { getAssessments } from "@/services/assessment-service"; // REPLACED with optimized hook
 import { useAssessments } from "@/hooks/use-assessments";
+import { getSchools } from "@/services/assessment-service";
+import type { School } from "@/types/assessment";
 import { 
   AlertTriangle,
   Calendar, 
@@ -86,6 +85,27 @@ export function AssessmentsPage() {
     key: "",
     direction: null
   });
+  const [schools, setSchools] = useState<School[]>([]);
+  const [schoolsLoading, setSchoolsLoading] = useState(true);
+  
+  // Fetch schools from API
+  useEffect(() => {
+    const fetchSchools = async () => {
+      try {
+        setSchoolsLoading(true);
+        const schoolsData = await getSchools();
+        setSchools(schoolsData);
+      } catch (error) {
+        console.error('Failed to fetch schools:', error);
+        // Fallback to empty array to prevent crashes
+        setSchools([]);
+      } finally {
+        setSchoolsLoading(false);
+      }
+    };
+    
+    fetchSchools();
+  }, []);
   
   // Get available terms from assessments (for department head view)
   const availableTerms = useMemo(() => {
@@ -138,12 +158,12 @@ export function AssessmentsPage() {
     );
   }, [assessments, selectedTerm, isMatAdmin]);
   
-  const uniqueSchools = useMemo(() => {
-    const schools = [...new Set(termFilteredAssessments.map(a => a.school.id))];
-    return mockSchools.filter(school => schools.includes(school.id));
-  }, [termFilteredAssessments]);
-  
-  const uniqueCategories = [...new Set(termFilteredAssessments.map(a => a.category))];
+  // Show all schools from API - same as MAT admin view
+  const schoolOptions: MultiSelectOption[] = schools.map(school => ({
+    label: school.name,
+    value: school.id,
+    icon: <SchoolIcon className="h-4 w-4" />
+  }));
   
   // Create filter options for multi-select components - SHOW ALL ASPECTS
   const categoryOptions: MultiSelectOption[] = assessmentCategories.map(categoryInfo => ({
@@ -157,12 +177,6 @@ export function AssessmentsPage() {
     { label: "Not Started", value: "not-started" },
     { label: "Overdue", value: "overdue" }
   ];
-
-  const schoolOptions: MultiSelectOption[] = uniqueSchools.map(school => ({
-    label: school.name,
-    value: school.id,
-    icon: <SchoolIcon className="h-4 w-4" />
-  }));
   
   // Pagination state
   const [currentPage, setCurrentPage] = useState(1);
@@ -284,22 +298,30 @@ export function AssessmentsPage() {
   }, [termFilteredAssessments]);
   
   const getCategoryIcon = (category: string) => {
-    switch (category) {
+    // Normalize category to lowercase to handle any case variations
+    const normalizedCategory = category.toLowerCase().trim();
+    
+    switch (normalizedCategory) {
       case "education":
         return <BookOpen className="h-4 w-4" />;
       case "hr":
+      case "human resources":
         return <Users className="h-4 w-4" />;
       case "finance":
+      case "finance & procurement":
         return <DollarSign className="h-4 w-4" />;
       case "estates":
         return <Building className="h-4 w-4" />;
       case "governance":
         return <Shield className="h-4 w-4" />;
       case "is":
+      case "it & information services":
         return <Monitor className="h-4 w-4" />;
       case "it":
+      case "it (digital aspects)":
         return <Settings className="h-4 w-4" />;
       default:
+        console.warn(`Unknown category: "${category}" (normalized: "${normalizedCategory}")`);
         return <ClipboardCheck className="h-4 w-4" />;
     }
   };
@@ -357,6 +379,7 @@ export function AssessmentsPage() {
           assessments={assessments} 
           refreshAssessments={refreshAssessments} 
           isLoading={isLoading}
+          isRefreshing={isRefreshing}
         />
         {/* 🚀 OPTIMIZED: Background refresh indicator */}
         {isRefreshing && (
@@ -445,15 +468,17 @@ export function AssessmentsPage() {
                     sortKey="school"
                     currentSort={sortConfig}
                     onSort={handleSort}
+                    className="text-left"
                   >
-                    School
+                    SCHOOL
                   </SortableTableHead>
                   <SortableTableHead 
                     sortKey="aspect"
                     currentSort={sortConfig}
                     onSort={handleSort}
+                    className="text-left"
                   >
-                    Aspect
+                    ASPECT
                   </SortableTableHead>
                   <SortableTableHead 
                     className="text-center"
@@ -461,7 +486,7 @@ export function AssessmentsPage() {
                     currentSort={sortConfig}
                     onSort={handleSort}
                   >
-                    Status
+                    STATUS
                   </SortableTableHead>
                   <SortableTableHead 
                     className="text-center"
@@ -469,7 +494,7 @@ export function AssessmentsPage() {
                     currentSort={sortConfig}
                     onSort={handleSort}
                   >
-                    Progress
+                    PROGRESS
                   </SortableTableHead>
                   <SortableTableHead 
                     className="text-center"
@@ -477,9 +502,9 @@ export function AssessmentsPage() {
                     currentSort={sortConfig}
                     onSort={handleSort}
                   >
-                    Due Date
+                    DUE DATE
                   </SortableTableHead>
-                  <TableHead className="text-right pr-6">Actions</TableHead>
+                  <TableHead className="text-right pr-6">ACTIONS</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>

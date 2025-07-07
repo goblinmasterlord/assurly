@@ -1,0 +1,28 @@
+# Assurly Assessment Management System
+# Private application - No crawling allowed
+
+User-agent: *
+Disallow: /
+Crawl-delay: 86400
+
+# Specific bot blocks
+User-agent: Googlebot
+Disallow: /
+
+User-agent: Bingbot
+Disallow: /
+
+User-agent: Slurp
+Disallow: /
+
+User-agent: DuckDuckBot
+Disallow: /
+
+User-agent: Baiduspider
+Disallow: /
+
+User-agent: YandexBot
+Disallow: /
+
+# No sitemap available
+Sitemap:

@@ -38,15 +38,11 @@ import type { Assessment, AssessmentCategory, SchoolPerformance, AcademicTerm, S
 import { cn } from "@/lib/utils";
 import { 
   AlertTriangle, 
-  Calendar, 
   CheckCircle2, 
   ChevronDown,
   ChevronRight, 
   Clock,
-  Filter,
   School as SchoolIcon, 
-  Search,
-  XCircle,
   Eye,
   BookOpen,
   ClipboardCheck,
@@ -56,24 +52,23 @@ import {
   Shield,
   Monitor,
   Settings,
-  TrendingUp,
-  TrendingDown,
-  AlertCircle,
   ArrowUp,
   ArrowDown,
-  Minus
+  Loader2
 } from "lucide-react";
 import { AssessmentInvitationSheet } from "@/components/AssessmentInvitationSheet";
 import { MiniTrendChart, type TrendDataPoint } from "@/components/ui/mini-trend-chart";
 import { SchoolPerformanceTableSkeleton } from "@/components/ui/table-skeleton";
 import { getAspectDisplayName } from "@/lib/assessment-utils";
-import { assessmentCategories, mockSchools } from "@/lib/mock-data";
+import { assessmentCategories } from "@/lib/mock-data";
 import { FilterBar } from "@/components/ui/filter-bar";
+import { getSchools } from "@/services/assessment-service";
 
 type SchoolPerformanceViewProps = {
   assessments: Assessment[];
   refreshAssessments?: () => Promise<void>;
   isLoading?: boolean;
+  isRefreshing?: boolean;
 }
 
 // Helper type for historical data
@@ -83,7 +78,7 @@ type HistoricalData = {
   categoryScores: Map<AssessmentCategory, number>;
 }
 
-export function SchoolPerformanceView({ assessments, refreshAssessments, isLoading = false }: SchoolPerformanceViewProps) {
+export function SchoolPerformanceView({ assessments, refreshAssessments, isLoading = false, isRefreshing = false }: SchoolPerformanceViewProps) {
   
   const [searchTerm, setSearchTerm] = useState("");
   const [performanceFilter, setPerformanceFilter] = useState<string[]>([]);
@@ -93,12 +88,31 @@ export function SchoolPerformanceView({ assessments, refreshAssessments, isLoadi
   const [criticalFilter, setCriticalFilter] = useState<boolean>(false);
   const [invitationSheetOpen, setInvitationSheetOpen] = useState(false);
   const [expandedSchools, setExpandedSchools] = useState<Set<string>>(new Set());
-  const [expandedHistoric, setExpandedHistoric] = useState<Set<string>>(new Set());
   const [selectedTerm, setSelectedTerm] = useState<string>(""); // Will be set to first available term
   const [sortConfig, setSortConfig] = useState<{ key: string; direction: SortDirection }>({
     key: "",
     direction: null
   });
+  const [schools, setSchools] = useState<School[]>([]);
+  const [schoolsLoading, setSchoolsLoading] = useState(true);
+
+  // Fetch schools from API
+  useEffect(() => {
+    const fetchSchools = async () => {
+      try {
+        setSchoolsLoading(true);
+        const schoolsData = await getSchools();
+        setSchools(schoolsData);
+      } catch (error) {
+        console.error('Failed to fetch schools:', error);
+        setSchools([]);
+      } finally {
+        setSchoolsLoading(false);
+      }
+    };
+    
+    fetchSchools();
+  }, []);
 
   // Get available terms from assessments
   const availableTerms = useMemo(() => {
@@ -305,7 +319,7 @@ export function SchoolPerformanceView({ assessments, refreshAssessments, isLoadi
   }));
 
   const uniqueSchools = [...new Set(filteredByTermAssessments.map(a => a.school.id))];
-  const schoolOptions: MultiSelectOption[] = mockSchools
+  const schoolOptions: MultiSelectOption[] = schools
     .map((school: School) => ({
       label: school.name,
       value: school.id
@@ -330,7 +344,7 @@ export function SchoolPerformanceView({ assessments, refreshAssessments, isLoadi
 
   // Group assessments by school and calculate performance metrics
   const schoolPerformanceData = useMemo(() => {
-    const schoolMap = new Map<string, SchoolPerformance & { previousOverallScore?: number; changesByCategory?: Map<string, any> }>();
+    const schoolMap = new Map<string, SchoolPerformance & { previousOverallScore?: number; changesByCategory?: Map<string, any>; aspectsWithInterventionRequired?: Set<string> }>();
 
     // Process current term assessments
     filteredByTermAssessments.forEach(assessment => {
@@ -346,7 +360,8 @@ export function SchoolPerformanceView({ assessments, refreshAssessments, isLoadi
           completedAssessments: 0,
           totalAssessments: 0,
           previousOverallScore: undefined,
-          changesByCategory: new Map()
+          changesByCategory: new Map(),
+          aspectsWithInterventionRequired: new Set()
         });
       }
 
@@ -357,27 +372,11 @@ export function SchoolPerformanceView({ assessments, refreshAssessments, isLoadi
       if (assessment.status === 'Completed') {
         schoolData.completedAssessments++;
         
-        // Calculate critical standards from overallScore and totalStandards
-        // Since we don't have individual standards data in summaries, we estimate
-        let criticalCount = 0;
+        // Check if this aspect requires intervention (score <= 1.5 means it has 1-rated standards)
         if (assessment.overallScore && assessment.overallScore <= 1.5) {
-          // For very low scores, estimate critical standards
-          // If average score is 1.0-1.5, likely some standards are rated 1
-          const avgScore = assessment.overallScore;
-          const totalStandards = assessment.totalStandards;
-          
-          if (avgScore <= 1.2) {
-            // Very low score - estimate 60-80% of standards are critical
-            criticalCount = Math.round(totalStandards * 0.7);
-          } else if (avgScore <= 1.5) {
-            // Low score - estimate 30-50% of standards are critical
-            criticalCount = Math.round(totalStandards * 0.4);
-          }
+          schoolData.aspectsWithInterventionRequired!.add(assessment.category);
         }
         
-        
-
-        schoolData.criticalStandardsTotal += criticalCount;
         schoolData.overallScore += assessment.overallScore || 0;
         
         // Update last updated if this assessment is more recent
@@ -401,17 +400,48 @@ export function SchoolPerformanceView({ assessments, refreshAssessments, isLoadi
       });
     });
 
+    // Calculate previous term scores for each school
+    previousTermAssessments.forEach(assessment => {
+      const schoolId = assessment.school.id;
+      const schoolData = schoolMap.get(schoolId);
+      
+      if (schoolData && assessment.status === 'Completed' && assessment.overallScore) {
+        // Initialize previous score tracking if needed
+        if (!schoolData.previousOverallScore) {
+          schoolData.previousOverallScore = 0;
+          schoolData.changesByCategory = new Map();
+        }
+        
+        // Add to previous overall score sum
+        schoolData.previousOverallScore += assessment.overallScore;
+        
+        // Track previous score by category
+        schoolData.changesByCategory!.set(assessment.category, assessment.overallScore);
+      }
+    });
+
     // Calculate average scores for schools (only from completed assessments)
     schoolMap.forEach((schoolData, schoolId) => {
       if (schoolData.completedAssessments > 0) {
         schoolData.overallScore = schoolData.overallScore / schoolData.completedAssessments;
       }
       
+      // Calculate average previous overall score
+      if (schoolData.previousOverallScore && schoolData.previousOverallScore > 0) {
+        const prevCompletedCount = previousTermAssessments.filter(
+          a => a.school.id === schoolId && a.status === 'Completed'
+        ).length;
+        if (prevCompletedCount > 0) {
+          schoolData.previousOverallScore = schoolData.previousOverallScore / prevCompletedCount;
+        }
+      }
       
+      // Set the intervention required count to the number of aspects that need intervention
+      schoolData.criticalStandardsTotal = schoolData.aspectsWithInterventionRequired!.size;
     });
 
     return Array.from(schoolMap.values());
-  }, [filteredByTermAssessments]);
+  }, [filteredByTermAssessments, previousTermAssessments]);
 
   const handleSort = (key: string) => {
     setSortConfig(prev => ({
@@ -527,32 +557,33 @@ export function SchoolPerformanceView({ assessments, refreshAssessments, isLoadi
   };
 
   const getCategoryIcon = (category: string) => {
-    switch (category) {
-      case "Education":
+    // Handle both lowercase keys and display names
+    const normalizedCategory = category.toLowerCase();
+    
+    switch (normalizedCategory) {
+      case "education":
         return <BookOpen className="h-4 w-4" />;
-      case "Human Resources":
+      case "hr":
+      case "human resources":
         return <Users className="h-4 w-4" />;
-      case "Finance & Procurement":
+      case "finance":
+      case "finance & procurement":
         return <DollarSign className="h-4 w-4" />;
-      case "Estates":
+      case "estates":
         return <Building className="h-4 w-4" />;
-      case "Governance":
+      case "governance":
         return <Shield className="h-4 w-4" />;
-      case "IT & Information Services":
+      case "is":
+      case "it & information services":
         return <Monitor className="h-4 w-4" />;
-      case "IT (Digital Aspects)":
+      case "it":
+      case "it (digital aspects)":
         return <Settings className="h-4 w-4" />;
       default:
         return <ClipboardCheck className="h-4 w-4" />;
     }
   };
 
-  const getScoreColor = (score: number) => {
-    if (score >= 3.5) return "text-emerald-600";
-    if (score >= 2.5) return "text-indigo-600";
-    if (score >= 1.5) return "text-amber-600";
-    return "text-rose-600";
-  };
 
   const getScoreBadgeColor = (score: number) => {
     if (score >= 3.5) return "bg-emerald-50 text-emerald-700 border-emerald-200";
@@ -586,149 +617,8 @@ export function SchoolPerformanceView({ assessments, refreshAssessments, isLoadi
     setExpandedSchools(newExpanded);
   };
 
-  const toggleHistoricExpansion = (schoolId: string) => {
-    const newExpanded = new Set(expandedHistoric);
-    if (newExpanded.has(schoolId)) {
-      newExpanded.delete(schoolId);
-    } else {
-      newExpanded.add(schoolId);
-    }
-    setExpandedHistoric(newExpanded);
-  };
 
-  // Helper function to render historical data view button
-  const renderHistoricalButton = (schoolId: string, isSmall: boolean = false) => {
-    const hasHistoricalData = historicalTermsData.has(schoolId) && historicalTermsData.get(schoolId)!.length > 0;
-    const isExpanded = expandedHistoric.has(schoolId);
-    
-    if (!hasHistoricalData) {
-      return (
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <Button 
-              variant="ghost" 
-              size={isSmall ? "icon" : "sm"}
-              className={cn(
-                "opacity-40 cursor-not-allowed",
-                isSmall ? "h-5 w-5" : "h-6 w-6"
-              )}
-              disabled
-            >
-              <TrendingUp className={cn(isSmall ? "h-3 w-3" : "h-3.5 w-3.5")} />
-            </Button>
-          </TooltipTrigger>
-          <TooltipContent>
-            <p>No historical data available</p>
-          </TooltipContent>
-        </Tooltip>
-      );
-    }
 
-    return (
-      <Tooltip>
-        <TooltipTrigger asChild>
-          <Button 
-            variant="ghost" 
-            size={isSmall ? "icon" : "sm"}
-            className={cn(
-              "hover:bg-slate-100",
-              isSmall ? "h-5 w-5" : "h-6 w-6",
-              isExpanded && "bg-slate-100"
-            )}
-            onClick={(e) => {
-              e.stopPropagation();
-              toggleHistoricExpansion(schoolId);
-            }}
-          >
-            <TrendingUp className={cn(
-              isSmall ? "h-3 w-3" : "h-3.5 w-3.5",
-              isExpanded ? "text-indigo-600" : "text-slate-600"
-            )} />
-          </Button>
-        </TooltipTrigger>
-        <TooltipContent>
-          <p>{isExpanded ? 'Hide' : 'View'} historical performance</p>
-        </TooltipContent>
-      </Tooltip>
-    );
-  };
-
-  // Helper function to render historical data rows
-  const renderHistoricalDataRows = (schoolId: string, categoryData: any) => {
-    const historicalData = historicalTermsData.get(schoolId) || [];
-    if (historicalData.length === 0) return null;
-
-    // Get historical scores for this category
-    const categoryHistoricalScores = historicalData
-      .map(termData => ({
-        term: termData.term,
-        score: termData.categoryScores.get(categoryData.category) || 0
-      }))
-      .filter(item => item.score > 0);
-
-    if (categoryHistoricalScores.length === 0) {
-      return (
-        <TableRow className="bg-slate-25 border-l-4 border-l-slate-200">
-          <TableCell colSpan={6} className="py-3 text-center text-sm text-slate-500">
-            No historical data available for {getAspectDisplayName(categoryData.category)}
-          </TableCell>
-        </TableRow>
-      );
-    }
-
-    // Prepare trend data for the mini chart
-    const trendData: TrendDataPoint[] = categoryHistoricalScores.map(item => ({
-      term: item.term,
-      overallScore: item.score
-    }));
-
-    return (
-      <TableRow className="bg-slate-25 border-l-4 border-l-indigo-200">
-        <TableCell className="py-3">
-          <div className="flex items-center space-x-3 ml-8">
-            <div className="h-1 w-6 bg-slate-300 rounded"></div>
-            <div>
-              <p className="text-sm font-medium text-slate-700">Historical Performance</p>
-              <p className="text-xs text-slate-500">Previous {categoryHistoricalScores.length} term{categoryHistoricalScores.length > 1 ? 's' : ''}</p>
-            </div>
-          </div>
-        </TableCell>
-        <TableCell className="text-center py-3">
-          <span className="text-xs text-slate-500">—</span>
-        </TableCell>
-        <TableCell className="text-center py-3">
-          <div className="flex items-center justify-center space-x-4">
-            {/* Mini trend chart */}
-            <MiniTrendChart data={trendData} width={100} height={24} />
-            
-            {/* Historical scores */}
-            <div className="flex items-center space-x-3">
-              {categoryHistoricalScores.slice(0, 3).map((item, index) => {
-                const termParts = item.term.split(' ');
-                const termShort = termParts[0]?.slice(0, 3) + ' ' + termParts[1]?.slice(-2);
-                
-                return (
-                  <div key={index} className="text-center">
-                    <div className="text-xs font-medium text-slate-700">{item.score.toFixed(1)}</div>
-                    <div className="text-xs text-slate-400">{termShort}</div>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-        </TableCell>
-        <TableCell className="text-center py-3">
-          <span className="text-xs text-slate-500">—</span>
-        </TableCell>
-        <TableCell className="text-center py-3">
-          <span className="text-xs text-slate-500">—</span>
-        </TableCell>
-        <TableCell className="text-center py-3">
-          <span className="text-xs text-slate-500">—</span>
-        </TableCell>
-      </TableRow>
-    );
-  };
 
   return (
     <TooltipProvider>
@@ -809,7 +699,17 @@ export function SchoolPerformanceView({ assessments, refreshAssessments, isLoadi
         />
 
       {/* Schools Table */}
-      <Card>
+      <Card className="relative">
+        {/* Loading overlay when refreshing */}
+        {isRefreshing && !isLoading && (
+          <div className="absolute inset-0 bg-white/70 backdrop-blur-sm z-10 flex items-center justify-center rounded-lg">
+            <div className="flex items-center gap-2 bg-white px-4 py-2 rounded-lg shadow-sm border">
+              <Loader2 className="h-4 w-4 animate-spin text-slate-600" />
+              <span className="text-sm text-slate-600">Updating assessments...</span>
+            </div>
+          </div>
+        )}
+        
         <CardHeader>
           <CardTitle className="flex items-center space-x-2">
             <SchoolIcon className="h-5 w-5" />
@@ -828,8 +728,9 @@ export function SchoolPerformanceView({ assessments, refreshAssessments, isLoadi
                   sortKey="school"
                   currentSort={sortConfig}
                   onSort={handleSort}
+                  className="text-left"
                 >
-                  School
+                  SCHOOL
                 </SortableTableHead>
                 <SortableTableHead 
                   className="text-center"
@@ -837,7 +738,7 @@ export function SchoolPerformanceView({ assessments, refreshAssessments, isLoadi
                   currentSort={sortConfig}
                   onSort={handleSort}
                 >
-                  Ratings
+                  RATINGS
                 </SortableTableHead>
                 <SortableTableHead 
                   className="text-center"
@@ -845,15 +746,16 @@ export function SchoolPerformanceView({ assessments, refreshAssessments, isLoadi
                   currentSort={sortConfig}
                   onSort={handleSort}
                 >
-                  Overall Score
+                  OVERALL SCORE
                 </SortableTableHead>
+                <TableHead className="text-center">PREVIOUS 3 TERMS</TableHead>
                 <SortableTableHead 
                   className="text-center"
                   sortKey="criticalStandards"
                   currentSort={sortConfig}
                   onSort={handleSort}
                 >
-                  Intervention Required
+                  INTERVENTION REQUIRED
                 </SortableTableHead>
                 <SortableTableHead 
                   className="text-center"
@@ -861,7 +763,7 @@ export function SchoolPerformanceView({ assessments, refreshAssessments, isLoadi
                   currentSort={sortConfig}
                   onSort={handleSort}
                 >
-                  Last Updated
+                  LAST UPDATED
                 </SortableTableHead>
               </TableRow>
             </TableHeader>
@@ -871,7 +773,6 @@ export function SchoolPerformanceView({ assessments, refreshAssessments, isLoadi
               ) : (
                 filteredSchoolData.map((school) => {
                 const isExpanded = expandedSchools.has(school.school.id);
-                const trend = getPerformanceTrend(school.overallScore, school.criticalStandardsTotal);
                 const completedCount = school.assessmentsByCategory.filter(cat => cat.status === "Completed").length;
                 const totalCount = school.assessmentsByCategory.length;
 
@@ -881,8 +782,8 @@ export function SchoolPerformanceView({ assessments, refreshAssessments, isLoadi
                       className="cursor-pointer hover:bg-slate-50"
                       onClick={() => toggleSchoolExpansion(school.school.id)}
                     >
-                      <TableCell>
-                        <Button variant="ghost" size="sm" className="h-6 w-6 p-0">
+                      <TableCell className="w-12 px-2">
+                        <Button variant="ghost" size="sm" className="h-6 w-6 p-0 mx-auto">
                           {isExpanded ? (
                             <ChevronDown className="h-4 w-4" />
                           ) : (
@@ -892,8 +793,8 @@ export function SchoolPerformanceView({ assessments, refreshAssessments, isLoadi
                       </TableCell>
                       <TableCell>
                         <div className="flex items-center gap-3">
-                          <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-blue-50 border border-blue-200 flex-shrink-0">
-                            <SchoolIcon className="h-4 w-4 text-blue-600" />
+                          <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-slate-50 border border-slate-200 flex-shrink-0">
+                            <SchoolIcon className="h-4 w-4 text-slate-600" />
                           </div>
                           <div className="min-w-0">
                             <p className="font-medium text-sm text-slate-900 leading-tight">{school.school.name}</p>
@@ -911,8 +812,7 @@ export function SchoolPerformanceView({ assessments, refreshAssessments, isLoadi
                       </TableCell>
                       <TableCell className="text-center">
                         {school.overallScore > 0 ? (
-                          <div className="flex items-center justify-center space-x-1.5">
-                            <div className="flex items-center space-x-1">
+                          <div className="flex items-center justify-center space-x-1">
                           <Badge variant="outline" className={getScoreBadgeColor(school.overallScore)}>
                             {school.overallScore.toFixed(1)}
                           </Badge>
@@ -941,16 +841,46 @@ export function SchoolPerformanceView({ assessments, refreshAssessments, isLoadi
                                 </Tooltip>
                               );
                             })()}
-                            </div>
-                            {/* Historical data button for overall score */}
-                            {renderHistoricalButton(school.school.id, true)}
                           </div>
                         ) : (
-                          <div className="flex items-center justify-center space-x-1.5">
                           <span className="text-slate-400">—</span>
-                            {renderHistoricalButton(school.school.id, true)}
-                          </div>
                         )}
+                      </TableCell>
+                      <TableCell className="text-center">
+                        {(() => {
+                          const historicalData = historicalTermsData.get(school.school.id) || [];
+                          if (historicalData.length === 0) {
+                            return <span className="text-sm text-slate-400">—</span>;
+                          }
+                          
+                          // Prepare trend data including current term (chronological order: oldest to newest)
+                          const currentTermData = {
+                            term: selectedTerm,
+                            overallScore: school.overallScore
+                          };
+                          // Reverse historical data to get oldest first, then add current term at the end
+                          const trendData: TrendDataPoint[] = [...historicalData.slice(0, 3).reverse(), currentTermData].filter(d => d.overallScore > 0);
+                          
+                          if (trendData.length < 2) {
+                            return <span className="text-sm text-slate-400">—</span>;
+                          }
+                          
+                          // For better clarity, show values directly with trend indicator
+                          return (
+                            <div className="flex items-center justify-center gap-1">
+                              <MiniTrendChart data={trendData} width={80} height={28} />
+                              <div className="flex items-center gap-0.5 text-xs">
+                                {trendData[trendData.length - 1].overallScore > trendData[0].overallScore ? (
+                                  <ArrowUp className="h-3 w-3 text-emerald-600" />
+                                ) : trendData[trendData.length - 1].overallScore < trendData[0].overallScore ? (
+                                  <ArrowDown className="h-3 w-3 text-rose-600" />
+                                ) : (
+                                  <span className="text-slate-400">—</span>
+                                )}
+                              </div>
+                            </div>
+                          );
+                        })()}
                       </TableCell>
                       <TableCell className="text-center">
                         {school.criticalStandardsTotal > 0 ? (
@@ -969,89 +899,28 @@ export function SchoolPerformanceView({ assessments, refreshAssessments, isLoadi
                       </TableCell>
                     </TableRow>
 
-                    {/* Historic Data Inline Expansion - School Level */}
-                    {expandedHistoric.has(school.school.id) && (
-                      <TableRow>
-                        <TableCell colSpan={6} className="bg-slate-50/30 p-4">
-                          {(() => {
-                            const historicalData = historicalTermsData.get(school.school.id) || [];
-                            if (historicalData.length === 0) {
-                              return (
-                                <div className="text-center text-sm text-slate-500">
-                                  No historical data available for {school.school.name}
-                                </div>
-                              );
-                            }
-
-                            // Prepare trend data for school overall score
-                            const schoolTrendData: TrendDataPoint[] = historicalData.map(termData => ({
-                              term: termData.term,
-                              overallScore: termData.overallScore
-                            }));
-
-                            return (
-                              <div className="space-y-4">
-                                <div className="flex items-center space-x-2">
-                                  <TrendingUp className="h-4 w-4 text-indigo-600" />
-                                  <h4 className="text-sm font-medium text-slate-900">
-                                    Historical Performance - {school.school.name}
-                                  </h4>
-                                </div>
-                                
-                                <div className="flex items-center justify-center space-x-8 bg-white rounded-lg border p-4">
-                                  {/* School Overall Trend Chart */}
-                                  <div className="flex items-center space-x-4">
-                                    <span className="text-sm font-medium text-slate-600">Overall Score Trend:</span>
-                                    <MiniTrendChart data={schoolTrendData} width={160} height={40} />
-                                  </div>
-                                  
-                                  {/* Historical Scores */}
-                                  <div className="flex items-center space-x-6">
-                                    {historicalData.slice(0, 3).map((termData, index) => {
-                                      const termParts = termData.term.split(' ');
-                                      const termShort = termParts[0]?.slice(0, 3) + ' ' + termParts[1]?.slice(-2);
-                                      
-                                      return (
-                                        <div key={index} className="text-center">
-                                          <div className="text-lg font-semibold text-slate-800">
-                                            {termData.overallScore > 0 ? termData.overallScore.toFixed(1) : '—'}
-                                          </div>
-                                          <div className="text-xs text-slate-500">{termShort}</div>
-                                        </div>
-                                      );
-                                    })}
-                                  </div>
-                                </div>
-                              </div>
-                            );
-                          })()}
-                        </TableCell>
-                      </TableRow>
-                    )}
 
                     {/* Expanded Content */}
                     {isExpanded && (
                       <TableRow>
-                        <TableCell colSpan={6} className="bg-slate-50 p-0">
+                        <TableCell colSpan={7} className="bg-slate-50 p-0">
                           <div className="p-6 border-t">
                             <h4 className="text-sm font-medium text-slate-900 mb-4">Assessment Strategies</h4>
                             <div className="bg-white rounded-lg border">
                               <Table>
                                 <TableHeader>
                                   <TableRow className="bg-slate-50/80 border-b border-slate-200">
-                                    <TableHead>Aspect</TableHead>
-                                    <TableHead className="text-center">Status</TableHead>
-                                    <TableHead className="text-center">Score</TableHead>
-                                    <TableHead className="text-center">Completion Rate</TableHead>
-                                    <TableHead className="text-center">Intervention Required</TableHead>
-                                    <TableHead className="text-center pr-6">Actions</TableHead>
+                                    <TableHead>ASPECT</TableHead>
+                                    <TableHead className="text-center">STATUS</TableHead>
+                                    <TableHead className="text-center">SCORE</TableHead>
+                                    <TableHead className="text-center">PREVIOUS 3 TERMS</TableHead>
+                                    <TableHead className="text-center">COMPLETION RATE</TableHead>
+                                    <TableHead className="text-center">INTERVENTION REQUIRED</TableHead>
+                                    <TableHead className="text-center pr-6">ACTIONS</TableHead>
                                   </TableRow>
                                 </TableHeader>
                                 <TableBody>
                                   {school.assessmentsByCategory.map((categoryData) => {
-                                    const categoryKey = `${school.school.id}-${categoryData.category}`;
-                                    const isCategoryHistoricExpanded = expandedHistoric.has(categoryKey);
-
                                     return (
                                       <React.Fragment key={categoryData.category}>
                                         <TableRow className="hover:bg-slate-50">
@@ -1078,7 +947,7 @@ export function SchoolPerformanceView({ assessments, refreshAssessments, isLoadi
                                       </TableCell>
                                       <TableCell className="text-center">
                                         {categoryData.overallScore > 0 ? (
-                                              <div className="flex items-center justify-center space-x-2">
+                                              <div className="flex items-center justify-center space-x-1">
                                           <Badge variant="outline" className={getScoreBadgeColor(categoryData.overallScore)}>
                                             {categoryData.overallScore.toFixed(1)}
                                           </Badge>
@@ -1109,58 +978,44 @@ export function SchoolPerformanceView({ assessments, refreshAssessments, isLoadi
                                                     </Tooltip>
                                                   );
                                                 })()}
-                                                {/* Historical data button for individual assessment */}
-                                                <Tooltip>
-                                                  <TooltipTrigger asChild>
-                                                    <Button 
-                                                      variant="ghost" 
-                                                      size="icon"
-                                                      className={cn(
-                                                        "h-5 w-5 hover:bg-slate-100",
-                                                        isCategoryHistoricExpanded && "bg-slate-100"
-                                                      )}
-                                                      onClick={(e) => {
-                                                        e.stopPropagation();
-                                                        const newExpanded = new Set(expandedHistoric);
-                                                        if (newExpanded.has(categoryKey)) {
-                                                          newExpanded.delete(categoryKey);
-                                                        } else {
-                                                          newExpanded.add(categoryKey);
-                                                        }
-                                                        setExpandedHistoric(newExpanded);
-                                                      }}
-                                                    >
-                                                      <TrendingUp className={cn(
-                                                        "h-3 w-3",
-                                                        isCategoryHistoricExpanded ? "text-indigo-600" : "text-slate-600"
-                                                      )} />
-                                                    </Button>
-                                                  </TooltipTrigger>
-                                                  <TooltipContent>
-                                                    <p>{isCategoryHistoricExpanded ? 'Hide' : 'View'} historical data for {getAspectDisplayName(categoryData.category)}</p>
-                                                  </TooltipContent>
-                                                </Tooltip>
                                               </div>
                                             ) : (
-                                              <div className="flex items-center justify-center space-x-2">
                                           <span className="text-slate-400 text-sm">—</span>
-                                                <Tooltip>
-                                                  <TooltipTrigger asChild>
-                                                    <Button 
-                                                      variant="ghost" 
-                                                      size="icon"
-                                                      className="h-5 w-5 opacity-40 cursor-not-allowed"
-                                                      disabled
-                                                    >
-                                                      <TrendingUp className="h-3 w-3" />
-                                                    </Button>
-                                                  </TooltipTrigger>
-                                                  <TooltipContent>
-                                                    <p>No current score to compare</p>
-                                                  </TooltipContent>
-                                                </Tooltip>
-                                              </div>
                                         )}
+                                      </TableCell>
+                                      <TableCell className="text-center">
+                                        {(() => {
+                                          const historicalData = historicalTermsData.get(school.school.id) || [];
+                                          const categoryHistoricalData = historicalData
+                                            .map(termData => ({
+                                              term: termData.term,
+                                              overallScore: termData.categoryScores.get(categoryData.category) || 0
+                                            }))
+                                            .filter(d => d.overallScore > 0);
+                                          
+                                          if (categoryHistoricalData.length === 0) {
+                                            return <span className="text-sm text-slate-400">—</span>;
+                                          }
+                                          
+                                          // Prepare trend data including current term (chronological order: oldest to newest)
+                                          const currentTermData = {
+                                            term: selectedTerm,
+                                            overallScore: categoryData.overallScore
+                                          };
+                                          // Reverse historical data to get oldest first, then add current term at the end
+                                          const trendData: TrendDataPoint[] = [...categoryHistoricalData.slice(0, 3).reverse(), currentTermData].filter(d => d.overallScore > 0);
+                                          
+                                          if (trendData.length < 2) {
+                                            return <span className="text-sm text-slate-400">—</span>;
+                                          }
+                                          
+                                          // Simple value sequence with mini chart
+                                          return (
+                                            <div className="flex items-center justify-center">
+                                              <MiniTrendChart data={trendData} width={80} height={24} />
+                                            </div>
+                                          );
+                                        })()}
                                       </TableCell>
                                       <TableCell className="text-center">
                                         <div className="flex items-center justify-center gap-2">
@@ -1173,30 +1028,31 @@ export function SchoolPerformanceView({ assessments, refreshAssessments, isLoadi
                                           />
                                         </div>
                                       </TableCell>
-                                                                                                                                                           <TableCell className="text-center">
-                                         {categoryData.overallScore && categoryData.overallScore <= 1.5 && categoryData.status === 'Completed' ? (
-                                           <Tooltip>
-                                             <TooltipTrigger asChild>
-                                               <div className="flex items-center justify-center space-x-1 cursor-help">
-                                                 <AlertTriangle className="h-3 w-3 text-rose-600" />
-                                                 <span className="text-sm font-medium text-rose-700">
-                                                   ⚠️
-                                                 </span>
-                                               </div>
-                                             </TooltipTrigger>
-                                             <TooltipContent side="left" className="max-w-sm">
-                                               <div className="space-y-1">
-                                                 <p className="font-medium text-rose-800">Low Performance Detected</p>
-                                                 <p className="text-xs text-slate-600">
-                                                   Score: {categoryData.overallScore.toFixed(1)} - Review this assessment for potential intervention needs
-                                                 </p>
-                                               </div>
-                                             </TooltipContent>
-                                           </Tooltip>
-                                         ) : (
-                                           <span className="text-slate-400 text-sm">—</span>
-                                         )}
-                                       </TableCell>
+                                      <TableCell className="text-center">
+                                        {categoryData.overallScore && categoryData.overallScore <= 1.5 && categoryData.status === 'Completed' ? (
+                                          <Tooltip>
+                                            <TooltipTrigger asChild>
+                                              <Badge 
+                                                variant="outline" 
+                                                className="bg-rose-50 text-rose-700 border-rose-200 cursor-help"
+                                              >
+                                                <AlertTriangle className="h-3 w-3 mr-1" />
+                                                Yes
+                                              </Badge>
+                                            </TooltipTrigger>
+                                            <TooltipContent side="top" align="center" className="max-w-xs">
+                                              <div className="space-y-2">
+                                                <p className="font-medium text-sm">Intervention Required</p>
+                                                <p className="text-xs leading-relaxed">
+                                                  This aspect has an overall score of {categoryData.overallScore.toFixed(1)}, indicating that one or more standards are rated as inadequate and require immediate attention.
+                                                </p>
+                                              </div>
+                                            </TooltipContent>
+                                          </Tooltip>
+                                        ) : (
+                                          <span className="text-slate-400 text-sm">—</span>
+                                        )}
+                                      </TableCell>
                                       <TableCell className="text-center pr-6">
                                         <Button 
                                           asChild 
@@ -1212,8 +1068,6 @@ export function SchoolPerformanceView({ assessments, refreshAssessments, isLoadi
                                       </TableCell>
                                     </TableRow>
 
-                                        {/* Historical data row for this category */}
-                                        {isCategoryHistoricExpanded && renderHistoricalDataRows(school.school.id, categoryData)}
                                       </React.Fragment>
                                     );
                                   })}

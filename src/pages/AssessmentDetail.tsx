@@ -134,10 +134,34 @@ export function AssessmentDetailPage() {
   
   const [activeStandard, setActiveStandard] = useState<Standard | null>(null);
   
+  // Helper function to get sorted standards
+  const getSortedStandards = (standards: Standard[]) => {
+    return standards.slice().sort((a, b) => {
+      const aMatch = a.code.match(/([A-Z]+)(\d+)/);
+      const bMatch = b.code.match(/([A-Z]+)(\d+)/);
+      
+      if (aMatch && bMatch) {
+        const aPrefix = aMatch[1];
+        const bPrefix = bMatch[1];
+        const aNum = parseInt(aMatch[2], 10);
+        const bNum = parseInt(bMatch[2], 10);
+        
+        if (aPrefix !== bPrefix) {
+          return aPrefix.localeCompare(bPrefix);
+        }
+        
+        return aNum - bNum;
+      }
+      
+      return a.code.localeCompare(b.code);
+    });
+  };
+  
   // Update activeStandard when assessment loads
   useEffect(() => {
     if (assessment?.standards && assessment.standards.length > 0) {
-      setActiveStandard(assessment.standards[0]);
+      const sortedStandards = getSortedStandards(assessment.standards);
+      setActiveStandard(sortedStandards[0]);
     }
   }, [assessment]);
   
@@ -177,7 +201,8 @@ export function AssessmentDetailPage() {
   
   useEffect(() => {
     if (assessment?.standards && activeStandard) {
-      const index = assessment.standards.findIndex(s => s.id === activeStandard.id);
+      const sortedStandards = getSortedStandards(assessment.standards);
+      const index = sortedStandards.findIndex(s => s.id === activeStandard.id);
       if (index !== -1) {
         setActiveStandardIndex(index);
       }
@@ -186,13 +211,15 @@ export function AssessmentDetailPage() {
 
   const goToNextStandard = () => {
     if (assessment?.standards && activeStandardIndex < assessment.standards.length - 1) {
-      setActiveStandard(assessment.standards[activeStandardIndex + 1]);
+      const sortedStandards = getSortedStandards(assessment.standards);
+      setActiveStandard(sortedStandards[activeStandardIndex + 1]);
     }
   };
 
   const goToPreviousStandard = () => {
     if (assessment?.standards && activeStandardIndex > 0) {
-      setActiveStandard(assessment.standards[activeStandardIndex - 1]);
+      const sortedStandards = getSortedStandards(assessment.standards);
+      setActiveStandard(sortedStandards[activeStandardIndex - 1]);
     }
   };
 
@@ -670,7 +697,32 @@ export function AssessmentDetailPage() {
             </CardHeader>
             <CardContent className="px-2 py-2 max-h-[60vh] overflow-y-auto">
               <div className="space-y-1">
-                {assessment.standards.map((standard, index) => {
+                {assessment.standards
+                  .slice()
+                  .sort((a, b) => {
+                    // Extract the numeric part from the standard code (e.g., ED1 -> 1, ED10 -> 10)
+                    const aMatch = a.code.match(/([A-Z]+)(\d+)/);
+                    const bMatch = b.code.match(/([A-Z]+)(\d+)/);
+                    
+                    if (aMatch && bMatch) {
+                      const aPrefix = aMatch[1];
+                      const bPrefix = bMatch[1];
+                      const aNum = parseInt(aMatch[2], 10);
+                      const bNum = parseInt(bMatch[2], 10);
+                      
+                      // First sort by prefix (ED, ES, FN, etc.)
+                      if (aPrefix !== bPrefix) {
+                        return aPrefix.localeCompare(bPrefix);
+                      }
+                      
+                      // Then sort numerically
+                      return aNum - bNum;
+                    }
+                    
+                    // Fallback to string comparison if pattern doesn't match
+                    return a.code.localeCompare(b.code);
+                  })
+                  .map((standard, index) => {
                   const status = getStatusStatus(standard);
                   return (
                     <Button
@@ -1153,7 +1205,7 @@ export function AssessmentDetailPage() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {assessment.standards.map((standard, index) => (
+                {getSortedStandards(assessment.standards).map((standard, index) => (
                   <TableRow 
                     key={standard.id} 
                     className="border-slate-200/60 hover:bg-slate-50/50 transition-colors"

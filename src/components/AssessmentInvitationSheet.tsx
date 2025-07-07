@@ -179,11 +179,10 @@ const SimpleDatePicker = ({
 };
 
 export function AssessmentInvitationSheet({ open, onOpenChange, onSuccess }: AssessmentInvitationSheetProps) {
-  const [category, setCategory] = useState<AssessmentCategory | "">("");
+  const [selectedCategories, setSelectedCategories] = useState<AssessmentCategory[]>([]);
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedSchools, setSelectedSchools] = useState<string[]>([]);
   const [dueDate, setDueDate] = useState<Date>();
-  const [isSelectAllOpen, setIsSelectAllOpen] = useState(false);
   const [datePickerOpen, setDatePickerOpen] = useState(false);
   const [loading, setLoading] = useState(false);
   const [schools, setSchools] = useState<School[]>([]);
@@ -269,34 +268,47 @@ export function AssessmentInvitationSheet({ open, onOpenChange, onSuccess }: Ass
 
   // Handle invitation send
   const handleSendInvitations = async () => {
-    if (!category || selectedSchools.length === 0) return;
+    if (selectedCategories.length === 0 || selectedSchools.length === 0) return;
 
     setLoading(true);
 
     try {
-      const assessmentIds = await createAssessments({
-        category,
-        schoolIds: selectedSchools,
-        dueDate: dueDate ? format(dueDate, "yyyy-MM-dd") : undefined,
-        term,
-        academicYear,
-      });
+      let totalAssessments = 0;
+      
+      // Create assessments for each selected category
+      for (const category of selectedCategories) {
+        const assessmentIds = await createAssessments({
+          category,
+          schoolIds: selectedSchools,
+          dueDate: dueDate ? format(dueDate, "yyyy-MM-dd") : undefined,
+          term,
+          academicYear,
+        });
+        totalAssessments += assessmentIds.length;
+      }
 
+      // Show success toast immediately
       toast({
-                    title: "Ratings created successfully!",
-        description: `Successfully created ${assessmentIds.length} assessment(s).`,
+        title: "✅ Ratings created successfully!",
+        description: `Successfully created ${totalAssessments} assessment(s) across ${selectedCategories.length} aspect(s).`,
+        duration: 5000, // Show for 5 seconds
       });
 
-      onSuccess?.();
+      // Trigger refresh immediately
+      if (onSuccess) {
+        await onSuccess();
+      }
+      
+      // Close the sheet and reset form
       onOpenChange(false);
-      setCategory("");
+      setSelectedCategories([]);
       setSelectedSchools([]);
       setDueDate(undefined);
       setSearchTerm("");
     } catch (error) {
       console.error('Error in assessment creation:', error);
       toast({
-                    title: "Error creating ratings",
+        title: "Error creating ratings",
         description: "An unexpected error occurred. Please try again later.",
         variant: "destructive",
       });
@@ -307,155 +319,31 @@ export function AssessmentInvitationSheet({ open, onOpenChange, onSuccess }: Ass
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent className="flex flex-col h-full sm:max-w-md">
+      <SheetContent className="flex flex-col h-full sm:max-w-lg">
         <SheetHeader className="flex-shrink-0">
           <SheetTitle className="text-xl">Request Rating</SheetTitle>
           <SheetDescription>
-            Invite schools to complete a specific aspect.
+            Invite schools to complete assessments for one or more aspects. You can select multiple aspects and schools at once.
           </SheetDescription>
         </SheetHeader>
         
         <div className="flex-1 overflow-y-auto py-6 space-y-6">
-          {/* Aspect Selection */}
-          <div className="space-y-2">
-            <Label htmlFor="category" className="text-sm font-medium">
-              Aspect
-            </Label>
-            <Select value={category} onValueChange={(value) => setCategory(value as AssessmentCategory)}>
-              <SelectTrigger id="category" className={cn(
-                "w-full", 
-                !category && "text-muted-foreground"
-              )}>
-                <SelectValue placeholder="Select aspect" />
-              </SelectTrigger>
-              <SelectContent>
-                {assessmentCategories.map((cat) => (
-                  <SelectItem key={cat.value} value={cat.value}>
-                    {getAspectDisplayName(cat.value)}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            {category && (
-              <p className="text-xs text-muted-foreground mt-1">
-                {assessmentCategories.find(cat => cat.value === category)?.description}
-              </p>
-            )}
-          </div>
-          
-          {/* Due Date Selection */}
-          <div className="space-y-2">
-            <Label htmlFor="dueDate" className="text-sm font-medium">
-              Due Date
-            </Label>
-            <Popover open={datePickerOpen} onOpenChange={setDatePickerOpen}>
-              <PopoverTrigger asChild>
-                <Button
-                  id="dueDate"
-                  variant="outline"
-                  className={cn(
-                    "w-full justify-start text-left font-normal",
-                    !dueDate && "text-muted-foreground"
-                  )}
-                >
-                  <CalendarIcon className="mr-2 h-4 w-4" />
-                  {dueDate ? format(dueDate, "PPP") : "Select due date"}
-                </Button>
-              </PopoverTrigger>
-              <PopoverContent align="start" className="p-0 w-auto">
-                <div className="border-b p-3">
-                  <div className="text-sm font-medium">Select date</div>
-                  <div className="text-xs text-muted-foreground">
-                    Choose when schools need to complete this assessment
-                  </div>
-                </div>
-                <SimpleDatePicker
-                  selected={dueDate}
-                  onSelect={(date) => {
-                    setDueDate(date);
-                    setDatePickerOpen(false);
-                  }}
-                />
-              </PopoverContent>
-            </Popover>
-            <p className="text-xs text-muted-foreground mt-1">
-              {dueDate 
-                ? `Schools will have until ${format(dueDate, "PPPP")} to complete this assessment.` 
-                : "Setting a due date is optional but recommended for timely completions."}
-            </p>
-          </div>
-          
-          {/* Term Selection */}
-          <div className="space-y-2">
-            <Label htmlFor="term" className="text-sm font-medium">
-              Academic Term
-            </Label>
-            <div className="grid grid-cols-2 gap-2">
-              <Select value={term} onValueChange={(val) => setTerm(val as AcademicTerm)}>
-                <SelectTrigger id="term" className="w-full">
-                  <SelectValue placeholder="Term" />
-                </SelectTrigger>
-                <SelectContent>
-                  {termOptions.map((t) => (
-                    <SelectItem key={t} value={t}>{t}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              <Select value={academicYear} onValueChange={setAcademicYear}>
-                <SelectTrigger id="academicYear" className="w-full">
-                  <SelectValue placeholder="Academic Year" />
-                </SelectTrigger>
-                <SelectContent>
-                  {academicYearOptions.map((y) => (
-                    <SelectItem key={y} value={y}>{y}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <p className="text-xs text-muted-foreground mt-1">
-              The term and year determine when the assessment appears in dashboards.
-            </p>
-          </div>
-          
-          {/* School Selection */}
-          <div className="space-y-2">
+          {/* School Selection - Moved to top */}
+          <div className="space-y-3">
             <div className="flex items-center justify-between">
-              <Label htmlFor="schools" className="text-sm font-medium">
-                Select Schools
-              </Label>
-              <Button 
-                variant="ghost" 
-                size="sm" 
-                className="h-7 gap-1 text-xs font-normal"
-                onClick={() => setIsSelectAllOpen(!isSelectAllOpen)}
-              >
-                {isSelectAllOpen ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronRight className="h-3.5 w-3.5" />}
-                Quick options
-              </Button>
-            </div>
-            
-            {isSelectAllOpen && (
-              <div className="flex items-center justify-between bg-slate-50 p-2.5 rounded-md">
-                <div className="flex items-center gap-2">
-                  <Checkbox 
-                    id="selectAll" 
-                    checked={selectedSchools.length === schools.length}
-                    onCheckedChange={toggleAllSchools}
-                  />
-                  <Label htmlFor="selectAll" className="text-xs font-medium cursor-pointer">
-                    Select all schools
-                  </Label>
-                </div>
-                <Badge variant="outline" className="font-normal">
-                  {schools.length} schools
-                </Badge>
+              <div>
+                <Label className="text-sm font-medium">
+                  Select Schools
+                </Label>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  Choose which schools will receive the assessment request
+                </p>
               </div>
-            )}
+            </div>
             
             <div className="relative">
               <Search className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
               <Input
-                id="schools"
                 placeholder="Search schools..."
                 className="pl-9"
                 value={searchTerm}
@@ -463,60 +351,174 @@ export function AssessmentInvitationSheet({ open, onOpenChange, onSuccess }: Ass
               />
             </div>
             
-            <div className="border rounded-md h-[240px] overflow-y-auto">
-              {filteredSchools.length === 0 ? (
-                <div className="flex flex-col items-center justify-center h-full text-sm text-muted-foreground">
-                  <p>No schools found</p>
-                </div>
-              ) : (
-                filteredSchools.map((school) => (
-                  <div 
-                    key={school.id} 
-                    className={cn(
-                      "flex items-center px-3 py-2.5 hover:bg-slate-50 cursor-pointer border-b last:border-b-0",
-                      selectedSchools.includes(school.id) && "bg-slate-50"
-                    )}
-                    onClick={() => toggleSchool(school.id)}
-                  >
-                    <Checkbox 
-                      id={`school-${school.id}`}
-                      checked={selectedSchools.includes(school.id)}
-                      className="mr-3 h-4 w-4"
-                      onCheckedChange={() => toggleSchool(school.id)}
-                    />
-                    <div className="flex items-center gap-2.5 flex-1 min-w-0">
-                      <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-slate-50 border border-slate-100">
-                        <SchoolIcon className="h-3.5 w-3.5 text-slate-600" />
-                      </div>
-                      <span className="text-sm truncate">{school.name}</span>
-                    </div>
-                  </div>
-                ))
+            {/* Quick select options */}
+            <div className="flex gap-2">
+              <Button 
+                variant="outline" 
+                size="sm" 
+                className="text-xs"
+                onClick={toggleAllSchools}
+              >
+                {selectedSchools.length === schools.length ? 'Deselect all' : 'Select all'} ({schools.length})
+              </Button>
+              {selectedSchools.length > 0 && (
+                <Badge variant="secondary" className="text-xs">
+                  {selectedSchools.length} selected
+                </Badge>
               )}
             </div>
             
-            <p className="text-xs text-muted-foreground">
-              {selectedSchools.length} of {schools.length} schools selected
-            </p>
+            <div className="border rounded-lg max-h-[200px] overflow-y-auto">
+              {schoolsLoading ? (
+                <div className="flex flex-col items-center justify-center py-8">
+                  <Loader2 className="h-5 w-5 animate-spin text-slate-400" />
+                  <p className="text-sm text-muted-foreground mt-2">Loading schools...</p>
+                </div>
+              ) : filteredSchools.length === 0 ? (
+                <div className="flex flex-col items-center justify-center py-8 text-sm text-muted-foreground">
+                  <SchoolIcon className="h-6 w-6 text-slate-300 mb-2" />
+                  <p>No schools found</p>
+                </div>
+              ) : (
+                <div className="divide-y">
+                  {filteredSchools.map((school) => (
+                    <label
+                      key={school.id} 
+                      className={cn(
+                        "flex items-center gap-3 px-3 py-2 hover:bg-slate-50 cursor-pointer transition-colors",
+                        selectedSchools.includes(school.id) && "bg-slate-50"
+                      )}
+                    >
+                      <Checkbox 
+                        checked={selectedSchools.includes(school.id)}
+                        onCheckedChange={() => toggleSchool(school.id)}
+                      />
+                      <span className="text-sm flex-1">{school.name}</span>
+                    </label>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Aspect Selection - Simplified */}
+          <div className="space-y-3">
+            <div>
+              <Label className="text-sm font-medium">
+                Select Aspects
+              </Label>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                Choose which aspects schools should complete
+              </p>
+            </div>
+            
+            <div className="grid grid-cols-1 gap-2">
+              {assessmentCategories.map((cat) => (
+                <label
+                  key={cat.value}
+                  className={cn(
+                    "flex items-center gap-3 p-3 rounded-lg border cursor-pointer transition-colors",
+                    selectedCategories.includes(cat.value) 
+                      ? "border-primary bg-primary/5" 
+                      : "border-slate-200 hover:border-slate-300"
+                  )}
+                >
+                  <Checkbox 
+                    checked={selectedCategories.includes(cat.value)}
+                    onCheckedChange={(checked) => {
+                      if (checked) {
+                        setSelectedCategories(prev => [...prev, cat.value]);
+                      } else {
+                        setSelectedCategories(prev => prev.filter(c => c !== cat.value));
+                      }
+                    }}
+                  />
+                  <div className="flex-1">
+                    <div className="font-medium text-sm">{getAspectDisplayName(cat.value)}</div>
+                  </div>
+                </label>
+              ))}
+            </div>
+          </div>
+          
+          {/* Due Date & Term Selection - Combined */}
+          <div className="space-y-3">
+            <div>
+              <Label className="text-sm font-medium">
+                Assessment Details
+              </Label>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                Set the term and optional due date
+              </p>
+            </div>
+            
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-2">
+                <Label htmlFor="term" className="text-xs text-muted-foreground">
+                  Term
+                </Label>
+                <Select value={term} onValueChange={(val) => setTerm(val as AcademicTerm)}>
+                  <SelectTrigger id="term" className="h-9">
+                    <SelectValue placeholder="Term" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {termOptions.map((t) => (
+                      <SelectItem key={t} value={t}>{t}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              
+              <div className="space-y-2">
+                <Label htmlFor="academicYear" className="text-xs text-muted-foreground">
+                  Academic Year
+                </Label>
+                <Select value={academicYear} onValueChange={setAcademicYear}>
+                  <SelectTrigger id="academicYear" className="h-9">
+                    <SelectValue placeholder="Year" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {academicYearOptions.map((y) => (
+                      <SelectItem key={y} value={y}>{y}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+            
+            <div className="space-y-2">
+              <Label htmlFor="dueDate" className="text-xs text-muted-foreground">
+                Due Date (Optional)
+              </Label>
+              <Popover open={datePickerOpen} onOpenChange={setDatePickerOpen}>
+                <PopoverTrigger asChild>
+                  <Button
+                    id="dueDate"
+                    variant="outline"
+                    className={cn(
+                      "w-full justify-start text-left font-normal h-9",
+                      !dueDate && "text-muted-foreground"
+                    )}
+                  >
+                    <CalendarIcon className="mr-2 h-4 w-4" />
+                    {dueDate ? format(dueDate, "PPP") : "No due date"}
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent align="start" className="p-0 w-auto">
+                  <SimpleDatePicker
+                    selected={dueDate}
+                    onSelect={(date) => {
+                      setDueDate(date);
+                      setDatePickerOpen(false);
+                    }}
+                  />
+                </PopoverContent>
+              </Popover>
+            </div>
           </div>
         </div>
         
-        <div className="border-t mt-auto pt-6 pb-4 flex-shrink-0">
-          {(category && selectedSchools.length > 0) && (
-            <div className="p-4 bg-blue-50 border border-blue-100 rounded-lg mb-5">
-              <div className="flex items-start gap-3">
-                <CheckCircle className="h-5 w-5 text-blue-500 mt-0.5 flex-shrink-0" />
-                <div className="space-y-1.5">
-                  <p className="text-sm font-medium text-blue-700">Ready to send</p>
-                  <p className="text-sm text-blue-600">
-                    Requesting {selectedSchools.length} {selectedSchools.length === 1 ? 'school' : 'schools'} to complete the {getAspectDisplayName(category)} assessment
-                    {dueDate ? ` by ${format(dueDate, "PPP")}` : ''}.
-                  </p>
-                </div>
-              </div>
-            </div>
-          )}
-          
+        <div className="border-t mt-auto pt-4 pb-4 flex-shrink-0">
           <div className="flex gap-3">
             <Button
               type="button"
@@ -529,7 +531,7 @@ export function AssessmentInvitationSheet({ open, onOpenChange, onSuccess }: Ass
             <Button
               type="button"
               className="flex-1 gap-2"
-              disabled={!category || selectedSchools.length === 0 || loading}
+              disabled={selectedCategories.length === 0 || selectedSchools.length === 0 || loading}
               onClick={handleSendInvitations}
             >
               {loading ? (
@@ -537,7 +539,7 @@ export function AssessmentInvitationSheet({ open, onOpenChange, onSuccess }: Ass
               ) : (
                 <>
                   <Send className="h-4 w-4" />
-                  Request Rating
+                  Send Request
                 </>
               )}
             </Button>
