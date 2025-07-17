@@ -1,5 +1,8 @@
 import type { Assessment, School, Standard } from '@/types/assessment';
 
+// Debug flag for cache logging
+const DEBUG_CACHE = import.meta.env.VITE_DEBUG_CACHE === 'true';
+
 // Cache configuration
 interface CacheConfig {
   ttl: number; // Time to live in milliseconds
@@ -78,7 +81,7 @@ class RequestCache {
 
     // Check if we have a pending request for deduplication
     if (this.pendingRequests.has(key)) {
-      console.log(`🔄 Deduplicating request: ${key}`);
+      if (DEBUG_CACHE) console.log(`🔄 Deduplicating request: ${key}`);
       return this.pendingRequests.get(key)!;
     }
 
@@ -87,14 +90,14 @@ class RequestCache {
     // Fresh data available
     if (entry && this.isValid(entry, config)) {
       entry.lastAccessed = now;
-      console.log(`💾 Cache hit (fresh): ${key}`);
+      if (DEBUG_CACHE) console.log(`💾 Cache hit (fresh): ${key}`);
       return entry.data;
     }
 
     // Stale data available and stale-while-revalidate enabled
     if (entry && this.isStale(entry, config) && config.staleWhileRevalidate) {
       entry.lastAccessed = now;
-      console.log(`⚡ Cache hit (stale): ${key} - fetching fresh data in background`);
+      if (DEBUG_CACHE) console.log(`⚡ Cache hit (stale): ${key} - fetching fresh data in background`);
       
       // Return stale data immediately
       const staleData = entry.data;
@@ -106,7 +109,7 @@ class RequestCache {
     }
 
     // No valid cache data, fetch fresh
-    console.log(`🌐 Cache miss: ${key} - fetching fresh data`);
+    if (DEBUG_CACHE) console.log(`🌐 Cache miss: ${key} - fetching fresh data`);
     return this.fetch(key, fetcher, config);
   }
 
@@ -134,7 +137,7 @@ class RequestCache {
       // Notify subscribers
       this.notifySubscribers(key, data);
 
-      console.log(`✅ Cached fresh data: ${key}`);
+      if (DEBUG_CACHE) console.log(`✅ Cached fresh data: ${key}`);
       return data;
     } catch (error) {
       console.error(`❌ Fetch failed: ${key}`, error);
@@ -235,7 +238,7 @@ class RequestCache {
     if (!entry || !this.isValid(entry, CACHE_CONFIGS[type] || CACHE_CONFIGS.assessments)) {
       try {
         await this.get(type, fetcher, params);
-        console.log(`🚀 Preloaded data: ${key}`);
+        if (DEBUG_CACHE) console.log(`🚀 Preloaded data: ${key}`);
       } catch (error) {
         console.warn(`Preload failed for ${key}:`, error);
       }
@@ -257,7 +260,7 @@ class RequestCache {
         entry.data = updatedData;
         entry.timestamp = Date.now(); // Refresh timestamp
         this.notifySubscribers(key, updatedData);
-        console.log(`⚡ Optimistic update: ${key}`);
+        if (DEBUG_CACHE) console.log(`⚡ Optimistic update: ${key}`);
       } catch (error) {
         console.error('Optimistic update failed:', error);
       }
@@ -283,7 +286,7 @@ class RequestCache {
     keysToDelete.forEach(key => this.cache.delete(key));
     
     if (keysToDelete.length > 0) {
-      console.log(`🧹 Cleaned up ${keysToDelete.length} old cache entries`);
+      if (DEBUG_CACHE) console.log(`🧹 Cleaned up ${keysToDelete.length} old cache entries`);
     }
   }
 

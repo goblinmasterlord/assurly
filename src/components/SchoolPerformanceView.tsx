@@ -71,6 +71,8 @@ import { assessmentCategories } from "@/lib/mock-data";
 import { FilterBar } from "@/components/ui/filter-bar";
 import { getSchools } from "@/services/assessment-service";
 import { useOptimisticFilter } from "@/hooks/use-optimistic-filter";
+import { useInlineLoading } from "@/hooks/use-inline-loading";
+import { useLocalStorage } from "@/hooks/use-local-storage";
 
 type SchoolPerformanceViewProps = {
   assessments: Assessment[];
@@ -120,6 +122,7 @@ export function SchoolPerformanceView({ assessments, refreshAssessments, isLoadi
   });
   const [schools, setSchools] = useState<School[]>([]);
   const [schoolsLoading, setSchoolsLoading] = useState(true);
+  const inlineLoading = useInlineLoading();
 
   // Fetch schools from API
   useEffect(() => {

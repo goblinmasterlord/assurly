@@ -12,26 +12,26 @@ export function useOptimisticFilter<T>({
   debounceMs = 0
 }: UseOptimisticFilterOptions<T>) {
   const [isPending, startTransition] = useTransition();
-  const [filters, setFilters] = useState<any>({});
-  const [optimisticFilters, setOptimisticFilters] = useState<any>({});
+  const [filters, setFilters] = useState<Record<string, any>>({});
+  const [optimisticFilters, setOptimisticFilters] = useState<Record<string, any>>({});
 
   // Update filters optimistically
   const updateFilter = useCallback((key: string, value: any) => {
     // Immediate optimistic update
-    setOptimisticFilters(prev => ({ ...prev, [key]: value }));
+    setOptimisticFilters((prev: Record<string, any>) => ({ ...prev, [key]: value }));
     
     // Deferred actual update
     if (debounceMs > 0) {
       const timeoutId = setTimeout(() => {
         startTransition(() => {
-          setFilters(prev => ({ ...prev, [key]: value }));
+          setFilters((prev: Record<string, any>) => ({ ...prev, [key]: value }));
         });
       }, debounceMs);
       
       return () => clearTimeout(timeoutId);
     } else {
       startTransition(() => {
-        setFilters(prev => ({ ...prev, [key]: value }));
+        setFilters((prev: Record<string, any>) => ({ ...prev, [key]: value }));
       });
     }
   }, [debounceMs]);

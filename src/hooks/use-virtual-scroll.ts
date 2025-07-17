@@ -33,7 +33,7 @@ export function useVirtualScroll<T>(
   
   const [scrollTop, setScrollTop] = useState(0);
   const [isScrolling, setIsScrolling] = useState(false);
-  const scrollingTimeoutRef = useRef<NodeJS.Timeout>();
+  const scrollingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   
   // Calculate visible items
   const { visibleItems, startIndex, endIndex, totalHeight } = calculateVisibleItems(

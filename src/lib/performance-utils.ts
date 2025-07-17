@@ -32,18 +32,18 @@ export function requestIdleCallbackShim(
   callback: () => void,
   options?: { timeout?: number }
 ): number {
-  if ('requestIdleCallback' in window) {
+  if (typeof window !== 'undefined' && 'requestIdleCallback' in window) {
     return (window as any).requestIdleCallback(callback, options);
   }
   
   // Fallback to setTimeout
   const timeout = options?.timeout || 1;
-  return window.setTimeout(callback, timeout);
+  return setTimeout(callback, timeout) as unknown as number;
 }
 
 // Cancel idle callback with fallback
 export function cancelIdleCallbackShim(id: number): void {
-  if ('cancelIdleCallback' in window) {
+  if (typeof window !== 'undefined' && 'cancelIdleCallback' in window) {
     (window as any).cancelIdleCallback(id);
   } else {
     clearTimeout(id);
@@ -105,7 +105,9 @@ export function memoize<T extends (...args: any[]) => any>(
     // Limit cache size
     if (cache.size > 100) {
       const firstKey = cache.keys().next().value;
-      cache.delete(firstKey);
+      if (firstKey !== undefined) {
+        cache.delete(firstKey);
+      }
     }
     
     return result;
@@ -120,7 +122,7 @@ export function lazyLoadImage(
     rootMargin?: string;
   } = {}
 ): void {
-  if ('IntersectionObserver' in window) {
+  if (typeof window !== 'undefined' && 'IntersectionObserver' in window) {
     const observer = new IntersectionObserver(
       (entries) => {
         entries.forEach(entry => {
