@@ -4,11 +4,9 @@ import { HomePage } from "@/pages/Home";
 import { AssessmentsPage } from "@/pages/Assessments";
 import { AssessmentDetailPage } from "@/pages/AssessmentDetail";
 import { Toaster } from "@/components/ui/toaster";
-import { useKeyboardShortcuts } from "@/hooks/use-keyboard-shortcuts";
 import { useUser } from "@/contexts/UserContext";
 
 function AppContent() {
-  useKeyboardShortcuts();
   const { isLoading } = useUser();
   
   // Show nothing while loading role from localStorage

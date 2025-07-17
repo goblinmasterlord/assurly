@@ -195,6 +195,7 @@ export function FilterBar({
                   "h-8 px-2 text-xs transition-all duration-200",
                   isSearchExpanded ? "bg-slate-100 text-slate-700" : "text-slate-500 hover:text-slate-700"
                 )}
+                data-search-toggle="true"
               >
                 <Search className="h-3 w-3 mr-1" />
                 Search

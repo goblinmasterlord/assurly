@@ -5,14 +5,23 @@ import { useUser } from "@/contexts/UserContext";
 import { ClipboardList, LogIn } from "lucide-react";
 import { TopLoader } from "@/components/ui/top-loader";
 import { KeyboardHint } from "@/components/ui/keyboard-hint";
+import { useState } from "react";
+import { KeyboardShortcutsModal } from "@/components/ui/keyboard-shortcuts-modal";
+import { useKeyboardShortcuts } from "@/hooks/use-keyboard-shortcuts";
 
 export function RootLayout() {
   const { role } = useUser();
+  const [showShortcuts, setShowShortcuts] = useState(false);
+  
+  // Set up keyboard shortcuts
+  useKeyboardShortcuts({
+    onShowShortcuts: () => setShowShortcuts(true)
+  });
   
   return (
     <div className="relative flex min-h-screen flex-col">
       <TopLoader />
-      <KeyboardHint />
+      <KeyboardShortcutsModal open={showShortcuts} onOpenChange={setShowShortcuts} />
       <header className="sticky top-0 z-40 w-full border-b bg-background">
         <div className="container flex h-16 items-center justify-between">
           <div className="flex items-center">
@@ -47,9 +56,10 @@ export function RootLayout() {
       <main className="flex-1 bg-slate-50">
         <Outlet />
       </main>
-      <footer className="border-t py-6 md:py-0 bg-background">
-        <div className="container flex flex-col items-center justify-between gap-4 md:h-16 md:flex-row">
-          <p className="text-center text-sm leading-loose text-muted-foreground md:text-left">
+      <footer className="border-t py-4 md:py-0 bg-background">
+        <div className="container flex flex-col items-center justify-between gap-4 md:h-14 md:flex-row">
+          <KeyboardHint onClick={() => setShowShortcuts(true)} />
+          <p className="text-center text-xs leading-loose text-muted-foreground md:text-right">
             © 2025 Assurly. All rights reserved.
           </p>
         </div>

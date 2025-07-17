@@ -2,21 +2,56 @@ import { useEffect, useState } from 'react';
 import { cn } from '@/lib/utils';
 import { Command } from 'lucide-react';
 
-export function KeyboardHint() {
-  const [isMac, setIsMac] = useState(false);
+interface KeyboardHintProps {
+  onClick?: () => void;
+  className?: string;
+}
+
+export function KeyboardHint({ onClick, className }: KeyboardHintProps) {
+  const [platform, setPlatform] = useState<'mac' | 'windows' | 'linux' | 'other'>('other');
   
   useEffect(() => {
-    setIsMac(navigator.platform.toUpperCase().indexOf('MAC') >= 0);
+    const userAgent = navigator.userAgent.toLowerCase();
+    const platform = navigator.platform.toLowerCase();
+    
+    if (platform.includes('mac') || userAgent.includes('macintosh')) {
+      setPlatform('mac');
+    } else if (platform.includes('win') || userAgent.includes('windows')) {
+      setPlatform('windows');
+    } else if (platform.includes('linux') || userAgent.includes('linux')) {
+      setPlatform('linux');
+    } else {
+      setPlatform('other');
+    }
   }, []);
   
+  const getModifierKey = () => {
+    switch (platform) {
+      case 'mac':
+        return <Command className="h-3 w-3" />;
+      case 'windows':
+      case 'linux':
+      default:
+        return <span className="font-mono text-[10px] font-semibold">Ctrl</span>;
+    }
+  };
+  
   return (
-    <div className="fixed bottom-4 left-4 z-40">
-      <div className="flex items-center gap-2 text-xs text-muted-foreground bg-background/80 backdrop-blur-sm px-3 py-1.5 rounded-full border shadow-sm">
-        {isMac ? <Command className="h-3 w-3" /> : <span>Ctrl</span>}
-        <span>+</span>
-        <span>/</span>
-        <span className="ml-2">for shortcuts</span>
-      </div>
-    </div>
+    <button
+      onClick={onClick}
+      className={cn(
+        "inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors",
+        "hover:bg-muted/50 rounded px-2 py-1",
+        className
+      )}
+      title="View keyboard shortcuts"
+    >
+      <span className="flex items-center gap-0.5">
+        {getModifierKey()}
+        <span className="mx-0.5">+</span>
+        <span className="font-mono text-[10px] font-semibold">/</span>
+      </span>
+      <span className="ml-1 text-[11px]">for shortcuts</span>
+    </button>
   );
 }
