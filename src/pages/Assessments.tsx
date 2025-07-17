@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo, useEffect, useTransition, useCallback } from "react";
 import { Link } from "react-router-dom";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -60,6 +60,8 @@ import { getAspectDisplayName } from "@/lib/assessment-utils";
 import { Progress } from "@/components/ui/progress";
 import { SortableTableHead, type SortDirection } from "@/components/ui/sortable-table-head";
 import { assessmentCategories } from "@/lib/mock-data";
+import { usePreload } from "@/hooks/use-preload";
+import { debounce } from "@/lib/performance-utils";
 
 export function AssessmentsPage() {
   const { role } = useUser();
@@ -76,9 +78,19 @@ export function AssessmentsPage() {
   
   // Define all hooks unconditionally here
   const [searchTerm, setSearchTerm] = useState("");
-  const [categoryFilter, setCategoryFilter] = useState<string[]>([]);
-  const [statusFilter, setStatusFilter] = useState<string[]>([]);
-  const [schoolFilter, setSchoolFilter] = useState<string[]>([]);
+  const [isPending, startTransition] = useTransition();
+  
+  // Individual filter states for optimistic updates
+  const [filters, setFilters] = useState({
+    category: [] as string[],
+    status: [] as string[],
+    school: [] as string[]
+  });
+  const [optimisticFilters, setOptimisticFilters] = useState({
+    category: [] as string[],
+    status: [] as string[],
+    school: [] as string[]
+  });
   const [view, setView] = useState<"table" | "cards">("table");
   const [selectedTerm, setSelectedTerm] = useState<string>(""); // Will be set to first available term
   const [sortConfig, setSortConfig] = useState<{ key: string; direction: SortDirection }>({
@@ -87,6 +99,46 @@ export function AssessmentsPage() {
   });
   const [schools, setSchools] = useState<School[]>([]);
   const [schoolsLoading, setSchoolsLoading] = useState(true);
+  const { preloadRoute, cancelPreload } = usePreload();
+  
+  // Optimistic filter update handlers
+  const updateFilter = useCallback((filterType: keyof typeof filters, value: string[]) => {
+    // Immediate optimistic update
+    setOptimisticFilters(prev => ({ ...prev, [filterType]: value }));
+    
+    // Deferred actual update with transition
+    startTransition(() => {
+      setFilters(prev => ({ ...prev, [filterType]: value }));
+    });
+  }, []);
+
+  const handleCategoryFilterChange = (newValue: string[]) => {
+    updateFilter('category', newValue);
+  };
+
+  const handleStatusFilterChange = (newValue: string[]) => {
+    updateFilter('status', newValue);
+  };
+
+  const handleSchoolFilterChange = (newValue: string[]) => {
+    updateFilter('school', newValue);
+  };
+  
+  const clearFilters = useCallback(() => {
+    setSearchTerm("");
+    setOptimisticFilters({
+      category: [],
+      status: [],
+      school: []
+    });
+    startTransition(() => {
+      setFilters({
+        category: [],
+        status: [],
+        school: []
+      });
+    });
+  }, []);
   
   // Fetch schools from API
   useEffect(() => {
@@ -170,8 +222,7 @@ export function AssessmentsPage() {
     value: categoryInfo.value
   }));
   
-  // DEBUG: Log category options being created
-  console.log('Category options created:', categoryOptions);
+  // Category options for multi-select
 
   const statusOptions: MultiSelectOption[] = [
     { label: "Completed", value: "completed" },
@@ -194,6 +245,9 @@ export function AssessmentsPage() {
   };
 
   const filteredAssessments = useMemo(() => {
+    // Use optimistic filters when pending, otherwise use actual filters
+    const activeFilters = isPending ? optimisticFilters : filters;
+    
     if (!isMatAdmin) {
       let filtered = termFilteredAssessments.filter((assessment) => {
         // Search term filter
@@ -203,21 +257,10 @@ export function AssessmentsPage() {
           assessment.category.toLowerCase().includes(searchTerm.toLowerCase());
         
         // Category filter
-        const matchesCategory = categoryFilter.length === 0 || categoryFilter.includes(assessment.category);
-        
-        // DEBUG: Log filter matching for category
-        if (categoryFilter.length > 0 && searchTerm === '') {
-          console.log('Category filter debug:', {
-            filterValues: categoryFilter,
-            assessmentCategory: assessment.category,
-            matches: categoryFilter.includes(assessment.category),
-            assessmentName: assessment.name,
-            school: assessment.school.name
-          });
-        }
+        const matchesCategory = activeFilters.category.length === 0 || activeFilters.category.includes(assessment.category);
         
         // Status filter
-        const matchesStatus = statusFilter.length === 0 || statusFilter.some(status => {
+        const matchesStatus = activeFilters.status.length === 0 || activeFilters.status.some(status => {
           switch (status) {
             case "completed": return assessment.status === "Completed";
             case "in-progress": return assessment.status === "In Progress";
@@ -228,7 +271,7 @@ export function AssessmentsPage() {
         });
         
         // School filter  
-        const matchesSchool = schoolFilter.length === 0 || schoolFilter.includes(assessment.school.id);
+        const matchesSchool = activeFilters.school.length === 0 || activeFilters.school.includes(assessment.school.id);
 
         return matchesSearch && matchesCategory && matchesStatus && matchesSchool;
       });
@@ -288,7 +331,7 @@ export function AssessmentsPage() {
       return filtered;
     }
     return [];
-  }, [isMatAdmin, termFilteredAssessments, searchTerm, categoryFilter, statusFilter, schoolFilter, sortConfig]);
+  }, [isMatAdmin, termFilteredAssessments, searchTerm, filters, optimisticFilters, isPending, sortConfig]);
 
   // Pagination calculations
   const totalPages = Math.ceil(filteredAssessments.length / itemsPerPage);
@@ -299,7 +342,7 @@ export function AssessmentsPage() {
   // Reset to first page when filters change
   useMemo(() => {
     setCurrentPage(1);
-  }, [searchTerm, categoryFilter, statusFilter, schoolFilter, selectedTerm]);
+  }, [searchTerm, filters.category, filters.status, filters.school, selectedTerm]);
   
   // Calculate how many assessments are overdue or in-progress (based on term-filtered assessments)
   const overdueCount = useMemo(() => {
@@ -369,12 +412,7 @@ export function AssessmentsPage() {
     }
   };
 
-  const clearAllFilters = () => {
-    setSearchTerm("");
-    setCategoryFilter([]);
-    setStatusFilter([]);
-    setSchoolFilter([]);
-  };
+  const clearAllFilters = clearFilters;
   
   if (error) {
     return (
@@ -439,7 +477,8 @@ export function AssessmentsPage() {
         <FilterBar
           title="Filters"
           layout="department-head"
-          onClearAll={clearAllFilters}
+          onClearAll={clearFilters}
+          isFiltering={isPending}
           filters={[
             {
               type: 'search',
@@ -450,25 +489,22 @@ export function AssessmentsPage() {
             {
               type: 'multiselect' as const,
               placeholder: 'Schools',
-              value: schoolFilter,
-              onChange: setSchoolFilter,
+              value: optimisticFilters.school,
+              onChange: handleSchoolFilterChange,
               options: schoolOptions
             },
             {
               type: 'multiselect' as const,
               placeholder: 'Aspects',
-              value: categoryFilter,
-              onChange: (newValue) => {
-                console.log('Category filter changed to:', newValue);
-                setCategoryFilter(newValue);
-              },
+              value: optimisticFilters.category,
+              onChange: handleCategoryFilterChange,
               options: categoryOptions
             },
             {
               type: 'multiselect' as const,
               placeholder: 'Status',
-              value: statusFilter,
-              onChange: setStatusFilter,
+              value: optimisticFilters.status,
+              onChange: handleStatusFilterChange,
               options: statusOptions
             }
           ]}
@@ -538,7 +574,7 @@ export function AssessmentsPage() {
                         <Button 
                           variant="link" 
                           className="mt-2"
-                          onClick={clearAllFilters}
+                          onClick={clearFilters}
                         >
                           Clear all filters
                         </Button>
@@ -547,7 +583,12 @@ export function AssessmentsPage() {
                   </TableRow>
                 ) : (
                   paginatedAssessments.map((assessment) => (
-                    <TableRow key={assessment.id} className="hover:bg-slate-50">
+                    <TableRow 
+                      key={assessment.id} 
+                      className="hover:bg-slate-50"
+                      onMouseEnter={() => preloadRoute(`/assessments/${assessment.id}`, { priority: 'low' })}
+                      onMouseLeave={() => cancelPreload(`/assessments/${assessment.id}`)}
+                    >
                       <TableCell>
                         <div className="flex items-center gap-3">
                           <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-slate-50 border border-slate-200 flex-shrink-0">

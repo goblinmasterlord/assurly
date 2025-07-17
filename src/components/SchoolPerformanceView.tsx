@@ -1,4 +1,4 @@
-import React, { useMemo, useState, useEffect } from "react";
+import React, { useMemo, useState, useEffect, useTransition, useCallback } from "react";
 import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -33,6 +33,8 @@ import {
   CollapsibleTrigger,
 } from "@/components/ui/collapsible";
 import { Progress } from "@/components/ui/progress";
+import { AnimatedProgress } from "@/components/ui/animated-progress";
+import { AnimatedNumber } from "@/components/ui/animated-number";
 import { SortableTableHead, type SortDirection } from "@/components/ui/sortable-table-head";
 import type { Assessment, AssessmentCategory, SchoolPerformance, AcademicTerm, School } from "@/types/assessment";
 import { cn } from "@/lib/utils";
@@ -58,11 +60,17 @@ import {
 } from "lucide-react";
 import { AssessmentInvitationSheet } from "@/components/AssessmentInvitationSheet";
 import { MiniTrendChart, type TrendDataPoint } from "@/components/ui/mini-trend-chart";
-import { SchoolPerformanceTableSkeleton } from "@/components/ui/table-skeleton";
+import { 
+  SchoolPerformanceTableSkeleton, 
+  FilterBarSkeleton, 
+  TermNavigationSkeleton,
+  InlineRefreshSkeleton 
+} from "@/components/ui/skeleton-loaders";
 import { getAspectDisplayName } from "@/lib/assessment-utils";
 import { assessmentCategories } from "@/lib/mock-data";
 import { FilterBar } from "@/components/ui/filter-bar";
 import { getSchools } from "@/services/assessment-service";
+import { useOptimisticFilter } from "@/hooks/use-optimistic-filter";
 
 type SchoolPerformanceViewProps = {
   assessments: Assessment[];
@@ -78,17 +86,34 @@ type HistoricalData = {
   categoryScores: Map<AssessmentCategory, number>;
 }
 
+const TERM_STORAGE_KEY = "assurly_selected_term_mat_admin";
+
 export function SchoolPerformanceView({ assessments, refreshAssessments, isLoading = false, isRefreshing = false }: SchoolPerformanceViewProps) {
   
+  // Optimistic filter states
   const [searchTerm, setSearchTerm] = useState("");
-  const [performanceFilter, setPerformanceFilter] = useState<string[]>([]);
-  const [statusFilter, setStatusFilter] = useState<string[]>([]);
-  const [categoryFilter, setCategoryFilter] = useState<string[]>([]);
-  const [schoolFilter, setSchoolFilter] = useState<string[]>([]);
   const [criticalFilter, setCriticalFilter] = useState<boolean>(false);
+  const [isPending, startTransition] = useTransition();
+  
+  // Individual filter states for optimistic updates
+  const [filters, setFilters] = useState({
+    performance: [] as string[],
+    status: [] as string[],
+    category: [] as string[],
+    school: [] as string[]
+  });
+  const [optimisticFilters, setOptimisticFilters] = useState({
+    performance: [] as string[],
+    status: [] as string[],
+    category: [] as string[],
+    school: [] as string[]
+  });
   const [invitationSheetOpen, setInvitationSheetOpen] = useState(false);
   const [expandedSchools, setExpandedSchools] = useState<Set<string>>(new Set());
-  const [selectedTerm, setSelectedTerm] = useState<string>(""); // Will be set to first available term
+  const [selectedTerm, setSelectedTerm] = useState<string>(() => {
+    // Initialize from localStorage
+    return localStorage.getItem(TERM_STORAGE_KEY) || "";
+  });
   const [sortConfig, setSortConfig] = useState<{ key: string; direction: SortDirection }>({
     key: "",
     direction: null
@@ -148,14 +173,23 @@ export function SchoolPerformanceView({ assessments, refreshAssessments, isLoadi
     return terms;
   }, [assessments]);
 
-  // Auto-select the first available term if none is selected
+  // Auto-select the first available term if none is selected or if saved term is no longer available
   useEffect(() => {
-    if (availableTerms.length > 0 && !selectedTerm) {
-      const firstTerm = availableTerms[0];
-      // console.debug('Auto-selecting first available term:', firstTerm);
-      setSelectedTerm(firstTerm);
+    if (availableTerms.length > 0) {
+      if (!selectedTerm || !availableTerms.includes(selectedTerm)) {
+        const firstTerm = availableTerms[0];
+        // console.debug('Auto-selecting first available term:', firstTerm);
+        setSelectedTerm(firstTerm);
+        localStorage.setItem(TERM_STORAGE_KEY, firstTerm);
+      }
     }
   }, [availableTerms, selectedTerm]);
+  
+  // Persist term selection
+  const handleTermChange = (term: string) => {
+    setSelectedTerm(term);
+    localStorage.setItem(TERM_STORAGE_KEY, term);
+  };
 
   // Filter assessments by selected term
   const filteredByTermAssessments = useMemo(() => {
@@ -318,9 +352,6 @@ export function SchoolPerformanceView({ assessments, refreshAssessments, isLoadi
     label: getAspectDisplayName(categoryInfo.value),
     value: categoryInfo.value
   }));
-  
-  // DEBUG: Log category options being created
-  console.log('SchoolPerformanceView - Category options created:', categoryOptions);
 
   const uniqueSchools = [...new Set(filteredByTermAssessments.map(a => a.school.id))];
   const schoolOptions: MultiSelectOption[] = schools
@@ -329,23 +360,51 @@ export function SchoolPerformanceView({ assessments, refreshAssessments, isLoadi
       value: school.id
     }));
 
-  // DEBUG: Add debugging wrappers for filter state changes
+  // Optimistic filter update handlers
+  const updateFilter = useCallback((filterType: keyof typeof filters, value: string[]) => {
+    // Immediate optimistic update
+    setOptimisticFilters(prev => ({ ...prev, [filterType]: value }));
+    
+    // Deferred actual update with transition
+    startTransition(() => {
+      setFilters(prev => ({ ...prev, [filterType]: value }));
+    });
+  }, []);
+
   const handlePerformanceFilterChange = (newValue: string[]) => {
-    setPerformanceFilter(newValue);
+    updateFilter('performance', newValue);
   };
 
   const handleStatusFilterChange = (newValue: string[]) => {
-    setStatusFilter(newValue);
+    updateFilter('status', newValue);
   };
 
   const handleCategoryFilterChange = (newValue: string[]) => {
-    console.log('SchoolPerformanceView - Category filter changed to:', newValue);
-    setCategoryFilter(newValue);
+    updateFilter('category', newValue);
   };
 
   const handleSchoolFilterChange = (newValue: string[]) => {
-    setSchoolFilter(newValue);
+    updateFilter('school', newValue);
   };
+  
+  const clearFilters = useCallback(() => {
+    setSearchTerm("");
+    setCriticalFilter(false);
+    setOptimisticFilters({
+      performance: [],
+      status: [],
+      category: [],
+      school: []
+    });
+    startTransition(() => {
+      setFilters({
+        performance: [],
+        status: [],
+        category: [],
+        school: []
+      });
+    });
+  }, []);
 
   // Group assessments by school and calculate performance metrics
   const schoolPerformanceData = useMemo(() => {
@@ -458,12 +517,15 @@ export function SchoolPerformanceView({ assessments, refreshAssessments, isLoadi
   };
 
   const filteredSchoolData = useMemo(() => {
+    // Use optimistic filters when pending, otherwise use actual filters
+    const activeFilters = isPending ? optimisticFilters : filters;
+    
     let filtered = schoolPerformanceData.filter(school => {
       const matchesSearch = searchTerm === "" ||
         school.school.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
         (school.school.code && school.school.code.toLowerCase().includes(searchTerm.toLowerCase()));
 
-      const matchesPerformance = performanceFilter.length === 0 || performanceFilter.some(filter => {
+      const matchesPerformance = activeFilters.performance.length === 0 || activeFilters.performance.some(filter => {
         switch (filter) {
           case "excellent": return school.overallScore >= 3.5;
           case "good": return school.overallScore >= 2.5 && school.overallScore < 3.5;
@@ -474,7 +536,7 @@ export function SchoolPerformanceView({ assessments, refreshAssessments, isLoadi
         }
       });
 
-      const matchesStatus = statusFilter.length === 0 || statusFilter.some(status => {
+      const matchesStatus = activeFilters.status.length === 0 || activeFilters.status.some(status => {
         return school.assessmentsByCategory.some(cat => {
           switch (status) {
             case "completed": return cat.status === "Completed";
@@ -486,21 +548,11 @@ export function SchoolPerformanceView({ assessments, refreshAssessments, isLoadi
         });
       });
 
-      const matchesCategory = categoryFilter.length === 0 || categoryFilter.some(category => {
+      const matchesCategory = activeFilters.category.length === 0 || activeFilters.category.some(category => {
         return school.assessmentsByCategory.some(cat => cat.category === category);
       });
-      
-      // DEBUG: Log category filter matching
-      if (categoryFilter.length > 0 && searchTerm === '') {
-        console.log('SchoolPerformanceView - Category filter debug:', {
-          filterValues: categoryFilter,
-          schoolName: school.school.name,
-          assessmentCategories: school.assessmentsByCategory.map(cat => cat.category),
-          matches: matchesCategory
-        });
-      }
 
-      const matchesSchool = schoolFilter.length === 0 || schoolFilter.includes(school.school.id);
+      const matchesSchool = activeFilters.school.length === 0 || activeFilters.school.includes(school.school.id);
       
       const matchesCritical = !criticalFilter || school.criticalStandardsTotal > 0;
 
@@ -559,17 +611,10 @@ export function SchoolPerformanceView({ assessments, refreshAssessments, isLoadi
     }
 
     return filtered;
-  }, [schoolPerformanceData, searchTerm, performanceFilter, statusFilter, categoryFilter, schoolFilter, criticalFilter, sortConfig]);
+  }, [schoolPerformanceData, searchTerm, filters, optimisticFilters, isPending, criticalFilter, sortConfig]);
 
   // Clear all filters
-  const clearAllFilters = () => {
-    setSearchTerm("");
-    setPerformanceFilter([]);
-    setStatusFilter([]);
-    setCategoryFilter([]);
-    setSchoolFilter([]);
-    setCriticalFilter(false);
-  };
+  const clearAllFilters = clearFilters;
 
   const getCategoryIcon = (category: string) => {
     // Handle both lowercase keys and display names
@@ -622,14 +667,18 @@ export function SchoolPerformanceView({ assessments, refreshAssessments, isLoadi
     }
   };
 
-  const toggleSchoolExpansion = (schoolId: string) => {
-    const newExpanded = new Set(expandedSchools);
-    if (newExpanded.has(schoolId)) {
-      newExpanded.delete(schoolId);
-    } else {
-      newExpanded.add(schoolId);
-    }
-    setExpandedSchools(newExpanded);
+  const toggleSchoolExpansion = async (schoolId: string) => {
+    await inlineLoading.withLoading(`expand-${schoolId}`, async () => {
+      const newExpanded = new Set(expandedSchools);
+      if (newExpanded.has(schoolId)) {
+        newExpanded.delete(schoolId);
+      } else {
+        newExpanded.add(schoolId);
+      }
+      setExpandedSchools(newExpanded);
+      // Simulate loading delay for smooth animation
+      await new Promise(resolve => setTimeout(resolve, 200));
+    });
   };
 
 
@@ -647,28 +696,37 @@ export function SchoolPerformanceView({ assessments, refreshAssessments, isLoadi
             </p>
           </div>
           <div className="flex flex-col space-y-2 md:flex-row md:space-y-0 md:space-x-3">
-            <TermStepper
-              terms={availableTerms}
-              currentTerm={selectedTerm}
-              onTermChange={setSelectedTerm}
+            {isLoading ? (
+              <TermNavigationSkeleton />
+            ) : (
+              <TermStepper
+                terms={availableTerms}
+                currentTerm={selectedTerm}
+                onTermChange={handleTermChange}
+                className="w-full md:w-auto"
+              />
+            )}
+            <Button 
+              onClick={() => setInvitationSheetOpen(true)}
               className="w-full md:w-auto"
-            />
-          <Button 
-            onClick={() => setInvitationSheetOpen(true)}
-            className="w-full md:w-auto"
-          >
-            <CheckCircle2 className="mr-2 h-4 w-4" />
-            Request Rating
-          </Button>
+              disabled={isLoading}
+            >
+              <CheckCircle2 className="mr-2 h-4 w-4" />
+              Request Rating
+            </Button>
           </div>
         </div>
 
         {/* Enhanced Filters */}
-        <FilterBar
-          title="Filters"
-          layout="mat-admin"
-          onClearAll={clearAllFilters}
-          filters={[
+        {isLoading ? (
+          <FilterBarSkeleton />
+        ) : (
+          <FilterBar
+            title="Filters"
+            layout="mat-admin"
+            onClearAll={clearAllFilters}
+            isFiltering={isPending}
+            filters={[
             {
               type: 'search',
               placeholder: 'Search schools...',
@@ -678,28 +736,28 @@ export function SchoolPerformanceView({ assessments, refreshAssessments, isLoadi
             {
               type: 'multiselect',
               placeholder: 'Schools',
-              value: schoolFilter,
+              value: optimisticFilters.school,
               onChange: handleSchoolFilterChange,
               options: schoolOptions
             },
             {
               type: 'multiselect',
               placeholder: 'Performance',
-              value: performanceFilter,
+              value: optimisticFilters.performance,
               onChange: handlePerformanceFilterChange,
               options: performanceOptions
             },
             {
               type: 'multiselect',
               placeholder: 'Status', 
-              value: statusFilter,
+              value: optimisticFilters.status,
               onChange: handleStatusFilterChange,
               options: statusOptions
             },
             {
               type: 'multiselect',
               placeholder: 'Aspect',
-              value: categoryFilter,
+              value: optimisticFilters.category,
               onChange: handleCategoryFilterChange,
               options: categoryOptions
             },
@@ -712,6 +770,7 @@ export function SchoolPerformanceView({ assessments, refreshAssessments, isLoadi
             }
           ]}
         />
+        )}
 
       {/* Schools Table */}
       <Card className="relative">
@@ -735,58 +794,83 @@ export function SchoolPerformanceView({ assessments, refreshAssessments, isLoadi
           </CardDescription>
         </CardHeader>
         <CardContent className="p-0">
-          <Table>
-            <TableHeader>
-              <TableRow className="bg-slate-50/80 border-b border-slate-200">
-                <TableHead className="w-12"></TableHead>
-                <SortableTableHead 
-                  sortKey="school"
-                  currentSort={sortConfig}
-                  onSort={handleSort}
-                  className="text-left"
-                >
-                  SCHOOL
-                </SortableTableHead>
-                <SortableTableHead 
-                  className="text-center"
-                  sortKey="assessments"
-                  currentSort={sortConfig}
-                  onSort={handleSort}
-                >
-                  RATINGS
-                </SortableTableHead>
-                <SortableTableHead 
-                  className="text-center"
-                  sortKey="overallScore"
-                  currentSort={sortConfig}
-                  onSort={handleSort}
-                >
-                  OVERALL SCORE
-                </SortableTableHead>
-                <TableHead className="text-center">PREVIOUS 3 TERMS</TableHead>
-                <SortableTableHead 
-                  className="text-center"
-                  sortKey="criticalStandards"
-                  currentSort={sortConfig}
-                  onSort={handleSort}
-                >
-                  INTERVENTION REQUIRED
-                </SortableTableHead>
-                <SortableTableHead 
-                  className="text-center"
-                  sortKey="lastUpdated"
-                  currentSort={sortConfig}
-                  onSort={handleSort}
-                >
-                  LAST UPDATED
-                </SortableTableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {isLoading ? (
-                <SchoolPerformanceTableSkeleton />
-              ) : (
-                filteredSchoolData.map((school) => {
+          {isLoading ? (
+            <div className="p-6">
+              <Table>
+                <TableHeader>
+                  <TableRow className="bg-slate-50/80 border-b border-slate-200">
+                    <TableHead className="w-12"></TableHead>
+                    <TableHead>SCHOOL</TableHead>
+                    <TableHead className="text-center">RATINGS</TableHead>
+                    <TableHead className="text-center">OVERALL SCORE</TableHead>
+                    <TableHead className="text-center">PREVIOUS 3 TERMS</TableHead>
+                    <TableHead className="text-center">INTERVENTION REQ</TableHead>
+                    <TableHead className="text-center">LAST UPDATED</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  <SchoolPerformanceTableSkeleton />
+                </TableBody>
+              </Table>
+            </div>
+          ) : filteredSchoolData.length === 0 ? (
+            <div className="text-center py-12">
+              <SchoolIcon className="mx-auto h-12 w-12 text-slate-400" />
+              <h3 className="mt-4 text-sm font-medium text-slate-900">No schools found</h3>
+              <p className="mt-2 text-sm text-slate-500">
+                Try adjusting your search or filter criteria.
+              </p>
+            </div>
+          ) : (
+            <Table>
+              <TableHeader>
+                <TableRow className="bg-slate-50/80 border-b border-slate-200">
+                  <TableHead className="w-12"></TableHead>
+                  <SortableTableHead 
+                    sortKey="school"
+                    currentSort={sortConfig}
+                    onSort={handleSort}
+                    className="text-left"
+                  >
+                    SCHOOL
+                  </SortableTableHead>
+                  <SortableTableHead 
+                    className="text-center"
+                    sortKey="assessments"
+                    currentSort={sortConfig}
+                    onSort={handleSort}
+                  >
+                    RATINGS
+                  </SortableTableHead>
+                  <SortableTableHead 
+                    className="text-center"
+                    sortKey="overallScore"
+                    currentSort={sortConfig}
+                    onSort={handleSort}
+                  >
+                    OVERALL SCORE
+                  </SortableTableHead>
+                  <TableHead className="text-center">PREVIOUS 3 TERMS</TableHead>
+                  <SortableTableHead 
+                    className="text-center"
+                    sortKey="criticalStandards"
+                    currentSort={sortConfig}
+                    onSort={handleSort}
+                  >
+                    INTERVENTION REQ
+                  </SortableTableHead>
+                  <SortableTableHead 
+                    className="text-center"
+                    sortKey="lastUpdated"
+                    currentSort={sortConfig}
+                    onSort={handleSort}
+                  >
+                    LAST UPDATED
+                  </SortableTableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {filteredSchoolData.map((school, index) => {
                 const isExpanded = expandedSchools.has(school.school.id);
                 const completedCount = school.assessmentsByCategory.filter(cat => cat.status === "Completed").length;
                 const totalCount = school.assessmentsByCategory.length;
@@ -794,7 +878,8 @@ export function SchoolPerformanceView({ assessments, refreshAssessments, isLoadi
                 return (
                   <React.Fragment key={school.school.id}>
                     <TableRow 
-                      className="cursor-pointer hover:bg-slate-50"
+                      className="cursor-pointer hover:bg-slate-50 transition-colors duration-200 animate-in fade-in-0 slide-in-from-bottom-1"
+                      style={{ animationDelay: `${index * 80}ms`, animationFillMode: 'both' }}
                       onClick={() => toggleSchoolExpansion(school.school.id)}
                     >
                       <TableCell className="w-12 px-2">
@@ -822,14 +907,14 @@ export function SchoolPerformanceView({ assessments, refreshAssessments, isLoadi
                       <TableCell className="text-center">
                         <div className="flex items-center justify-center gap-2">
                           <span className="text-sm font-semibold text-slate-700 tabular-nums">{completedCount}/{totalCount}</span>
-                          <Progress value={(completedCount / totalCount) * 100} className="w-16 h-2" />
+                          <AnimatedProgress value={(completedCount / totalCount) * 100} className="w-16 h-2" delay={index * 80 + 200} />
                         </div>
                       </TableCell>
                       <TableCell className="text-center">
                         {school.overallScore > 0 ? (
                           <div className="flex items-center justify-center space-x-1">
                           <Badge variant="outline" className={getScoreBadgeColor(school.overallScore)}>
-                            {school.overallScore.toFixed(1)}
+                            <AnimatedNumber value={school.overallScore} delay={index * 80 + 300} />
                           </Badge>
                               {/* More compact change indicator */}
                               {(() => {
@@ -910,7 +995,6 @@ export function SchoolPerformanceView({ assessments, refreshAssessments, isLoadi
                       </TableCell>
                     </TableRow>
 
-
                     {/* Expanded Content */}
                     {isExpanded && (
                       <TableRow>
@@ -931,10 +1015,12 @@ export function SchoolPerformanceView({ assessments, refreshAssessments, isLoadi
                                   </TableRow>
                                 </TableHeader>
                                 <TableBody>
-                                  {school.assessmentsByCategory.map((categoryData) => {
+                                  {school.assessmentsByCategory.map((categoryData, catIndex) => {
                                     return (
                                       <React.Fragment key={categoryData.category}>
-                                        <TableRow className="hover:bg-slate-50">
+                                        <TableRow 
+                                          className="hover:bg-slate-50 transition-colors duration-200 animate-in fade-in-0 slide-in-from-left-2"
+                                          style={{ animationDelay: `${catIndex * 60}ms`, animationFillMode: 'both' }}>
                                       <TableCell>
                                         <div className="flex items-center gap-3">
                                           <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-slate-50 border border-slate-200 flex-shrink-0">
@@ -1029,9 +1115,10 @@ export function SchoolPerformanceView({ assessments, refreshAssessments, isLoadi
                                           <span className="text-sm font-semibold text-slate-700 tabular-nums">
                                             {categoryData.completedStandards}/{categoryData.totalStandards}
                                           </span>
-                                          <Progress 
+                                          <AnimatedProgress 
                                             value={(categoryData.completedStandards / categoryData.totalStandards) * 100} 
                                             className="w-14 h-2"
+                                            delay={catIndex * 60 + 200}
                                           />
                                         </div>
                                       </TableCell>
@@ -1074,7 +1161,6 @@ export function SchoolPerformanceView({ assessments, refreshAssessments, isLoadi
                                         </Button>
                                       </TableCell>
                                     </TableRow>
-
                                       </React.Fragment>
                                     );
                                   })}
@@ -1087,19 +1173,9 @@ export function SchoolPerformanceView({ assessments, refreshAssessments, isLoadi
                     )}
                   </React.Fragment>
                 );
-                })
-              )}
+                })}
             </TableBody>
           </Table>
-
-          {filteredSchoolData.length === 0 && (
-            <div className="text-center py-12">
-              <SchoolIcon className="mx-auto h-12 w-12 text-slate-400" />
-              <h3 className="mt-4 text-sm font-medium text-slate-900">No schools found</h3>
-              <p className="mt-2 text-sm text-slate-500">
-                Try adjusting your search or filter criteria.
-              </p>
-            </div>
           )}
         </CardContent>
       </Card>

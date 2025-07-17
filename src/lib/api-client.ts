@@ -4,6 +4,9 @@ import type { AxiosResponse, InternalAxiosRequestConfig } from 'axios';
 // Request metadata storage
 const requestMetadata = new Map<string, { startTime: number }>();
 
+// Debug logging control
+const DEBUG_API = import.meta.env.VITE_DEBUG_API === 'true';
+
 // Enhanced API client with industry-standard optimizations
 const apiClient = axios.create({
   baseURL: import.meta.env.VITE_API_BASE_URL,
@@ -21,8 +24,8 @@ apiClient.interceptors.request.use(
     requestMetadata.set(requestId, { startTime: Date.now() });
     config.headers['X-Request-Id'] = requestId;
     
-    // Log requests in development
-    if (import.meta.env.DEV) {
+    // Log requests if debug is enabled
+    if (DEBUG_API) {
       console.log(`🚀 API Request: ${config.method?.toUpperCase()} ${config.url}`);
     }
     
@@ -46,7 +49,7 @@ apiClient.interceptors.response.use(
     const metadata = requestMetadata.get(requestId);
     const duration = metadata ? Date.now() - metadata.startTime : 0;
     
-    if (import.meta.env.DEV) {
+    if (DEBUG_API) {
       console.log(`✅ API Response: ${response.config.method?.toUpperCase()} ${response.config.url} (${duration}ms)`);
     }
     
@@ -63,7 +66,7 @@ apiClient.interceptors.response.use(
     const metadata = requestId ? requestMetadata.get(requestId) : null;
     const duration = metadata ? Date.now() - metadata.startTime : 0;
     
-    if (import.meta.env.DEV) {
+    if (DEBUG_API) {
       console.error(`❌ API Error: ${error.config?.method?.toUpperCase()} ${error.config?.url} (${duration}ms)`, error);
     }
     

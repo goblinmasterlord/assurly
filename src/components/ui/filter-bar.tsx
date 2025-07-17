@@ -1,5 +1,5 @@
 import React, { useState } from 'react'
-import { Filter, Search, ChevronDown, ChevronUp, TrendingUp, Users, School, BookOpen, DollarSign, Building, Shield, Monitor, Settings, AlertTriangle, X } from 'lucide-react'
+import { Filter, Search, ChevronDown, ChevronUp, TrendingUp, Users, School, BookOpen, DollarSign, Building, Shield, Monitor, Settings, AlertTriangle, X, Loader2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
@@ -24,6 +24,7 @@ interface FilterBarProps {
   onClearAll?: () => void
   className?: string
   layout?: 'mat-admin' | 'department-head'
+  isFiltering?: boolean
 }
 
 export function FilterBar({ 
@@ -31,7 +32,8 @@ export function FilterBar({
   filters, 
   onClearAll, 
   className,
-  layout = 'department-head'
+  layout = 'department-head',
+  isFiltering = false
 }: FilterBarProps) {
   const [isSearchExpanded, setIsSearchExpanded] = useState(false)
   
@@ -174,6 +176,12 @@ export function FilterBar({
           <div className="flex items-center gap-3">
             <Filter className="h-4 w-4 text-slate-600" />
             <CardTitle className="text-base font-semibold">{title}</CardTitle>
+            {isFiltering && (
+              <div className="flex items-center gap-1.5 text-xs text-slate-500">
+                <Loader2 className="h-3 w-3 animate-spin" />
+                <span>Filtering...</span>
+              </div>
+            )}
           </div>
           
           <div className="flex items-center gap-2">

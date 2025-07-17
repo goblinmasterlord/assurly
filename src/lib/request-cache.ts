@@ -205,7 +205,7 @@ class RequestCache {
       const key = this.generateKey(type, params);
       this.cache.delete(key);
       this.pendingRequests.delete(key);
-      console.log(`🗑️  Invalidated cache: ${key}`);
+      if (DEBUG_CACHE) console.log(`🗑️  Invalidated cache: ${key}`);
     } else {
       // Invalidate all entries of this type
       const keysToDelete: string[] = [];
@@ -218,7 +218,7 @@ class RequestCache {
         this.cache.delete(key);
         this.pendingRequests.delete(key);
       });
-      console.log(`🗑️  Invalidated all cache entries for type: ${type}`);
+      if (DEBUG_CACHE) console.log(`🗑️  Invalidated all cache entries for type: ${type}`);
     }
   }
 

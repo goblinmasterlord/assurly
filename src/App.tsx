@@ -4,10 +4,27 @@ import { HomePage } from "@/pages/Home";
 import { AssessmentsPage } from "@/pages/Assessments";
 import { AssessmentDetailPage } from "@/pages/AssessmentDetail";
 import { Toaster } from "@/components/ui/toaster";
+import { useKeyboardShortcuts } from "@/hooks/use-keyboard-shortcuts";
+import { useUser } from "@/contexts/UserContext";
 
-function App() {
+function AppContent() {
+  useKeyboardShortcuts();
+  const { isLoading } = useUser();
+  
+  // Show nothing while loading role from localStorage
+  if (isLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="text-center">
+          <div className="h-8 w-8 animate-spin rounded-full border-4 border-gray-300 border-t-blue-600 mx-auto"></div>
+          <p className="mt-2 text-sm text-gray-500">Loading...</p>
+        </div>
+      </div>
+    );
+  }
+  
   return (
-    <BrowserRouter>
+    <>
       <Routes>
         <Route path="/" element={<RootLayout />}>
           <Route index element={<HomePage />} />
@@ -16,6 +33,14 @@ function App() {
         </Route>
       </Routes>
       <Toaster />
+    </>
+  );
+}
+
+function App() {
+  return (
+    <BrowserRouter>
+      <AppContent />
     </BrowserRouter>
   );
 }

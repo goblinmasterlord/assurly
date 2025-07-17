@@ -60,10 +60,11 @@ This document provides a functional description of the frontend components in th
                 - Progress cells: Numeric display with Progress bar (w-16)
                 - Action buttons: variant="outline" h-8 px-3 with icons (Eye/ChevronRight)
             - Filtering: By search term, category, status, and school (3 filters in single row on desktop).
+            - **Optimistic Filtering**: Implements immediate visual feedback for filter changes using React concurrent features.
             - Status indicators and colors are used for clarity.
-    - State Management (for Department Head view): `searchTerm`, `categoryFilter`, `statusFilter`, `schoolFilter`, `sortConfig`.
-    - Data: Uses `mockAssessmentsAdmin` or `mockAssessmentsForDeptHead` based on role.
-    - UI Components: `Badge`, `Button`, `Card`, `Table`, `Input`, `Select`, `Progress`, `SortableTableHead`.
+    - State Management (for Department Head view): Uses optimistic filter states with `useTransition` for smooth updates.
+    - Data: Uses real-time data from `useAssessments` hook with caching and background refresh.
+    - UI Components: `Badge`, `Button`, `Card`, `Table`, `Input`, `Select`, `Progress`, `SortableTableHead`, `AnimatedProgress`, `AnimatedNumber`.
     - Helper Functions: `getStatusColor`, `getStatusIcon`, `getCategoryIcon` for consistent styling.
 
 ### `src/pages/AssessmentDetail.tsx`
@@ -129,10 +130,12 @@ This document provides a functional description of the frontend components in th
 ### `src/components/SchoolPerformanceView.tsx`
 - **Description:** MAT admin dashboard view showing school performance metrics and assessment overview.
 - **Key Properties/Functionality:**
-    - Props: `assessments` (Assessment[]), `refreshAssessments` (callback), `isLoading` (boolean).
+    - Props: `assessments` (Assessment[]), `refreshAssessments` (callback), `isLoading` (boolean), `isRefreshing` (boolean).
     - Features: Expandable school rows, performance trends, filtering with FilterBar, term navigation.
     - **Filter Integration**: Uses FilterBar with 'mat-admin' layout including performance, status, category filters plus intervention checkbox.
+    - **Optimistic Updates**: Implements immediate filter feedback using React's useTransition for smooth UX.
     - **Data Display**: School cards with scores, trends, progress bars, expandable assessment details by category.
+    - **Loading States**: Comprehensive skeleton loaders, inline refresh indicators, and subtle loading overlays.
     - Performance trend calculation with color-coded badges and change indicators.
 
 ### `src/components/MatAdminAssessmentsView.tsx`
@@ -433,13 +436,14 @@ This section details the reusable UI components, many of which are based on Radi
 ### `src/components/ui/filter-bar.tsx`
 - **Description:** Professional, reusable filter container component with intelligent layout system for different view contexts.
 - **Key Properties/Functionality:**
-    - Props: `title`, `filters` (FilterConfig[]), `onClearAll`, `layout` ('mat-admin' | 'department-head'), `className`.
-    - **Filter Types**: 'search' (with icon), 'multiselect' (using MultiSelect component), 'checkbox' (with label).
+    - Props: `title`, `filters` (FilterConfig[]), `onClearAll`, `layout` ('mat-admin' | 'department-head'), `className`, `isFiltering` (boolean).
+    - **Filter Types**: 'search' (with expandable toggle), 'multiselect' (using MultiSelect component), 'checkbox' (with label).
     - **Intelligent Layouts**: 
-      - MAT Admin: 12-column grid (Search: 4 cols, MultiSelects: 2 cols each, Checkbox: 2 cols)
-      - Department Head: 8-10 column grid (Search: 4 cols, MultiSelects: 2 cols each)
+      - MAT Admin: 4 columns on lg, 2 on sm, 1 on mobile
+      - Department Head: 3 columns on md, 1 on mobile
     - **Professional Design**: Consistent h-9 height, gap-4 spacing, responsive breakpoints, conditional Clear All button.
-    - **Smart Features**: Clear All only shows when filters have values, automatic column span calculation, responsive grid collapse.
+    - **Smart Features**: Clear All only shows when filters have values, animated search expansion, optimistic loading indicator.
+    - **Loading State**: Shows "Filtering..." with spinner animation when `isFiltering` is true.
 
 ## Utility Functions (`src/lib/`)
 
@@ -457,6 +461,62 @@ This section details the reusable UI components, many of which are based on Radi
     - Integration with assessment-utils for strategy name handling.
     - Category-specific styling and icon mappings.
 
+### `src/components/ui/skeleton-loaders.tsx`
+- **Description:** Comprehensive anatomically correct skeleton loading components with shimmer effects.
+- **Key Components:**
+    - `SkeletonBox`: Base skeleton with optional shimmer animation using gradient overlay.
+    - `SchoolCardSkeleton`: MAT admin card skeleton with icon, title, badges, and progress bars.
+    - `SchoolTableRowSkeleton`: MAT admin table row with 7 columns matching exact structure.
+    - `SchoolPerformanceTableSkeleton`: Complete table skeleton with staggered row animations.
+    - `FilterBarSkeleton`: Filter bar placeholder with grid layout.
+    - `AssessmentDetailSkeleton`: Complete assessment detail page skeleton.
+    - `InlineRefreshSkeleton`: Subtle overlay with animated dots for data updates.
+- **Animation Features**: Staggered delays, fade-in/slide-in animations, shimmer effects.
+
+### `src/components/ui/animated-progress.tsx`
+- **Description:** Enhanced progress bar with smooth animations and transitions.
+- **Key Properties/Functionality:**
+    - Props: `value` (0-100), `delay` (animation delay), `className`, `indicatorClassName`.
+    - Features: Animated fill transitions, configurable delays for staggered effects.
+    - Smooth transitions using CSS transforms and opacity.
+
+### `src/components/ui/animated-number.tsx`
+- **Description:** Number display component with smooth counting animations.
+- **Key Properties/Functionality:**
+    - Props: `value` (number), `duration` (ms), `delay` (ms), `decimals`, `className`.
+    - Features: Easing functions, configurable decimal places, animation delays.
+    - Uses RAF (requestAnimationFrame) for smooth performance.
+
+### `src/components/ui/staggered-list.tsx`
+- **Description:** Container components for creating staggered animation effects.
+- **Key Components:**
+    - `StaggeredList`: Wraps children with individual animation delays.
+    - `StaggeredItem`: Individual item wrapper with animation support.
+- **Props**: `delay`, `stagger` (ms between items), `animationClassName`.
+- **Note**: Use carefully with tables - apply animations directly to TableRow instead.
+
+### `src/components/ui/sortable-table-head.tsx`
+- **Description:** Enhanced table header with sorting functionality and visual indicators.
+- **Key Properties/Functionality:**
+    - Props: `column` (key), `children`, `onSort` (callback), `sortConfig` (current state).
+    - Features: Tri-state sorting (asc/desc/none), visual indicators with icons.
+    - Accessible keyboard support and ARIA labels.
+
+### `src/hooks/use-optimistic-filter.ts`
+- **Description:** Custom hook for implementing optimistic UI updates with React's concurrent features.
+- **Key Properties/Functionality:**
+    - Parameters: `data` (array), `filterFn` (predicate), `debounceMs` (optional).
+    - Returns: `filteredData`, `filters`, `updateFilter`, `isPending`, `clearFilters`.
+    - Features: Immediate visual feedback, deferred updates with useTransition.
+    - Supports debouncing for expensive operations.
+
+### `src/hooks/use-assessments.ts`
+- **Description:** Enhanced data fetching hook with caching and background refresh.
+- **Key Properties/Functionality:**
+    - Features: SWR-style caching, automatic background refresh, deduplication.
+    - Returns: `assessments`, `isLoading`, `isRefreshing`, `error`, `refreshAssessments`.
+    - Smart refresh logic that maintains UI state during updates.
+
 ### Key Design Principles Applied:
 1. **Consistent Heights**: All interactive elements use h-9 (36px) for perfect alignment
 2. **Professional Spacing**: gap-4 (16px) standard, with contextual adjustments
@@ -465,3 +525,6 @@ This section details the reusable UI components, many of which are based on Radi
 5. **Fixed Layouts**: Prevents layout jumping with fixed widths and consistent sizing
 6. **Type Safety**: Full TypeScript support with proper interfaces
 7. **Accessibility**: ARIA labels, keyboard navigation, screen reader support
+8. **Performance First**: Optimistic updates, smart caching, perceived performance optimizations
+9. **Anatomically Correct Skeletons**: Loading states that match exact component structure
+10. **Smooth Animations**: Staggered effects, transitions, and micro-interactions

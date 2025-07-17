@@ -3,12 +3,16 @@ import { RoleSwitcher } from "@/components/RoleSwitcher";
 import { Button } from "@/components/ui/button";
 import { useUser } from "@/contexts/UserContext";
 import { ClipboardList, LogIn } from "lucide-react";
+import { TopLoader } from "@/components/ui/top-loader";
+import { KeyboardHint } from "@/components/ui/keyboard-hint";
 
 export function RootLayout() {
   const { role } = useUser();
   
   return (
     <div className="relative flex min-h-screen flex-col">
+      <TopLoader />
+      <KeyboardHint />
       <header className="sticky top-0 z-40 w-full border-b bg-background">
         <div className="container flex h-16 items-center justify-between">
           <div className="flex items-center">

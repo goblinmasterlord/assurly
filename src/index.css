@@ -90,3 +90,71 @@
     font-feature-settings: "rlig" 1, "calt" 1;
   }
 }
+
+/* Performance optimizations */
+@layer utilities {
+  /* Shimmer animation for skeleton loaders */
+  @keyframes shimmer {
+    0% {
+      transform: translateX(-100%);
+    }
+    100% {
+      transform: translateX(100%);
+    }
+  }
+  
+  .animate-shimmer {
+    animation: shimmer 2s infinite;
+  }
+  
+  /* Navigation state for instant feedback */
+  .navigating {
+    cursor: wait;
+  }
+  
+  .navigating * {
+    pointer-events: none;
+  }
+  
+  /* Optimized transitions */
+  .transition-gpu {
+    transform: translateZ(0);
+    will-change: transform;
+  }
+  
+  /* Reduce motion for accessibility */
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+    }
+  }
+  
+  /* Optimized hover states */
+  @media (hover: hover) {
+    .hover\:scale-sm:hover {
+      transform: scale(0.98);
+    }
+  }
+  
+  /* Fill mode for animations */
+  .fill-mode-both {
+    animation-fill-mode: both;
+  }
+  
+  /* Contain layout for performance */
+  .contain-layout {
+    contain: layout;
+  }
+  
+  .contain-paint {
+    contain: paint;
+  }
+  
+  .contain-strict {
+    contain: strict;
+  }
+}
