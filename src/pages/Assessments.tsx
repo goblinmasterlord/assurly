@@ -161,8 +161,7 @@ export function AssessmentsPage() {
   // Show all schools from API - same as MAT admin view
   const schoolOptions: MultiSelectOption[] = schools.map(school => ({
     label: school.name,
-    value: school.id,
-    icon: <SchoolIcon className="h-4 w-4" />
+    value: school.id
   }));
   
   // Create filter options for multi-select components - SHOW ALL ASPECTS
@@ -170,6 +169,9 @@ export function AssessmentsPage() {
     label: getAspectDisplayName(categoryInfo.value),
     value: categoryInfo.value
   }));
+  
+  // DEBUG: Log category options being created
+  console.log('Category options created:', categoryOptions);
 
   const statusOptions: MultiSelectOption[] = [
     { label: "Completed", value: "completed" },
@@ -202,6 +204,17 @@ export function AssessmentsPage() {
         
         // Category filter
         const matchesCategory = categoryFilter.length === 0 || categoryFilter.includes(assessment.category);
+        
+        // DEBUG: Log filter matching for category
+        if (categoryFilter.length > 0 && searchTerm === '') {
+          console.log('Category filter debug:', {
+            filterValues: categoryFilter,
+            assessmentCategory: assessment.category,
+            matches: categoryFilter.includes(assessment.category),
+            assessmentName: assessment.name,
+            school: assessment.school.name
+          });
+        }
         
         // Status filter
         const matchesStatus = statusFilter.length === 0 || statusFilter.some(status => {
@@ -445,7 +458,10 @@ export function AssessmentsPage() {
               type: 'multiselect' as const,
               placeholder: 'Aspects',
               value: categoryFilter,
-              onChange: setCategoryFilter,
+              onChange: (newValue) => {
+                console.log('Category filter changed to:', newValue);
+                setCategoryFilter(newValue);
+              },
               options: categoryOptions
             },
             {

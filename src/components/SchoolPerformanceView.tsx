@@ -300,9 +300,11 @@ export function SchoolPerformanceView({ assessments, refreshAssessments, isLoadi
 
   // Create filter options for multi-select components
   const performanceOptions: MultiSelectOption[] = [
-    { label: "High Performance", value: "high" },
-    { label: "Medium Performance", value: "medium" },
-    { label: "Low Performance", value: "low" }
+    { label: "Excellent", value: "excellent" },
+    { label: "Good", value: "good" },
+    { label: "Requires Improvement", value: "requires-improvement" },
+    { label: "Inadequate", value: "inadequate" },
+    { label: "No Data", value: "no-data" }
   ];
 
   const statusOptions: MultiSelectOption[] = [
@@ -312,11 +314,13 @@ export function SchoolPerformanceView({ assessments, refreshAssessments, isLoadi
     { label: "Overdue", value: "overdue" }
   ];
 
-  const uniqueCategories = [...new Set(filteredByTermAssessments.map(a => a.category))];
   const categoryOptions: MultiSelectOption[] = assessmentCategories.map(categoryInfo => ({
     label: getAspectDisplayName(categoryInfo.value),
     value: categoryInfo.value
   }));
+  
+  // DEBUG: Log category options being created
+  console.log('SchoolPerformanceView - Category options created:', categoryOptions);
 
   const uniqueSchools = [...new Set(filteredByTermAssessments.map(a => a.school.id))];
   const schoolOptions: MultiSelectOption[] = schools
@@ -335,6 +339,7 @@ export function SchoolPerformanceView({ assessments, refreshAssessments, isLoadi
   };
 
   const handleCategoryFilterChange = (newValue: string[]) => {
+    console.log('SchoolPerformanceView - Category filter changed to:', newValue);
     setCategoryFilter(newValue);
   };
 
@@ -484,6 +489,16 @@ export function SchoolPerformanceView({ assessments, refreshAssessments, isLoadi
       const matchesCategory = categoryFilter.length === 0 || categoryFilter.some(category => {
         return school.assessmentsByCategory.some(cat => cat.category === category);
       });
+      
+      // DEBUG: Log category filter matching
+      if (categoryFilter.length > 0 && searchTerm === '') {
+        console.log('SchoolPerformanceView - Category filter debug:', {
+          filterValues: categoryFilter,
+          schoolName: school.school.name,
+          assessmentCategories: school.assessmentsByCategory.map(cat => cat.category),
+          matches: matchesCategory
+        });
+      }
 
       const matchesSchool = schoolFilter.length === 0 || schoolFilter.includes(school.school.id);
       
@@ -683,7 +698,7 @@ export function SchoolPerformanceView({ assessments, refreshAssessments, isLoadi
             },
             {
               type: 'multiselect',
-                              placeholder: 'Aspect',
+              placeholder: 'Aspect',
               value: categoryFilter,
               onChange: handleCategoryFilterChange,
               options: categoryOptions
@@ -853,13 +868,9 @@ export function SchoolPerformanceView({ assessments, refreshAssessments, isLoadi
                             return <span className="text-sm text-slate-400">—</span>;
                           }
                           
-                          // Prepare trend data including current term (chronological order: oldest to newest)
-                          const currentTermData = {
-                            term: selectedTerm,
-                            overallScore: school.overallScore
-                          };
-                          // Reverse historical data to get oldest first, then add current term at the end
-                          const trendData: TrendDataPoint[] = [...historicalData.slice(0, 3).reverse(), currentTermData].filter(d => d.overallScore > 0);
+                          // Prepare trend data for previous 3 terms only (chronological order: oldest to newest)
+                          // Take the most recent 3 terms and reverse to show oldest first
+                          const trendData: TrendDataPoint[] = historicalData.slice(0, 3).reverse().filter(d => d.overallScore > 0);
                           
                           if (trendData.length < 2) {
                             return <span className="text-sm text-slate-400">—</span>;
@@ -997,13 +1008,9 @@ export function SchoolPerformanceView({ assessments, refreshAssessments, isLoadi
                                             return <span className="text-sm text-slate-400">—</span>;
                                           }
                                           
-                                          // Prepare trend data including current term (chronological order: oldest to newest)
-                                          const currentTermData = {
-                                            term: selectedTerm,
-                                            overallScore: categoryData.overallScore
-                                          };
-                                          // Reverse historical data to get oldest first, then add current term at the end
-                                          const trendData: TrendDataPoint[] = [...categoryHistoricalData.slice(0, 3).reverse(), currentTermData].filter(d => d.overallScore > 0);
+                                          // Prepare trend data for previous 3 terms only (chronological order: oldest to newest)
+                                          // Take the most recent 3 terms and reverse to show oldest first
+                                          const trendData: TrendDataPoint[] = categoryHistoricalData.slice(0, 3).reverse().filter(d => d.overallScore > 0);
                                           
                                           if (trendData.length < 2) {
                                             return <span className="text-sm text-slate-400">—</span>;

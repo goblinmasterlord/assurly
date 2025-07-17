@@ -29,3 +29,6 @@ dev-guidelines.md
 design-guidelines.md
 instructions.md
 project-description.md
+docs*
+.cursor*
+.claude*

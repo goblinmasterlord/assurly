@@ -76,14 +76,12 @@ const termMap: Record<string, AcademicTerm> = {
 
 /**
  * Normalises category strings to match our `AssessmentCategory` union type.
- * Example: "education" → "Education"
+ * Keeps categories in lowercase to match backend format
+ * Example: "education" → "education"
  */
 const normaliseCategory = (category: string): AssessmentCategory => {
-  // Convert to Title Case and handle ampersand spacing
-  return category
-    .split(' ')
-    .map(word => word.charAt(0).toUpperCase() + word.slice(1))
-    .join(' ') as AssessmentCategory;
+  // Keep lowercase to match backend format
+  return category.toLowerCase() as AssessmentCategory;
 };
 
 /**
@@ -124,24 +122,6 @@ const mapAcademicYear = (academicYear: string): string => {
   return academicYear; // Return as-is if format is unexpected
 };
 
-/**
- * Maps backend category to frontend category format
- */
-const mapCategory = (category: string): string => {
-  const categoryMap: Record<string, string> = {
-    'education': 'Education',
-    'finance': 'Finance & Procurement',
-    'hr': 'Human Resources',
-    'estates': 'Estates',
-    'governance': 'Governance',
-    'it': 'IT & Information Services',
-    'is': 'IT (Digital Aspects)', // Information Standards -> IT (Digital Aspects)
-    // Note: Only 6 categories exist in backend standards
-    // Frontend has additional categories that may not have backend implementations yet:
-    // 'IT (Digital Aspects)' - maps to 'it' for now
-  };
-  return categoryMap[category.toLowerCase()] || category;
-};
 
 /**
  * Maps backend status to frontend status format
