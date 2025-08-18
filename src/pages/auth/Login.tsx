@@ -1,11 +1,16 @@
 import { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
-import { Mail, ArrowRight, Shield } from 'lucide-react';
+import { Mail, ArrowRight, Shield, AlertCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/hooks/use-toast';
+import { loginRateLimiter } from '@/lib/rate-limiter';
+import { z } from 'zod';
+
+// Email validation schema
+const emailSchema = z.string().email('Please enter a valid email address').max(255);
 
 export default function LoginPage() {
   const [email, setEmail] = useState('');
@@ -18,10 +23,24 @@ export default function LoginPage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    if (!email) {
+    // Validate email format
+    try {
+      emailSchema.parse(email);
+    } catch (error) {
       toast({
-        title: 'Email required',
-        description: 'Please enter your email address',
+        title: 'Invalid email',
+        description: 'Please enter a valid email address',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    // Check rate limiting
+    const rateLimitCheck = loginRateLimiter.checkLimit(email.toLowerCase());
+    if (!rateLimitCheck.allowed) {
+      toast({
+        title: 'Too many attempts',
+        description: `Please try again in ${rateLimitCheck.retryAfter} seconds`,
         variant: 'destructive',
       });
       return;
@@ -30,16 +49,24 @@ export default function LoginPage() {
     setIsSubmitting(true);
     
     try {
-      await login({ email });
+      await login({ email: email.toLowerCase().trim() });
       setIsSuccess(true);
+      // Reset rate limit on successful request
+      loginRateLimiter.reset(email.toLowerCase());
       toast({
         title: 'Magic link sent!',
         description: `We've sent a login link to ${email}. Please check your inbox.`,
       });
     } catch (error: any) {
+      // Show remaining attempts if rate limited
+      const status = loginRateLimiter.checkLimit(email.toLowerCase());
+      const description = status.remainingAttempts 
+        ? `${error.message || 'Please try again later'} (${status.remainingAttempts} attempts remaining)`
+        : error.message || 'Please try again later';
+      
       toast({
         title: 'Failed to send magic link',
-        description: error.message || 'Please try again later',
+        description,
         variant: 'destructive',
       });
     } finally {
@@ -47,31 +74,6 @@ export default function LoginPage() {
     }
   };
 
-  // Development mode bypass for testing
-  const handleDevBypass = () => {
-    if (import.meta.env.DEV) {
-      // In development, create a mock session
-      const mockUser = {
-        id: 'dev-user-1',
-        email: 'dev@example.com',
-        name: 'Development User',
-        role: 'department-head' as const,
-        schools: ['school-1']
-      };
-      
-      // Store a mock token
-      sessionStorage.setItem('assurly_auth_token', 'dev-token-12345');
-      
-      // Navigate to assessments
-      toast({
-        title: 'Development Mode',
-        description: 'Logged in with mock credentials',
-      });
-      
-      // Force a page reload to reinitialize auth
-      window.location.href = '/assessments';
-    }
-  };
 
   if (isSuccess) {
     return (
@@ -113,21 +115,6 @@ export default function LoginPage() {
                 try again
               </button>
             </div>
-            
-            {/* Development mode bypass */}
-            {import.meta.env.DEV && (
-              <div className="mt-4 pt-4 border-t border-slate-200">
-                <p className="text-xs text-slate-500 text-center mb-2">Development Mode Only:</p>
-                <Button
-                  onClick={handleDevBypass}
-                  variant="outline"
-                  size="sm"
-                  className="w-full"
-                >
-                  Skip email verification (Dev)
-                </Button>
-              </div>
-            )}
           </CardContent>
         </Card>
       </div>
@@ -187,19 +174,6 @@ export default function LoginPage() {
                 </>
               )}
             </Button>
-            
-            {/* Development mode quick login */}
-            {import.meta.env.DEV && (
-              <Button
-                type="button"
-                onClick={handleDevBypass}
-                variant="ghost"
-                size="sm"
-                className="w-full text-xs"
-              >
-                Quick login (Development only)
-              </Button>
-            )}
             
             <div className="text-center text-xs text-slate-500">
               By signing in, you agree to our{' '}

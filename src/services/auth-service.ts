@@ -1,4 +1,6 @@
 import apiClient from '@/lib/api-client';
+import { logger } from '@/lib/logger';
+import { tokenStorage } from '@/lib/secure-storage';
 import type { 
   LoginRequest, 
   VerifyTokenRequest, 
@@ -7,40 +9,17 @@ import type {
   User 
 } from '@/types/auth';
 
-const AUTH_TOKEN_KEY = 'assurly_auth_token';
-
 class AuthService {
-  private tokenCache: string | null = null;
-
-  constructor() {
-    this.tokenCache = this.getStoredToken();
-  }
-
-  private getStoredToken(): string | null {
-    if (typeof window === 'undefined') return null;
-    try {
-      return sessionStorage.getItem(AUTH_TOKEN_KEY);
-    } catch {
-      return null;
-    }
+  getToken(): string | null {
+    return tokenStorage.getToken();
   }
 
   private setStoredToken(token: string | null): void {
-    if (typeof window === 'undefined') return;
-    try {
-      if (token) {
-        sessionStorage.setItem(AUTH_TOKEN_KEY, token);
-      } else {
-        sessionStorage.removeItem(AUTH_TOKEN_KEY);
-      }
-      this.tokenCache = token;
-    } catch (error) {
-      console.error('Failed to store auth token:', error);
+    if (token) {
+      tokenStorage.setToken(token);
+    } else {
+      tokenStorage.clearToken();
     }
-  }
-
-  getToken(): string | null {
-    return this.tokenCache;
   }
 
   async requestMagicLink(request: LoginRequest): Promise<void> {
@@ -50,17 +29,15 @@ class AuthService {
         redirect_url: window.location.origin + '/auth/verify'
       });
       
-      // Log success for debugging
-      if (import.meta.env.DEV) {
-        console.log('Magic link request successful:', response.data);
-      }
+      // Log success for debugging (only in dev)
+      logger.debug('Magic link request successful:', response.data?.status);
     } catch (error: any) {
-      console.error('Failed to request magic link:', error);
+      logger.error('Failed to request magic link');
       
-      // In development, if email still sent despite error, it's likely CORS
-      if (import.meta.env.DEV && error.isNetworkError) {
-        console.warn('Network error (likely CORS) but request may have succeeded on backend');
-      }
+      // Security event tracking
+      logger.securityEvent('AUTH_MAGIC_LINK_FAILED', { 
+        isNetworkError: error.isNetworkError 
+      });
       
       throw new Error(
         error.userMessage || 'Failed to send magic link. Please try again.'
@@ -70,17 +47,13 @@ class AuthService {
 
   async verifyToken(request: VerifyTokenRequest): Promise<AuthResponse> {
     try {
-      if (import.meta.env.DEV) {
-        console.log('Verifying token:', request.token);
-      }
+      logger.debug('Verifying token');
       
       const response = await apiClient.get<any>(
         `/api/auth/verify/${request.token}`
       );
       
-      if (import.meta.env.DEV) {
-        console.log('Verification response:', response.data);
-      }
+      logger.debug('Verification successful');
       
       if (response.data.access_token) {
         this.setStoredToken(response.data.access_token);
@@ -105,8 +78,10 @@ class AuthService {
         expires_at: response.data.expires_at
       };
     } catch (error: any) {
-      console.error('Failed to verify token:', error);
-      console.error('Error response:', error.response?.data);
+      logger.error('Failed to verify token');
+      logger.securityEvent('AUTH_VERIFY_FAILED', { 
+        statusCode: error.response?.status 
+      });
       throw new Error(
         error.response?.data?.detail || 
         error.userMessage || 
@@ -140,7 +115,7 @@ class AuthService {
         this.setStoredToken(null);
         return null;
       }
-      console.error('Failed to get current session:', error);
+      logger.error('Failed to get current session');
       throw new Error(
         error.userMessage || 'Failed to load user session.'
       );
@@ -164,7 +139,7 @@ class AuthService {
     try {
       await apiClient.post('/api/auth/logout');
     } catch (error) {
-      console.error('Logout request failed:', error);
+      logger.error('Logout request failed');
     } finally {
       this.setStoredToken(null);
     }

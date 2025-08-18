@@ -2,6 +2,7 @@ import { createContext, useContext, useState, useEffect, useCallback } from 'rea
 import type { ReactNode } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { authService } from '@/services/auth-service';
+import { logger } from '@/lib/logger';
 import type { User, AuthState, LoginRequest, VerifyTokenRequest } from '@/types/auth';
 
 interface AuthContextType extends AuthState {
@@ -61,7 +62,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
         setUser(null);
       }
     } catch (error) {
-      console.error('Failed to initialize auth:', error);
+      logger.error('Failed to initialize auth');
       setUser(null);
     } finally {
       setLoading(false);
@@ -109,7 +110,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
       setUser(null);
       navigate('/auth/login');
     } catch (error) {
-      console.error('Logout failed:', error);
+      logger.error('Logout failed');
     } finally {
       setLoading(false);
     }
@@ -124,7 +125,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
         setUser(null);
       }
     } catch (error) {
-      console.error('Failed to refresh session:', error);
+      logger.error('Failed to refresh session');
       setUser(null);
     }
   }, [setUser]);

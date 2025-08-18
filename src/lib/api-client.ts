@@ -1,5 +1,6 @@
 import axios, { AxiosError } from 'axios';
 import type { AxiosResponse, InternalAxiosRequestConfig } from 'axios';
+import { logger } from '@/lib/logger';
 
 // Request metadata storage
 const requestMetadata = new Map<string, { startTime: number }>();
@@ -47,16 +48,31 @@ apiClient.interceptors.request.use(
     requestMetadata.set(requestId, { startTime: Date.now() });
     config.headers['X-Request-Id'] = requestId;
     
-    // Log requests if debug is enabled
+    // Log requests if debug is enabled (dev only)
     if (DEBUG_API) {
-      console.log(`🚀 API Request: ${config.method?.toUpperCase()} ${config.url}`);
+      logger.debug(`API Request: ${config.method?.toUpperCase()} ${config.url}`);
     }
     
     // Add auth token if available
-    // We get the token from sessionStorage directly to avoid circular dependency
-    const token = typeof window !== 'undefined' ? sessionStorage.getItem('assurly_auth_token') : null;
-    if (token && !config.url?.includes('/auth/')) {
-      config.headers.Authorization = `Bearer ${token}`;
+    // Use a sync method to get token to avoid circular dependency
+    if (!config.url?.includes('/auth/') && typeof window !== 'undefined') {
+      try {
+        // Direct access to secure storage
+        const stored = sessionStorage.getItem('assurly_secure');
+        if (stored) {
+          const data = JSON.parse(stored);
+          if (data.auth_token?.v) {
+            // Simple deobfuscation for the token
+            const decoded = atob(data.auth_token.v);
+            const token = decoded.split(':')[1];
+            if (token) {
+              config.headers.Authorization = `Bearer ${token}`;
+            }
+          }
+        }
+      } catch {
+        // Silent fail - no auth header
+      }
     }
     
     return config;
@@ -75,7 +91,7 @@ apiClient.interceptors.response.use(
     const duration = metadata ? Date.now() - metadata.startTime : 0;
     
     if (DEBUG_API) {
-      console.log(`✅ API Response: ${response.config.method?.toUpperCase()} ${response.config.url} (${duration}ms)`);
+      logger.debug(`API Response: ${response.config.method?.toUpperCase()} ${response.config.url} (${duration}ms)`);
     }
     
     // Clean up metadata
@@ -92,7 +108,7 @@ apiClient.interceptors.response.use(
     const duration = metadata ? Date.now() - metadata.startTime : 0;
     
     if (DEBUG_API) {
-      console.error(`❌ API Error: ${error.config?.method?.toUpperCase()} ${error.config?.url} (${duration}ms)`, error);
+      logger.debug(`API Error: ${error.config?.method?.toUpperCase()} ${error.config?.url} (${duration}ms)`);
     }
 
     // Handle 401 errors with token refresh
@@ -124,7 +140,7 @@ apiClient.interceptors.response.use(
         isRefreshing = false;
         // Clear session and redirect to login
         if (typeof window !== 'undefined') {
-          sessionStorage.removeItem('assurly_auth_token');
+          sessionStorage.removeItem('assurly_secure');
           if (!window.location.pathname.includes('/auth/')) {
             window.location.href = '/auth/login';
           }
