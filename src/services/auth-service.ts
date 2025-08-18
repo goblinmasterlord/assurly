@@ -87,7 +87,7 @@ class AuthService {
       }
       
       // Map backend user to our User type
-      let mappedUser = null;
+      let mappedUser: User | null = null;
       if (response.data.user) {
         const user = response.data.user;
         mappedUser = {

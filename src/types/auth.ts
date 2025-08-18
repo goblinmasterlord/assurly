@@ -24,11 +24,11 @@ export interface VerifyTokenRequest {
 
 export interface AuthResponse {
   access_token: string;
-  user: User;
+  user: User | null;
   expires_at?: string;
 }
 
 export interface SessionResponse {
-  user: User;
+  user: User | null;
   expires_at?: string;
 }
