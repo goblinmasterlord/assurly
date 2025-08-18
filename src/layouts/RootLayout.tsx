@@ -2,7 +2,8 @@ import { Link, Outlet } from "react-router-dom";
 import { RoleSwitcher } from "@/components/RoleSwitcher";
 import { Button } from "@/components/ui/button";
 import { useUser } from "@/contexts/UserContext";
-import { ClipboardList, LogIn } from "lucide-react";
+import { useAuth } from "@/contexts/AuthContext";
+import { ClipboardList, LogIn, LogOut, User } from "lucide-react";
 import { TopLoader } from "@/components/ui/top-loader";
 import { KeyboardHint } from "@/components/ui/keyboard-hint";
 import { useState } from "react";
@@ -11,6 +12,7 @@ import { useKeyboardShortcuts } from "@/hooks/use-keyboard-shortcuts";
 
 export function RootLayout() {
   const { role } = useUser();
+  const { user, logout } = useAuth();
   const [showShortcuts, setShowShortcuts] = useState(false);
   
   // Set up keyboard shortcuts
@@ -38,7 +40,33 @@ export function RootLayout() {
             </nav>
           </div>
           <div className="flex items-center space-x-4">
-            <RoleSwitcher />
+            {/* Only show role switcher in development */}
+            {import.meta.env.DEV && <RoleSwitcher />}
+            
+            {/* User info and actions */}
+            {user && (
+              <div className="flex items-center space-x-3">
+                <div className="hidden md:flex items-center space-x-2 text-sm text-muted-foreground">
+                  <User className="h-4 w-4" />
+                  <span>{user.email}</span>
+                  {user.role && (
+                    <span className="px-2 py-0.5 text-xs bg-slate-100 text-slate-700 rounded">
+                      {user.role === 'mat-admin' ? 'MAT Admin' : 'Department Head'}
+                    </span>
+                  )}
+                </div>
+                <Button 
+                  size="sm" 
+                  variant="outline"
+                  onClick={() => logout()}
+                  className="flex items-center gap-2"
+                >
+                  <LogOut className="h-4 w-4" />
+                  <span className="hidden md:inline">Sign out</span>
+                </Button>
+              </div>
+            )}
+            
             <Button size="sm" asChild>
               <a 
                 href="https://app.goconfigur.com" 
@@ -47,7 +75,7 @@ export function RootLayout() {
                 className="flex items-center gap-2"
               >
                 <LogIn className="h-4 w-4" />
-                Data Management Portal
+                <span className="hidden md:inline">Data Management Portal</span>
               </a>
             </Button>
           </div>

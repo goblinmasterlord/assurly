@@ -7,13 +7,36 @@ const requestMetadata = new Map<string, { startTime: number }>();
 // Debug logging control
 const DEBUG_API = import.meta.env.VITE_DEBUG_API === 'true';
 
+// Track refresh attempt to prevent infinite loops
+let isRefreshing = false;
+let failedQueue: Array<{
+  resolve: (value?: unknown) => void;
+  reject: (reason?: any) => void;
+}> = [];
+
+const processQueue = (error: any = null) => {
+  failedQueue.forEach(promise => {
+    if (error) {
+      promise.reject(error);
+    } else {
+      promise.resolve();
+    }
+  });
+  failedQueue = [];
+};
+
 // Enhanced API client with industry-standard optimizations
 const apiClient = axios.create({
-  baseURL: import.meta.env.VITE_API_BASE_URL,
+  // In development with empty base URL, use relative paths (proxied by Vite)
+  // In production, use the full API URL
+  baseURL: import.meta.env.VITE_API_BASE_URL || '',
   timeout: 30000, // 30 second timeout
   headers: {
     'Content-Type': 'application/json',
   },
+  // Only enable credentials if not using Authorization header
+  // This prevents CORS preflight issues in development
+  withCredentials: false,
 });
 
 // Request interceptor for debugging and auth
@@ -29,10 +52,12 @@ apiClient.interceptors.request.use(
       console.log(`🚀 API Request: ${config.method?.toUpperCase()} ${config.url}`);
     }
     
-    // TODO: Add auth token when authentication is implemented
-    // if (authToken) {
-    //   config.headers.Authorization = `Bearer ${authToken}`;
-    // }
+    // Add auth token if available
+    // We get the token from sessionStorage directly to avoid circular dependency
+    const token = typeof window !== 'undefined' ? sessionStorage.getItem('assurly_auth_token') : null;
+    if (token && !config.url?.includes('/auth/')) {
+      config.headers.Authorization = `Bearer ${token}`;
+    }
     
     return config;
   },
@@ -60,7 +85,7 @@ apiClient.interceptors.response.use(
     
     return response;
   },
-  (error: AxiosError) => {
+  async (error: AxiosError) => {
     // Enhanced error handling with user-friendly messages
     const requestId = error.config?.headers?.['X-Request-Id'] as string;
     const metadata = requestId ? requestMetadata.get(requestId) : null;
@@ -68,6 +93,43 @@ apiClient.interceptors.response.use(
     
     if (DEBUG_API) {
       console.error(`❌ API Error: ${error.config?.method?.toUpperCase()} ${error.config?.url} (${duration}ms)`, error);
+    }
+
+    // Handle 401 errors with token refresh
+    if (error.response?.status === 401 && error.config && !error.config.url?.includes('/auth/')) {
+      if (isRefreshing) {
+        // If already refreshing, queue this request
+        return new Promise((resolve, reject) => {
+          failedQueue.push({ resolve, reject });
+        }).then(() => {
+          // Retry original request after refresh
+          return apiClient(error.config!);
+        });
+      }
+
+      isRefreshing = true;
+
+      try {
+        // Import auth service dynamically to avoid circular dependency
+        const { authService } = await import('@/services/auth-service');
+        const response = await authService.refreshSession();
+        if (response) {
+          processQueue();
+          isRefreshing = false;
+          // Retry original request with new token
+          return apiClient(error.config);
+        }
+      } catch (refreshError) {
+        processQueue(refreshError);
+        isRefreshing = false;
+        // Clear session and redirect to login
+        if (typeof window !== 'undefined') {
+          sessionStorage.removeItem('assurly_auth_token');
+          if (!window.location.pathname.includes('/auth/')) {
+            window.location.href = '/auth/login';
+          }
+        }
+      }
     }
     
     // Transform errors into user-friendly format
