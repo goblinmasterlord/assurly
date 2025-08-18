@@ -87,10 +87,19 @@ export default function LoginPage() {
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
-            <div className="bg-slate-50 rounded-lg p-4 text-sm text-slate-600">
-              <p className="mb-2">📧 Click the link in your email to sign in</p>
-              <p className="mb-2">⏱️ The link expires in 10 minutes</p>
-              <p>🔒 You can safely close this window</p>
+            <div className="bg-slate-50 rounded-lg p-4 space-y-3">
+              <div className="flex items-start space-x-3">
+                <div className="flex-shrink-0 w-1 h-1 rounded-full bg-slate-400 mt-2"></div>
+                <p className="text-sm text-slate-600">Check your inbox for an email from Assurly</p>
+              </div>
+              <div className="flex items-start space-x-3">
+                <div className="flex-shrink-0 w-1 h-1 rounded-full bg-slate-400 mt-2"></div>
+                <p className="text-sm text-slate-600">Click the secure link to access your dashboard</p>
+              </div>
+              <div className="flex items-start space-x-3">
+                <div className="flex-shrink-0 w-1 h-1 rounded-full bg-slate-400 mt-2"></div>
+                <p className="text-sm text-slate-600">The link will expire in 15 minutes for security</p>
+              </div>
             </div>
             <div className="text-center text-sm text-slate-500">
               Didn't receive the email? Check your spam folder or{' '}
