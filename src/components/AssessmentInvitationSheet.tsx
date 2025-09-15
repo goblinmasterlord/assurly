@@ -32,6 +32,7 @@ import { assessmentCategories } from "@/lib/mock-data";
 import { getSchools, createAssessments } from "@/services/assessment-service";
 import { useToast } from "@/hooks/use-toast";
 import { getAspectDisplayName } from "@/lib/assessment-utils";
+import { useAuth } from "@/contexts/AuthContext";
 import type { AssessmentCategory, School, AcademicTerm, AcademicYear } from "@/types/assessment";
 
 type AssessmentInvitationSheetProps = {
@@ -188,6 +189,7 @@ export function AssessmentInvitationSheet({ open, onOpenChange, onSuccess }: Ass
   const [schools, setSchools] = useState<School[]>([]);
   const [schoolsLoading, setSchoolsLoading] = useState(false);
   const { toast } = useToast();
+  const { user } = useAuth();
   const [term, setTerm] = useState<AcademicTerm>("Autumn");
   const [academicYear, setAcademicYear] = useState<AcademicYear>("");
   
@@ -292,6 +294,7 @@ export function AssessmentInvitationSheet({ open, onOpenChange, onSuccess }: Ass
           dueDate: dueDate ? format(dueDate, "yyyy-MM-dd") : undefined,
           term,
           academicYear,
+          assignedTo: user?.id,
         });
         totalAssessments += assessmentIds.length;
       }

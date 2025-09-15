@@ -3,6 +3,7 @@ import { RootLayout } from "@/layouts/RootLayout";
 import { HomePage } from "@/pages/Home";
 import { AssessmentsPage } from "@/pages/Assessments";
 import { AssessmentDetailPage } from "@/pages/AssessmentDetail";
+import { AnalyticsPage } from "@/pages/Analytics";
 import LoginPage from "@/pages/auth/Login";
 import VerifyPage from "@/pages/auth/Verify";
 import { Toaster } from "@/components/ui/toaster";
@@ -30,6 +31,7 @@ function AppContent() {
           <Route index element={<HomePage />} />
           <Route path="assessments" element={<AssessmentsPage />} />
           <Route path="assessments/:id" element={<AssessmentDetailPage />} />
+          <Route path="analytics" element={<AnalyticsPage />} />
         </Route>
         
         {/* Redirect any unknown routes to home */}

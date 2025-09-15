@@ -11,11 +11,6 @@ export function ProtectedRoute({ children, requiredRole }: ProtectedRouteProps) 
   const { isAuthenticated, isLoading, user } = useAuth();
   const location = useLocation();
 
-  // 🚧 DEVELOPMENT BYPASS - Remove this in production!
-  const isDevelopment = import.meta.env.DEV;
-  if (isDevelopment) {
-    return <>{children}</>;
-  }
 
   if (isLoading) {
     return (
