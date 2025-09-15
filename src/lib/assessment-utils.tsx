@@ -1,4 +1,4 @@
-import type { Assessment, AssessmentCategory, Standard, User } from "@/types/assessment";
+import type { Assessment, AssessmentCategory, Standard, User, AssessmentStatus } from "@/types/assessment";
 import { cn } from "@/lib/utils";
 import { 
   AlertTriangle, 
@@ -62,6 +62,35 @@ export const getRatingGradient = (rating: number) => {
   if (rating < 3) return "bg-gradient-to-r from-amber-50 to-white";
   if (rating < 4) return "bg-gradient-to-r from-emerald-50 to-white";
   return "bg-gradient-to-r from-indigo-50 to-white";
+};
+
+/**
+ * Calculate the overall status for a school based on its individual assessment statuses
+ * Priority: Overdue > In Progress > Mixed State > All Completed > All Not Started
+ */
+export const calculateSchoolStatus = (assessments: Array<{status: AssessmentStatus}>): AssessmentStatus => {
+  if (assessments.length === 0) return "Not Started";
+
+  const statuses = assessments.map(a => a.status);
+  const uniqueStatuses = [...new Set(statuses)];
+  
+  // If any assessment is overdue, the school is overdue
+  if (statuses.includes("Overdue")) return "Overdue";
+  
+  // If any assessment is explicitly in progress, the school is in progress
+  if (statuses.includes("In Progress")) return "In Progress";
+  
+  // If all assessments are completed, the school is completed
+  if (statuses.every(status => status === "Completed")) return "Completed";
+  
+  // If all assessments are not started, the school is not started
+  if (statuses.every(status => status === "Not Started")) return "Not Started";
+  
+  // If there's a mix of statuses (some completed, some not started), show in progress
+  if (uniqueStatuses.length > 1) return "In Progress";
+  
+  // Default fallback
+  return "Not Started";
 };
 
 // #endregion

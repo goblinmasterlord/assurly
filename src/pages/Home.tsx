@@ -94,6 +94,16 @@ export function HomePage() {
           </div>
         </div>
         
+        {/* CTA Section */}
+        <div className="flex flex-col items-center text-center space-y-6 pt-4">
+          <h2 className="text-2xl font-bold">Ready to explore?</h2>
+          <Button asChild size="lg" className="gap-2">
+            <Link to="/assessments">
+                                  View Ratings <ArrowRight className="h-4 w-4" />
+            </Link>
+          </Button>
+        </div>
+        
         {/* About Project Section */}
         <div className="bg-gradient-to-r from-slate-50 to-indigo-50 rounded-xl p-8 md:p-12 border border-slate-100">
           <div className="grid md:grid-cols-2 gap-12">
@@ -127,16 +137,6 @@ export function HomePage() {
               </ul>
             </div>
           </div>
-        </div>
-        
-        {/* CTA Section */}
-        <div className="flex flex-col items-center text-center space-y-6 pt-4">
-          <h2 className="text-2xl font-bold">Ready to explore?</h2>
-          <Button asChild size="lg" className="gap-2">
-            <Link to="/assessments">
-                                  View Ratings <ArrowRight className="h-4 w-4" />
-            </Link>
-          </Button>
         </div>
       </div>
     </div>

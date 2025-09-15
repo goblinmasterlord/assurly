@@ -266,6 +266,15 @@ export function AssessmentInvitationSheet({ open, onOpenChange, onSuccess }: Ass
     }
   };
 
+  // Toggle all categories
+  const toggleAllCategories = () => {
+    if (selectedCategories.length === assessmentCategories.length) {
+      setSelectedCategories([]);
+    } else {
+      setSelectedCategories(assessmentCategories.map(cat => cat.value));
+    }
+  };
+
   // Handle invitation send
   const handleSendInvitations = async () => {
     if (selectedCategories.length === 0 || selectedSchools.length === 0) return;
@@ -410,6 +419,23 @@ export function AssessmentInvitationSheet({ open, onOpenChange, onSuccess }: Ass
               <p className="text-xs text-muted-foreground mt-0.5">
                 Choose which aspects schools should complete
               </p>
+            </div>
+            
+            {/* Quick select options */}
+            <div className="flex gap-2">
+              <Button 
+                variant="outline" 
+                size="sm" 
+                className="text-xs"
+                onClick={toggleAllCategories}
+              >
+                {selectedCategories.length === assessmentCategories.length ? 'Deselect all' : 'Select all'} ({assessmentCategories.length})
+              </Button>
+              {selectedCategories.length > 0 && (
+                <Badge variant="secondary" className="text-xs">
+                  {selectedCategories.length} selected
+                </Badge>
+              )}
             </div>
             
             <div className="grid grid-cols-1 gap-2">

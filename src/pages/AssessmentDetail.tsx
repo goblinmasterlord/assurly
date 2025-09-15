@@ -866,7 +866,7 @@ export function AssessmentDetailPage() {
                     
                     <div>
                       <div className="flex items-center justify-between mb-3">
-                        <h3 className="text-base font-medium">Evidence / Comments <span className="text-xs text-muted-foreground">(Optional)</span></h3>
+                        <h3 className="text-base font-medium">Comments <span className="text-xs text-muted-foreground">(Optional)</span></h3>
                         <span className="text-xs text-muted-foreground">
                           {evidence[activeStandard.id]?.length || 0} / 500 characters
                         </span>
@@ -1199,7 +1199,7 @@ export function AssessmentDetailPage() {
                   <TableHead className="font-semibold text-slate-600">Standard</TableHead>
                   <TableHead className="w-24 text-center font-semibold text-slate-600">Rating</TableHead>
                   <TableHead className="w-20 text-center font-semibold text-slate-600">Status</TableHead>
-                  <TableHead className="w-80 font-semibold text-slate-600">Evidence</TableHead>
+                  <TableHead className="w-80 font-semibold text-slate-600">Comments</TableHead>
                   <TableHead className="w-20 font-semibold text-slate-600">Files</TableHead>
                   <TableHead className="w-24 text-right font-semibold text-slate-600">Updated</TableHead>
                 </TableRow>
@@ -1261,7 +1261,7 @@ export function AssessmentDetailPage() {
                       {standard.evidence ? (
                         <EvidenceCell evidence={standard.evidence} />
                       ) : (
-                        <span className="text-sm text-slate-400 italic">No evidence provided</span>
+                        <span className="text-sm text-slate-400 italic">No comments provided</span>
                       )}
                     </TableCell>
                     

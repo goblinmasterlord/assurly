@@ -66,7 +66,7 @@ import {
   TermNavigationSkeleton,
   InlineRefreshSkeleton 
 } from "@/components/ui/skeleton-loaders";
-import { getAspectDisplayName } from "@/lib/assessment-utils";
+import { getAspectDisplayName, calculateSchoolStatus, getStatusColor, getStatusIcon } from "@/lib/assessment-utils";
 import { assessmentCategories } from "@/lib/mock-data";
 import { FilterBar } from "@/components/ui/filter-bar";
 import { getSchools } from "@/services/assessment-service";
@@ -421,6 +421,7 @@ export function SchoolPerformanceView({ assessments, refreshAssessments, isLoadi
         schoolMap.set(schoolId, {
           school: assessment.school,
           overallScore: 0,
+          status: "Not Started", // Will be calculated after all assessments are processed
           assessmentsByCategory: [],
           criticalStandardsTotal: 0,
           lastUpdated: assessment.lastUpdated,
@@ -505,6 +506,9 @@ export function SchoolPerformanceView({ assessments, refreshAssessments, isLoadi
       
       // Set the intervention required count to the number of aspects that need intervention
       schoolData.criticalStandardsTotal = schoolData.aspectsWithInterventionRequired!.size;
+      
+      // Calculate school-level status based on individual assessment statuses
+      schoolData.status = calculateSchoolStatus(schoolData.assessmentsByCategory);
     });
 
     return Array.from(schoolMap.values());
@@ -804,7 +808,7 @@ export function SchoolPerformanceView({ assessments, refreshAssessments, isLoadi
                   <TableRow className="bg-slate-50/80 border-b border-slate-200">
                     <TableHead className="w-12"></TableHead>
                     <TableHead>SCHOOL</TableHead>
-                    <TableHead className="text-center">RATINGS</TableHead>
+                    <TableHead className="text-center">SUBMITTED RATINGS</TableHead>
                     <TableHead className="text-center">OVERALL SCORE</TableHead>
                     <TableHead className="text-center">PREVIOUS 3 TERMS</TableHead>
                     <TableHead className="text-center">INTERVENTION REQ</TableHead>
@@ -839,11 +843,11 @@ export function SchoolPerformanceView({ assessments, refreshAssessments, isLoadi
                   </SortableTableHead>
                   <SortableTableHead 
                     className="text-center"
-                    sortKey="assessments"
+                    sortKey="status"
                     currentSort={sortConfig}
                     onSort={handleSort}
                   >
-                    RATINGS
+                    STATUS
                   </SortableTableHead>
                   <SortableTableHead 
                     className="text-center"
@@ -851,7 +855,7 @@ export function SchoolPerformanceView({ assessments, refreshAssessments, isLoadi
                     currentSort={sortConfig}
                     onSort={handleSort}
                   >
-                    OVERALL SCORE
+                    CURRENT SCORE
                   </SortableTableHead>
                   <TableHead className="text-center">PREVIOUS 3 TERMS</TableHead>
                   <SortableTableHead 
@@ -860,7 +864,15 @@ export function SchoolPerformanceView({ assessments, refreshAssessments, isLoadi
                     currentSort={sortConfig}
                     onSort={handleSort}
                   >
-                    INTERVENTION REQ
+                    INTERVENTION REQUIRED
+                  </SortableTableHead>
+                  <SortableTableHead 
+                    className="text-center"
+                    sortKey="assessments"
+                    currentSort={sortConfig}
+                    onSort={handleSort}
+                  >
+                    COMPLETION RATE
                   </SortableTableHead>
                   <SortableTableHead 
                     className="text-center"
@@ -908,10 +920,12 @@ export function SchoolPerformanceView({ assessments, refreshAssessments, isLoadi
                         </div>
                       </TableCell>
                       <TableCell className="text-center">
-                        <div className="flex items-center justify-center gap-2">
-                          <span className="text-sm font-semibold text-slate-700 tabular-nums">{completedCount}/{totalCount}</span>
-                          <AnimatedProgress value={(completedCount / totalCount) * 100} className="w-16 h-2" delay={index * 80 + 200} />
-                        </div>
+                        <Badge variant="outline" className={getStatusColor(school.status)}>
+                          <div className="flex items-center gap-1">
+                            {getStatusIcon(school.status)}
+                            <span className="text-xs font-medium">{school.status}</span>
+                          </div>
+                        </Badge>
                       </TableCell>
                       <TableCell className="text-center">
                         {school.overallScore > 0 ? (
@@ -992,7 +1006,12 @@ export function SchoolPerformanceView({ assessments, refreshAssessments, isLoadi
                           </Badge>
                         )}
                       </TableCell>
-
+                      <TableCell className="text-center">
+                        <div className="flex items-center justify-center gap-2">
+                          <span className="text-sm font-semibold text-slate-700 tabular-nums">{completedCount}/{totalCount}</span>
+                          <AnimatedProgress value={(completedCount / totalCount) * 100} className="w-16 h-2" delay={index * 80 + 200} />
+                        </div>
+                      </TableCell>
                       <TableCell className="text-center text-sm text-slate-600">
                         {school.lastUpdated !== "-" ? new Date(school.lastUpdated).toLocaleDateString() : "—"}
                       </TableCell>
@@ -1001,7 +1020,7 @@ export function SchoolPerformanceView({ assessments, refreshAssessments, isLoadi
                     {/* Expanded Content */}
                     {isExpanded && (
                       <TableRow>
-                        <TableCell colSpan={7} className="bg-slate-50 p-0">
+                        <TableCell colSpan={8} className="bg-slate-50 p-0">
                           <div className="p-6 border-t">
                             <h4 className="text-sm font-medium text-slate-900 mb-4">Assessment Strategies</h4>
                             <div className="bg-white rounded-lg border">
@@ -1010,10 +1029,10 @@ export function SchoolPerformanceView({ assessments, refreshAssessments, isLoadi
                                   <TableRow className="bg-slate-50/80 border-b border-slate-200">
                                     <TableHead>ASPECT</TableHead>
                                     <TableHead className="text-center">STATUS</TableHead>
-                                    <TableHead className="text-center">SCORE</TableHead>
+                                    <TableHead className="text-center">CURRENT SCORE</TableHead>
                                     <TableHead className="text-center">PREVIOUS 3 TERMS</TableHead>
-                                    <TableHead className="text-center">COMPLETION RATE</TableHead>
                                     <TableHead className="text-center">INTERVENTION REQUIRED</TableHead>
+                                    <TableHead className="text-center">COMPLETION RATE</TableHead>
                                     <TableHead className="text-center pr-6">ACTIONS</TableHead>
                                   </TableRow>
                                 </TableHeader>
@@ -1114,18 +1133,6 @@ export function SchoolPerformanceView({ assessments, refreshAssessments, isLoadi
                                         })()}
                                       </TableCell>
                                       <TableCell className="text-center">
-                                        <div className="flex items-center justify-center gap-2">
-                                          <span className="text-sm font-semibold text-slate-700 tabular-nums">
-                                            {categoryData.completedStandards}/{categoryData.totalStandards}
-                                          </span>
-                                          <AnimatedProgress 
-                                            value={(categoryData.completedStandards / categoryData.totalStandards) * 100} 
-                                            className="w-14 h-2"
-                                            delay={catIndex * 60 + 200}
-                                          />
-                                        </div>
-                                      </TableCell>
-                                      <TableCell className="text-center">
                                         {categoryData.overallScore && categoryData.overallScore <= 1.5 && categoryData.status === 'Completed' ? (
                                           <Tooltip>
                                             <TooltipTrigger asChild>
@@ -1149,6 +1156,18 @@ export function SchoolPerformanceView({ assessments, refreshAssessments, isLoadi
                                         ) : (
                                           <span className="text-slate-400 text-sm">—</span>
                                         )}
+                                      </TableCell>
+                                      <TableCell className="text-center">
+                                        <div className="flex items-center justify-center gap-2">
+                                          <span className="text-sm font-semibold text-slate-700 tabular-nums">
+                                            {categoryData.completedStandards}/{categoryData.totalStandards}
+                                          </span>
+                                          <AnimatedProgress 
+                                            value={(categoryData.completedStandards / categoryData.totalStandards) * 100} 
+                                            className="w-14 h-2"
+                                            delay={catIndex * 60 + 200}
+                                          />
+                                        </div>
                                       </TableCell>
                                       <TableCell className="text-center pr-6">
                                         <Button 
@@ -1189,6 +1208,37 @@ export function SchoolPerformanceView({ assessments, refreshAssessments, isLoadi
         onOpenChange={setInvitationSheetOpen} 
         onSuccess={refreshAssessments}
       />
+
+        {/* Performance Zones Legend */}
+        <div className="mt-6 py-3 border-t border-slate-200">
+          <div className="flex flex-wrap items-center justify-center gap-x-6 gap-y-2">
+            <span className="text-xs text-slate-500 font-medium">Performance Zones:</span>
+            <div className="flex items-center gap-1.5">
+              <div className="w-3 h-2 bg-emerald-500 rounded-sm opacity-60"></div>
+              <span className="text-xs text-slate-600">
+                <span className="font-medium text-emerald-700">Outstanding</span> (3.5-4.0)
+              </span>
+            </div>
+            <div className="flex items-center gap-1.5">
+              <div className="w-3 h-2 bg-indigo-500 rounded-sm opacity-60"></div>
+              <span className="text-xs text-slate-600">
+                <span className="font-medium text-indigo-700">Good</span> (2.5-3.4)
+              </span>
+            </div>
+            <div className="flex items-center gap-1.5">
+              <div className="w-3 h-2 bg-amber-500 rounded-sm opacity-60"></div>
+              <span className="text-xs text-slate-600">
+                <span className="font-medium text-amber-700">Requires Improvement</span> (1.5-2.4)
+              </span>
+            </div>
+            <div className="flex items-center gap-1.5">
+              <div className="w-3 h-2 bg-red-500 rounded-sm opacity-60"></div>
+              <span className="text-xs text-slate-600">
+                <span className="font-medium text-red-700">Inadequate</span> (1.0-1.4)
+              </span>
+            </div>
+          </div>
+        </div>
     </div>
     </TooltipProvider>
   );

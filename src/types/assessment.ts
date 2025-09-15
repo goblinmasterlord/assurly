@@ -76,6 +76,7 @@ export interface StandardGroup {
 export interface SchoolPerformance {
   school: School;
   overallScore: number;
+  status: AssessmentStatus; // School-level status calculated from individual assessments
   assessmentsByCategory: Array<{
     category: AssessmentCategory;
     name: string;

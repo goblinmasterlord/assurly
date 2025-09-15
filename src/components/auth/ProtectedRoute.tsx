@@ -11,6 +11,12 @@ export function ProtectedRoute({ children, requiredRole }: ProtectedRouteProps) 
   const { isAuthenticated, isLoading, user } = useAuth();
   const location = useLocation();
 
+  // 🚧 DEVELOPMENT BYPASS - Remove this in production!
+  const isDevelopment = import.meta.env.DEV;
+  if (isDevelopment) {
+    return <>{children}</>;
+  }
+
   if (isLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-50 to-slate-100">
