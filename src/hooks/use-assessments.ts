@@ -229,6 +229,7 @@ export function useCreateAssessment() {
     dueDate?: string;
     term: AcademicTerm;
     academicYear: AcademicYear;
+    assignedTo?: string;
   }) => {
     setIsCreating(true);
     setError(null);

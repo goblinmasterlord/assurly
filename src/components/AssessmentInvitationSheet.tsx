@@ -32,6 +32,7 @@ import { assessmentCategories } from "@/lib/mock-data";
 import { getSchools, createAssessments } from "@/services/assessment-service";
 import { useToast } from "@/hooks/use-toast";
 import { getAspectDisplayName } from "@/lib/assessment-utils";
+import { useAuth } from "@/contexts/AuthContext";
 import type { AssessmentCategory, School, AcademicTerm, AcademicYear } from "@/types/assessment";
 
 type AssessmentInvitationSheetProps = {
@@ -188,6 +189,7 @@ export function AssessmentInvitationSheet({ open, onOpenChange, onSuccess }: Ass
   const [schools, setSchools] = useState<School[]>([]);
   const [schoolsLoading, setSchoolsLoading] = useState(false);
   const { toast } = useToast();
+  const { user } = useAuth();
   const [term, setTerm] = useState<AcademicTerm>("Autumn");
   const [academicYear, setAcademicYear] = useState<AcademicYear>("");
   
@@ -266,6 +268,15 @@ export function AssessmentInvitationSheet({ open, onOpenChange, onSuccess }: Ass
     }
   };
 
+  // Toggle all categories
+  const toggleAllCategories = () => {
+    if (selectedCategories.length === assessmentCategories.length) {
+      setSelectedCategories([]);
+    } else {
+      setSelectedCategories(assessmentCategories.map(cat => cat.value));
+    }
+  };
+
   // Handle invitation send
   const handleSendInvitations = async () => {
     if (selectedCategories.length === 0 || selectedSchools.length === 0) return;
@@ -283,6 +294,7 @@ export function AssessmentInvitationSheet({ open, onOpenChange, onSuccess }: Ass
           dueDate: dueDate ? format(dueDate, "yyyy-MM-dd") : undefined,
           term,
           academicYear,
+          assignedTo: user?.id,
         });
         totalAssessments += assessmentIds.length;
       }
@@ -410,6 +422,23 @@ export function AssessmentInvitationSheet({ open, onOpenChange, onSuccess }: Ass
               <p className="text-xs text-muted-foreground mt-0.5">
                 Choose which aspects schools should complete
               </p>
+            </div>
+            
+            {/* Quick select options */}
+            <div className="flex gap-2">
+              <Button 
+                variant="outline" 
+                size="sm" 
+                className="text-xs"
+                onClick={toggleAllCategories}
+              >
+                {selectedCategories.length === assessmentCategories.length ? 'Deselect all' : 'Select all'} ({assessmentCategories.length})
+              </Button>
+              {selectedCategories.length > 0 && (
+                <Badge variant="secondary" className="text-xs">
+                  {selectedCategories.length} selected
+                </Badge>
+              )}
             </div>
             
             <div className="grid grid-cols-1 gap-2">

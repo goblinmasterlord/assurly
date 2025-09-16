@@ -166,6 +166,7 @@ export class EnhancedAssessmentService {
     dueDate?: string;
     term: AcademicTerm;
     academicYear: AcademicYear;
+    assignedTo?: string;
   }): Promise<string[]> {
     try {
       const assessmentIds = await apiCreateAssessments(request);

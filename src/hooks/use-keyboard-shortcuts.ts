@@ -88,6 +88,12 @@ export function useKeyboardShortcuts(options: UseKeyboardShortcutsOptions = {}) 
         navigate('/assessments');
       }
 
+      // Cmd/Ctrl + D: Go to analytics (Dashboard)
+      if ((e.metaKey || e.ctrlKey) && e.key === 'd') {
+        e.preventDefault();
+        navigate('/analytics');
+      }
+
       // Escape: Clear all filters
       if (e.key === 'Escape') {
         const clearButton = document.querySelector('button:has-text("Clear all")') as HTMLButtonElement;

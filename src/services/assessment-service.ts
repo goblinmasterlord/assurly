@@ -47,6 +47,7 @@ interface CreateAssessmentRequest {
   dueDate?: string;
   term: AcademicTerm;
   academicYear: AcademicYear;
+  assignedTo?: string; // User ID to assign the assessment to
 }
 
 interface SubmitStandardRequest {
@@ -173,7 +174,7 @@ export const createAssessments = async (request: CreateAssessmentRequest): Promi
       due_date: request.dueDate,
       term_id: request.term === 'Autumn' ? 'T1' : request.term === 'Spring' ? 'T2' : 'T3',
       academic_year: request.academicYear.replace(/^(\d{4})-(\d{4})$/, '$1-$2').replace(/^(\d{4})-(\d{2})$/, '$1-$2'), // Keep backend format: 2024-25
-      assigned_to: ['user1'], // TODO: replace with actual user ID when auth implemented
+      assigned_to: request.assignedTo ? [request.assignedTo] : []
     };
 
     const response = await apiClient.post('/api/assessments', payload);

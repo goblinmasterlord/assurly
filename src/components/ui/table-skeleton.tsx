@@ -53,15 +53,12 @@ export function SchoolPerformanceTableSkeleton() {
             </div>
           </TableCell>
           
-          {/* Assessments Progress */}
+          {/* Status */}
           <TableCell className="text-center">
-            <div className="flex items-center justify-center space-x-2">
-              <Skeleton className="h-4 w-8" />
-              <Skeleton className="h-2 w-16" />
-            </div>
+            <Skeleton className="h-6 w-20 rounded-full mx-auto" />
           </TableCell>
           
-          {/* Overall Score */}
+          {/* Current Score */}
           <TableCell className="text-center">
             <div className="flex items-center justify-center space-x-1.5">
               <Skeleton className="h-6 w-12 rounded-full" />
@@ -69,9 +66,25 @@ export function SchoolPerformanceTableSkeleton() {
             </div>
           </TableCell>
           
+          {/* Previous 3 Terms */}
+          <TableCell className="text-center">
+            <div className="flex items-center justify-center gap-1">
+              <Skeleton className="h-7 w-20" />
+              <Skeleton className="h-3 w-3" />
+            </div>
+          </TableCell>
+          
           {/* Intervention Required */}
           <TableCell className="text-center">
             <Skeleton className="h-6 w-8 rounded-full" />
+          </TableCell>
+          
+          {/* Completion Rate */}
+          <TableCell className="text-center">
+            <div className="flex items-center justify-center space-x-2">
+              <Skeleton className="h-4 w-8" />
+              <Skeleton className="h-2 w-16" />
+            </div>
           </TableCell>
           
           {/* Last Updated */}

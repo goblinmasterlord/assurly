@@ -3,7 +3,7 @@ import { RoleSwitcher } from "@/components/RoleSwitcher";
 import { Button } from "@/components/ui/button";
 import { useUser } from "@/contexts/UserContext";
 import { useAuth } from "@/contexts/AuthContext";
-import { ClipboardList, LogIn, LogOut, User } from "lucide-react";
+import { ClipboardList, LogIn, LogOut, User, BarChart3 } from "lucide-react";
 import { TopLoader } from "@/components/ui/top-loader";
 import { KeyboardHint } from "@/components/ui/keyboard-hint";
 import { useState } from "react";
@@ -37,6 +37,14 @@ export function RootLayout() {
                   {role === "mat-admin" ? "All Ratings" : "My Ratings"}
                 </Link>
               </Button>
+              {role === "mat-admin" && (
+                <Button variant="link" size="sm" asChild>
+                  <Link to="/analytics" className="flex items-center">
+                    <BarChart3 className="mr-1 h-4 w-4" /> 
+                    Analytics
+                  </Link>
+                </Button>
+              )}
             </nav>
           </div>
           <div className="flex items-center space-x-4">
