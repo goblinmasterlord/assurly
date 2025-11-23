@@ -13,6 +13,7 @@ import { SecurityPage } from "@/pages/Security";
 import { TermsPage } from "@/pages/Terms";
 import { DPAPage } from "@/pages/DPA";
 import { ExportPage } from "@/pages/Export";
+import StandardsManagement from "@/pages/admin/StandardsManagement";
 import LoginPage from "@/pages/auth/Login";
 import VerifyPage from "@/pages/auth/Verify";
 import { Toaster } from "@/components/ui/toaster";
@@ -38,7 +39,7 @@ function AppContent() {
         {/* Public auth routes */}
         <Route path="/auth/login" element={<LoginPage />} />
         <Route path="/auth/verify" element={<VerifyPage />} />
-        
+
         {/* Protected application routes */}
         <Route
           path="/app"
@@ -53,6 +54,7 @@ function AppContent() {
           <Route path="assessments/:id" element={<AssessmentDetailPage />} />
           <Route path="analytics" element={<AnalyticsPage />} />
           <Route path="export" element={<ExportPage />} />
+          <Route path="admin/standards" element={<StandardsManagement />} />
         </Route>
         
         {/* Redirect any unknown routes to landing */}

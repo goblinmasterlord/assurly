@@ -1,15 +1,17 @@
 // Assessment categories (matching backend API exactly)
-export type AssessmentCategory = 
+export type AssessmentCategory =
   | "education"
   | "hr"
   | "finance"
   | "estates"
   | "governance"
   | "is"
-  | "it";
+  | "it"
+  | "safeguarding"
+  | "faith";
 
 // Academic terms
-export type AcademicTerm = 
+export type AcademicTerm =
   | "Autumn"
   | "Spring"
   | "Summer";
@@ -37,9 +39,9 @@ export const RatingDescriptions: Record<NonNullable<Rating>, string> = {
 };
 
 // Assessment status
-export type AssessmentStatus = 
-  | "Not Started" 
-  | "In Progress" 
+export type AssessmentStatus =
+  | "Not Started"
+  | "In Progress"
   | "Completed"
   | "Overdue";
 

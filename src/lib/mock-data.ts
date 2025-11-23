@@ -1,9 +1,9 @@
-import type { 
-  Assessment, 
-  AssessmentCategory, 
+import type {
+  Assessment,
+  AssessmentCategory,
   AcademicTerm,
-  School, 
-  Standard, 
+  School,
+  Standard,
   User
 } from "@/types/assessment";
 
@@ -33,6 +33,8 @@ export const assessmentCategories: { value: AssessmentCategory; description: str
   { value: "governance", description: "Strategic leadership, accountability, governance structures, etc." },
   { value: "is", description: "Data security, breach management, GDPR compliance, etc." },
   { value: "it", description: "IT strategy, service management, asset management, etc." },
+  { value: "safeguarding", description: "Safeguarding policies, procedures, and culture." },
+  { value: "faith", description: "Faith character, collective worship, and religious education." },
 ];
 
 // #endregion
@@ -101,6 +103,14 @@ export const itStrategyStandards: Standard[] = [
   { id: "it4", code: "IT4", title: "IT Asset & Lifecycle Management", description: "Central register of IT assets, with lifecycle planning, secure disposal, and cost-effective procurement and maintenance processes.", rating: null },
 ];
 
+export const safeguardingStandards: Standard[] = [
+  { id: "sg1", code: "SG1", title: "Safeguarding Policy", description: "Comprehensive safeguarding policy in place and understood by all staff.", rating: null },
+];
+
+export const faithStandards: Standard[] = [
+  { id: "ft1", code: "FT1", title: "Faith Character", description: "Distinctive faith character is maintained and developed.", rating: null },
+];
+
 const allStandards = {
   "education": educationStandards,
   "hr": hrStandards,
@@ -109,6 +119,8 @@ const allStandards = {
   "governance": governanceStandards,
   "is": itInformationStandards,
   "it": itStrategyStandards,
+  "safeguarding": safeguardingStandards,
+  "faith": faithStandards,
 };
 
 // #endregion
@@ -318,7 +330,7 @@ const generateAssessmentsForSchool = (school: School, term: AcademicTerm = "Summ
       status,
       dueDate,
       assignedTo: [mockUsers[Math.floor(Math.random() * mockUsers.length)]],
-      standards: standards.map((std, idx) => {
+      standards: standards.map((std: Standard, idx: number) => {
         if (idx < completedStandards) {
           return {
             ...std,
@@ -338,12 +350,12 @@ const generateAssessmentsForSchool = (school: School, term: AcademicTerm = "Summ
 };
 
 // Generate current term assessments (unchanged)
-const currentTermAssessments = mockSchools.flatMap(school => 
+const currentTermAssessments = mockSchools.flatMap(school =>
   generateAssessmentsForSchool(school, "Summer", "2024-2025")
 );
 
 // Generate historical assessments for previous term
-const historicalAssessments = mockSchools.flatMap(school => 
+const historicalAssessments = mockSchools.flatMap(school =>
   generateAssessmentsForSchool(school, "Spring", "2024-2025")
 );
 

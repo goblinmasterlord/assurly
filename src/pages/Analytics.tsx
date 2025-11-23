@@ -4,11 +4,11 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Progress } from "@/components/ui/progress";
-import { 
-  BarChart3, 
-  TrendingUp, 
+import {
+  BarChart3,
+  TrendingUp,
   TrendingDown,
-  Users, 
+  Users,
   School as SchoolIcon,
   ClipboardCheck,
   AlertTriangle,
@@ -54,7 +54,9 @@ const CATEGORY_COLORS = {
   'estates': '#f59e0b', // Amber
   'governance': '#ef4444', // Red
   'it': '#06b6d4', // Cyan
-  'is': '#84cc16' // Lime
+  'is': '#84cc16', // Lime
+  'safeguarding': '#ef4444', // Red (using same as governance for now or distinct)
+  'faith': '#8b5cf6' // Violet (using same as hr for now or distinct)
 };
 
 const RATING_COLORS = {
@@ -66,11 +68,13 @@ const RATING_COLORS = {
 
 const ASSESSMENT_CATEGORIES: AssessmentCategory[] = [
   'education',
-  'finance', 
+  'finance',
   'hr',
   'estates',
   'governance',
-  'it'
+  'it',
+  'safeguarding',
+  'faith'
 ];
 
 // Helper to convert backend category codes to display names
@@ -82,7 +86,9 @@ const getCategoryDisplayName = (category: AssessmentCategory): string => {
     'estates': 'Estates',
     'governance': 'Governance',
     'it': 'IT & Info\nServices',
-    'is': 'Information\nServices'
+    'is': 'Information\nServices',
+    'safeguarding': 'Safeguarding',
+    'faith': 'Faith'
   };
   return displayNames[category] || category;
 };
@@ -138,7 +144,7 @@ export function AnalyticsPage() {
       previousAverageScore: 2.6,
       schoolsRequiringIntervention: 2,
       complianceStatus: 78,
-      
+
       // Rich term trends showing improvement over time
       termTrends: [
         { term: 'Autumn 23-24', score: 2.3 },
@@ -153,17 +159,20 @@ export function AnalyticsPage() {
       categoryPerformance: ASSESSMENT_CATEGORIES.map(cat => ({
         category: getCategoryDisplayName(cat),
         score: cat === 'education' ? 3.2 :
-               cat === 'finance' ? 3.5 :
-               cat === 'hr' ? 2.1 :
-               cat === 'estates' ? 2.8 :
-               cat === 'governance' ? 3.1 :
-               cat === 'it' ? 2.4 : 2.5,
+          cat === 'finance' ? 3.5 :
+            cat === 'hr' ? 2.1 :
+              cat === 'estates' ? 2.8 :
+                cat === 'governance' ? 3.1 :
+                  cat === 'it' ? 2.4 :
+                    cat === 'safeguarding' ? 3.8 :
+                      cat === 'faith' ? 3.5 : 2.5,
         assessments: cat === 'education' ? 5 :
-                    cat === 'finance' ? 4 :
-                    cat === 'hr' ? 3 :
-                    cat === 'estates' ? 4 :
-                    cat === 'governance' ? 5 :
-                    cat === 'it' ? 3 : 3
+          cat === 'finance' ? 4 :
+            cat === 'hr' ? 3 :
+              cat === 'estates' ? 4 :
+                cat === 'governance' ? 5 :
+                  cat === 'it' ? 3 :
+                    cat === 'safeguarding' ? 5 : 4
       })),
 
       // Diverse school performance data
@@ -257,9 +266,9 @@ export function AnalyticsPage() {
       const realActiveAssessments = assessments.filter(a => a.status === 'In Progress').length;
       const realCompletedAssessments = assessments.filter(a => a.status === 'Completed').length;
       const realCompletionRate = assessments.length > 0 ? (realCompletedAssessments / assessments.length) * 100 : 0;
-      
+
       const completedWithScores = assessments.filter(a => a.status === 'Completed' && a.overallScore);
-      const realAverageScore = completedWithScores.length > 0 
+      const realAverageScore = completedWithScores.length > 0
         ? completedWithScores.reduce((sum, a) => sum + (a.overallScore || 0), 0) / completedWithScores.length
         : mockData.averageScore;
 
@@ -356,9 +365,8 @@ export function AnalyticsPage() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">{analyticsData.averageScore.toFixed(1)}</div>
-            <p className={`text-xs ${
-              isImproving ? 'text-green-600' : 'text-red-600'
-            }`}>
+            <p className={`text-xs ${isImproving ? 'text-green-600' : 'text-red-600'
+              }`}>
               {isImproving ? '+' : ''}{scoreChange.toFixed(1)} from previous term
             </p>
           </CardContent>
@@ -393,7 +401,7 @@ export function AnalyticsPage() {
 
       {/* Main Content Grid */}
       <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3 mb-8">
-        
+
         {/* Term Performance Trend */}
         <Card className="lg:col-span-2">
           <CardHeader>
@@ -410,26 +418,26 @@ export function AnalyticsPage() {
               <ResponsiveContainer width="100%" height="100%">
                 <LineChart data={analyticsData.termTrends}>
                   <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
-                  <XAxis 
-                    dataKey="term" 
+                  <XAxis
+                    dataKey="term"
                     stroke="#64748b"
                     fontSize={12}
                   />
-                  <YAxis 
+                  <YAxis
                     domain={[1, 4]}
                     stroke="#64748b"
                     fontSize={12}
                   />
-                  <Tooltip 
+                  <Tooltip
                     contentStyle={{
                       backgroundColor: 'white',
                       border: '1px solid #e2e8f0',
                       borderRadius: '6px'
                     }}
                   />
-                  <Line 
-                    type="monotone" 
-                    dataKey="score" 
+                  <Line
+                    type="monotone"
+                    dataKey="score"
                     stroke={CHART_COLORS.primary}
                     strokeWidth={3}
                     dot={{ fill: CHART_COLORS.primary, strokeWidth: 2, r: 6 }}
@@ -462,11 +470,11 @@ export function AnalyticsPage() {
                       <span className="font-medium">{cat.category}</span>
                       <span className="text-muted-foreground">{cat.score}/4.0</span>
                     </div>
-                    <Progress 
-                      value={(cat.score / 4) * 100} 
+                    <Progress
+                      value={(cat.score / 4) * 100}
                       className="h-2"
-                      style={{ 
-                        "--progress-foreground": color 
+                      style={{
+                        "--progress-foreground": color
                       } as React.CSSProperties}
                     />
                   </div>
@@ -494,20 +502,20 @@ export function AnalyticsPage() {
               <ResponsiveContainer width="100%" height="100%">
                 <BarChart data={analyticsData.categoryPerformance} margin={{ top: 20, right: 30, left: 20, bottom: 60 }}>
                   <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
-                  <XAxis 
-                    dataKey="category" 
+                  <XAxis
+                    dataKey="category"
                     stroke="#64748b"
                     fontSize={11}
                     angle={-45}
                     textAnchor="end"
                     height={80}
                   />
-                  <YAxis 
+                  <YAxis
                     domain={[0, 4]}
                     stroke="#64748b"
                     fontSize={12}
                   />
-                  <Tooltip 
+                  <Tooltip
                     contentStyle={{
                       backgroundColor: 'white',
                       border: '1px solid #e2e8f0',
@@ -532,7 +540,7 @@ export function AnalyticsPage() {
 
       {/* School Performance Table and Recent Activity */}
       <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-        
+
         {/* School Performance Rankings */}
         <Card className="lg:col-span-2">
           <CardHeader>
@@ -562,12 +570,12 @@ export function AnalyticsPage() {
                       <div className="flex items-center gap-2">
                         <span className="font-mono">{school.overallScore || 'N/A'}</span>
                         {school.overallScore > 0 && (
-                          <div 
-                            className="w-3 h-3 rounded-full" 
-                            style={{ 
+                          <div
+                            className="w-3 h-3 rounded-full"
+                            style={{
                               backgroundColor: school.overallScore >= 3.5 ? RATING_COLORS[4] :
-                                             school.overallScore >= 2.5 ? RATING_COLORS[3] :
-                                             school.overallScore >= 1.5 ? RATING_COLORS[2] : RATING_COLORS[1]
+                                school.overallScore >= 2.5 ? RATING_COLORS[3] :
+                                  school.overallScore >= 1.5 ? RATING_COLORS[2] : RATING_COLORS[1]
                             }}
                           />
                         )}
@@ -577,20 +585,20 @@ export function AnalyticsPage() {
                       <div className="text-sm">
                         {school.completedAssessments}/{school.totalAssessments}
                         <div className="w-full bg-muted rounded-full h-1.5 mt-1">
-                          <div 
+                          <div
                             className="bg-primary h-1.5 rounded-full transition-all"
-                            style={{ 
-                              width: `${school.totalAssessments > 0 ? (school.completedAssessments / school.totalAssessments) * 100 : 0}%` 
+                            style={{
+                              width: `${school.totalAssessments > 0 ? (school.completedAssessments / school.totalAssessments) * 100 : 0}%`
                             }}
                           />
                         </div>
                       </div>
                     </TableCell>
                     <TableCell>
-                      <Badge 
-                        variant={school.status === 'Critical' ? 'destructive' : 
-                                school.status === 'Needs Attention' ? 'secondary' :
-                                school.status === 'Excellent' ? 'default' : 'outline'}
+                      <Badge
+                        variant={school.status === 'Critical' ? 'destructive' :
+                          school.status === 'Needs Attention' ? 'secondary' :
+                            school.status === 'Excellent' ? 'default' : 'outline'}
                         className={school.status === 'Excellent' ? 'bg-green-100 text-green-800 hover:bg-green-200' : ''}
                       >
                         {school.status}
