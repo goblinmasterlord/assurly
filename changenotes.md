@@ -1,5 +1,19 @@
 # Change Notes
 
+## 2025-11-23 - Initial UI/UX Analysis & Setup
+
+### Summary
+Started the UI/UX refinement process by analyzing project documentation and structure.
+
+### Actions
+- Reviewed `project-info.md`, `components.mdc`, `api-documentation.md`, and `design-guidelines.md`.
+- Established context for Information Architecture and Visual Hierarchy analysis.
+- Prepared to provide actionable recommendations for UI/UX improvements.
+
+## 2025-11-23 - Authentication Bypass
+- Modified `src/contexts/AuthContext.tsx` to bypass authentication when running in development mode (`import.meta.env.DEV`).
+- Automatically logs in a mock user (`mat-admin`) to simplify local development.
+
 ## 2025-07-07 - Request Rating & UX Improvements
 
 ### Summary
