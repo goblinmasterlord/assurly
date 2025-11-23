@@ -22,35 +22,35 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { type Standard } from '@/lib/mock-standards-data';
+import { type Standard, type Aspect } from '@/types/assessment';
 import { useEffect } from 'react';
 
 const formSchema = z.object({
     code: z.string().min(2, 'Code must be at least 2 characters').max(10, 'Code must be less than 10 characters'),
     title: z.string().min(5, 'Title must be at least 5 characters'),
     description: z.string().min(20, 'Description must be at least 20 characters').max(250, 'Description must be less than 250 characters'),
-    category: z.string().min(1, 'Please select a category'),
+    aspectId: z.string().min(1, 'Please select an aspect'),
 });
 
-import { type Aspect } from '@/lib/mock-standards-data';
+
 
 interface CreateStandardModalProps {
     open: boolean;
     onOpenChange: (open: boolean) => void;
     onSave: (data: any) => void;
     standard?: Standard; // If provided, we are in edit mode
-    defaultCategory?: string;
+    defaultAspectId?: string;
     aspects: Aspect[];
 }
 
-export function CreateStandardModal({ open, onOpenChange, onSave, standard, defaultCategory, aspects }: CreateStandardModalProps) {
+export function CreateStandardModal({ open, onOpenChange, onSave, standard, defaultAspectId, aspects }: CreateStandardModalProps) {
     const form = useForm<z.infer<typeof formSchema>>({
         resolver: zodResolver(formSchema),
         defaultValues: {
             code: '',
             title: '',
             description: '',
-            category: defaultCategory || '',
+            aspectId: defaultAspectId || '',
         },
     });
 
@@ -60,28 +60,31 @@ export function CreateStandardModal({ open, onOpenChange, onSave, standard, defa
                 code: standard.code,
                 title: standard.title,
                 description: standard.description,
-                category: standard.category,
+                aspectId: standard.aspectId || '',
             });
         } else {
             form.reset({
                 code: '',
                 title: '',
                 description: '',
-                category: defaultCategory || '',
+                aspectId: defaultAspectId || '',
             });
         }
-    }, [standard, defaultCategory, form]);
+    }, [standard, defaultAspectId, form]);
 
     function onSubmit(values: z.infer<typeof formSchema>) {
         // Create a standard object from the form values
+        const selectedAspect = aspects.find(a => a.id === values.aspectId);
+
         const standardData = {
             ...standard, // Keep existing ID and other fields if editing
             id: standard?.id || `std-${Date.now()}`,
             code: values.code,
             title: values.title,
             description: values.description,
-            category: values.category,
-            version: standard ? standard.version + 1 : 1,
+            aspectId: values.aspectId,
+            category: selectedAspect?.name || 'General', // Fallback for display
+            version: standard?.version || 1,
             status: standard?.status || 'active',
             lastModified: new Date().toISOString(),
             lastModifiedBy: 'Current User', // In a real app, get from auth context
@@ -109,7 +112,7 @@ export function CreateStandardModal({ open, onOpenChange, onSave, standard, defa
                         <div className="grid grid-cols-2 gap-4">
                             <FormField
                                 control={form.control}
-                                name="category"
+                                name="aspectId"
                                 render={({ field }) => (
                                     <FormItem>
                                         <FormLabel>Aspect</FormLabel>
@@ -121,7 +124,7 @@ export function CreateStandardModal({ open, onOpenChange, onSave, standard, defa
                                             </FormControl>
                                             <SelectContent>
                                                 {aspects.map((aspect) => (
-                                                    <SelectItem key={aspect.id} value={aspect.code}>
+                                                    <SelectItem key={aspect.id} value={aspect.id}>
                                                         {aspect.name}
                                                     </SelectItem>
                                                 ))}

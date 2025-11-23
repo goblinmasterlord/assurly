@@ -21,7 +21,7 @@ import {
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Button } from '@/components/ui/button';
-import { type Aspect } from '@/lib/mock-standards-data';
+import { type Aspect } from '@/types/assessment';
 
 const formSchema = z.object({
     name: z.string().min(3, 'Name must be at least 3 characters'),

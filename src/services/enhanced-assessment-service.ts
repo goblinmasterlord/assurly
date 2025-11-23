@@ -1,19 +1,27 @@
 import { requestCache } from '@/lib/request-cache';
-import { 
+import {
   getAssessments as apiGetAssessments,
   getAssessmentById as apiGetAssessmentById,
   getSchools as apiGetSchools,
   getStandards as apiGetStandards,
   submitAssessment as apiSubmitAssessment,
   createAssessments as apiCreateAssessments,
+  getAspects as apiGetAspects,
+  createAspect as apiCreateAspect,
+  updateAspect as apiUpdateAspect,
+  deleteAspect as apiDeleteAspect,
+  createStandard as apiCreateStandard,
+  updateStandardDefinition as apiUpdateStandardDefinition,
+  deleteStandard as apiDeleteStandard,
+  reorderStandards as apiReorderStandards,
 } from '@/services/assessment-service';
-import type { Assessment, Rating, AssessmentCategory, AcademicTerm, AcademicYear, School, Standard } from '@/types/assessment';
+import type { Assessment, Rating, AssessmentCategory, AcademicTerm, AcademicYear, School, Standard, Aspect } from '@/types/assessment';
 
 // Enhanced service with caching, optimistic updates, and intelligent data management
 export class EnhancedAssessmentService {
-  
+
   // ===== ASSESSMENT OPERATIONS =====
-  
+
   /**
    * Get all assessments with intelligent caching
    * Uses stale-while-revalidate for optimal UX
@@ -57,8 +65,8 @@ export class EnhancedAssessmentService {
    * Immediately updates UI, then syncs with server
    */
   async submitAssessment(
-    assessmentId: string, 
-    standards: { standardId: string; rating: Rating; evidence: string }[], 
+    assessmentId: string,
+    standards: { standardId: string; rating: Rating; evidence: string }[],
     submittedBy: string = 'user1'
   ): Promise<void> {
     // Optimistic update - immediately update the cached assessment
@@ -66,7 +74,7 @@ export class EnhancedAssessmentService {
       'assessment_detail',
       (currentAssessment) => {
         if (!currentAssessment.standards) return currentAssessment;
-        
+
         // Update standards with new ratings and evidence
         const updatedStandards = currentAssessment.standards.map(standard => {
           const submittedStandard = standards.find(s => s.standardId === standard.id);
@@ -84,16 +92,16 @@ export class EnhancedAssessmentService {
         // Calculate new completion stats
         const completedStandards = updatedStandards.filter(s => s.rating !== null).length;
         const totalStandards = updatedStandards.length;
-        
+
         // Calculate overall score (average of ratings)
         const ratedStandards = updatedStandards.filter(s => s.rating !== null);
-        const overallScore = ratedStandards.length > 0 
+        const overallScore = ratedStandards.length > 0
           ? ratedStandards.reduce((sum, s) => sum + (s.rating || 0), 0) / ratedStandards.length
           : 0;
 
         // Determine new status
-        const newStatus = completedStandards === totalStandards ? 'Completed' : 
-                         completedStandards > 0 ? 'In Progress' : 'Not Started';
+        const newStatus = completedStandards === totalStandards ? 'Completed' :
+          completedStandards > 0 ? 'In Progress' : 'Not Started';
 
         return {
           ...currentAssessment,
@@ -117,12 +125,12 @@ export class EnhancedAssessmentService {
             const completedStandards = standards.length;
             const totalStandards = assessment.totalStandards;
             const ratedStandards = standards.filter(s => s.rating !== null);
-            const overallScore = ratedStandards.length > 0 
+            const overallScore = ratedStandards.length > 0
               ? ratedStandards.reduce((sum, s) => sum + (s.rating || 0), 0) / ratedStandards.length
               : assessment.overallScore || 0;
 
-            const newStatus = completedStandards === totalStandards ? 'Completed' : 
-                             completedStandards > 0 ? 'In Progress' : 'Not Started';
+            const newStatus = completedStandards === totalStandards ? 'Completed' :
+              completedStandards > 0 ? 'In Progress' : 'Not Started';
 
             return {
               ...assessment,
@@ -140,18 +148,18 @@ export class EnhancedAssessmentService {
     try {
       // Perform actual API call
       await apiSubmitAssessment(assessmentId, standards, submittedBy);
-      
+
       // Invalidate cache to ensure we get fresh data on next request
       // This will trigger a background refresh for subscribers
       requestCache.invalidate('assessment_detail', { id: assessmentId });
       requestCache.invalidate('assessments');
-      
+
       console.log('✅ Assessment submitted successfully with optimistic updates');
     } catch (error) {
       // Revert optimistic updates on failure
       requestCache.invalidate('assessment_detail', { id: assessmentId });
       requestCache.invalidate('assessments');
-      
+
       console.error('❌ Assessment submission failed, reverted optimistic updates');
       throw error;
     }
@@ -170,15 +178,15 @@ export class EnhancedAssessmentService {
   }): Promise<string[]> {
     try {
       const assessmentIds = await apiCreateAssessments(request);
-      
+
       // Invalidate assessments cache to refresh the list
       requestCache.invalidate('assessments');
-      
+
       // Preload the new assessments for better UX
       assessmentIds.forEach(id => {
         requestCache.preload('assessment_detail', () => apiGetAssessmentById(id), { id });
       });
-      
+
       return assessmentIds;
     } catch (error) {
       console.error('Failed to create assessments:', error);
@@ -205,6 +213,33 @@ export class EnhancedAssessmentService {
     return requestCache.subscribe('schools', callback);
   }
 
+  // ===== ASPECTS OPERATIONS =====
+
+  async getAspects(): Promise<Aspect[]> {
+    return requestCache.get(
+      'aspects',
+      () => apiGetAspects()
+    );
+  }
+
+  async createAspect(aspect: Omit<Aspect, 'id' | 'standardCount'>): Promise<Aspect> {
+    const newAspect = await apiCreateAspect(aspect);
+    requestCache.invalidate('aspects');
+    return newAspect;
+  }
+
+  async updateAspect(aspect: Aspect): Promise<Aspect> {
+    const updated = await apiUpdateAspect(aspect);
+    requestCache.invalidate('aspects');
+    return updated;
+  }
+
+  async deleteAspect(id: string): Promise<void> {
+    await apiDeleteAspect(id);
+    requestCache.invalidate('aspects');
+    requestCache.invalidate('standards'); // Deleting aspect might affect standards
+  }
+
   // ===== STANDARDS OPERATIONS =====
 
   /**
@@ -216,6 +251,33 @@ export class EnhancedAssessmentService {
       () => apiGetStandards(aspectId),
       { aspectId: aspectId || 'all' }
     );
+  }
+
+  async createStandard(standard: Omit<Standard, 'id' | 'lastUpdated' | 'versions'> & { aspectId: string, orderIndex: number }): Promise<Standard> {
+    const newStandard = await apiCreateStandard(standard);
+    requestCache.invalidate('standards', { aspectId: standard.aspectId });
+    requestCache.invalidate('standards', { aspectId: 'all' });
+    requestCache.invalidate('aspects'); // Count might change
+    return newStandard;
+  }
+
+  async updateStandardDefinition(standard: Standard): Promise<Standard> {
+    const updated = await apiUpdateStandardDefinition(standard);
+    // Invalidate all potential standard lists since we don't know the aspect ID easily here without passing it
+    // Or we could pass aspectId to this method if needed. For now, invalidate all.
+    requestCache.invalidate('standards');
+    return updated;
+  }
+
+  async deleteStandard(id: string): Promise<void> {
+    await apiDeleteStandard(id);
+    requestCache.invalidate('standards');
+    requestCache.invalidate('aspects'); // Count might change
+  }
+
+  async reorderStandards(standards: { id: string; orderIndex: number }[]): Promise<void> {
+    await apiReorderStandards(standards);
+    requestCache.invalidate('standards');
   }
 
   /**
@@ -233,7 +295,7 @@ export class EnhancedAssessmentService {
    */
   async preloadCriticalData(): Promise<void> {
     console.log('🚀 Preloading critical data...');
-    
+
     try {
       // Preload in parallel for best performance
       await Promise.allSettled([
@@ -241,7 +303,7 @@ export class EnhancedAssessmentService {
         requestCache.preload('schools', () => apiGetSchools()),
         requestCache.preload('standards', () => apiGetStandards(), { aspectId: 'all' }),
       ]);
-      
+
       console.log('✅ Critical data preloaded successfully');
     } catch (error) {
       console.warn('⚠️  Some preloading failed:', error);
@@ -254,13 +316,13 @@ export class EnhancedAssessmentService {
    */
   async refreshAllData(): Promise<void> {
     console.log('🔄 Refreshing all cached data...');
-    
+
     // Invalidate all caches
     requestCache.invalidate('assessments');
     requestCache.invalidate('assessment_detail');
     requestCache.invalidate('schools');
     requestCache.invalidate('standards');
-    
+
     // Preload fresh data
     await this.preloadCriticalData();
   }

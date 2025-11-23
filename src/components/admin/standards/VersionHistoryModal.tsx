@@ -16,7 +16,7 @@ import {
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { type Standard } from '@/lib/mock-standards-data';
+import { type Standard } from '@/types/assessment';
 import { RotateCcw } from 'lucide-react';
 
 interface VersionHistoryModalProps {
@@ -38,8 +38,16 @@ export function VersionHistoryModal({ open, onOpenChange, standard }: VersionHis
             createdBy: standard.lastModifiedBy,
             changeType: 'current' as const
         },
-        ...standard.versions
+        ...(standard.versions || [])
     ];
+
+    const currentVersion = {
+        id: 'current',
+        version: standard.version || 1,
+        createdAt: standard.lastModified || new Date().toISOString(),
+        createdBy: standard.lastModifiedBy || 'Unknown',
+        changeType: 'current'
+    };
 
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
@@ -63,7 +71,32 @@ export function VersionHistoryModal({ open, onOpenChange, standard }: VersionHis
                             </TableRow>
                         </TableHeader>
                         <TableBody>
-                            {allVersions.map((version) => (
+                            <TableRow key={currentVersion.id}>
+                                <TableCell>
+                                    <Badge variant="outline">v{currentVersion.version}</Badge>
+                                </TableCell>
+                                <TableCell className="text-muted-foreground">
+                                    {new Date(currentVersion.createdAt).toLocaleDateString()}
+                                </TableCell>
+                                <TableCell>{currentVersion.createdBy}</TableCell>
+                                <TableCell>
+                                    <Badge
+                                        variant={currentVersion.changeType === 'created' ? 'secondary' : 'default'}
+                                        className="capitalize"
+                                    >
+                                        {currentVersion.changeType}
+                                    </Badge>
+                                </TableCell>
+                                <TableCell className="text-right">
+                                    {currentVersion.changeType !== 'current' && (
+                                        <Button variant="ghost" size="sm">
+                                            <RotateCcw className="mr-2 h-3 w-3" />
+                                            Restore
+                                        </Button>
+                                    )}
+                                </TableCell>
+                            </TableRow>
+                            {(standard.versions || []).map((version) => (
                                 <TableRow key={version.id}>
                                     <TableCell>
                                         <Badge variant="outline">v{version.version}</Badge>
