@@ -10,6 +10,15 @@ export type AssessmentCategory =
   | "safeguarding"
   | "faith";
 
+export interface Aspect {
+  id: string;
+  code: string; // This might be different from AssessmentCategory if custom
+  name: string;
+  description: string;
+  isCustom: boolean;
+  standardCount: number;
+}
+
 // Academic terms
 export type AcademicTerm =
   | "Autumn"
@@ -65,6 +74,15 @@ export interface Standard {
   evidence?: string;
   lastUpdated?: string;
   attachments?: FileAttachment[];
+  // Added for compatibility with StandardsManagement
+  aspectId?: string;
+  category?: AssessmentCategory;
+  version?: number;
+  status?: 'active' | 'archived' | 'draft';
+  lastModified?: string;
+  lastModifiedBy?: string;
+  orderIndex?: number;
+  versions?: any[]; // For history
 }
 
 // Group of standards for a category

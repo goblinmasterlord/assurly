@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import {
     Plus,
     Search,
@@ -23,7 +23,7 @@ import {
     DropdownMenuItem,
     DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu';
-import { type Aspect, type Standard } from '@/lib/mock-standards-data';
+import { type Aspect, type Standard } from '@/types/assessment';
 import { cn } from '@/lib/utils';
 import { CreateStandardModal } from '@/components/admin/standards/CreateStandardModal';
 import { CreateAspectModal } from '@/components/admin/standards/CreateAspectModal';
@@ -57,25 +57,12 @@ export default function StandardsManagement() {
         reorderStandards,
         addAspect,
         updateAspect,
-        deleteAspect
+        deleteAspect,
+        isLoading
     } = useStandardsPersistence();
 
-    const [selectedAspect, setSelectedAspect] = useState<Aspect>(aspects[0]);
+    const [selectedAspect, setSelectedAspect] = useState<Aspect | undefined>(undefined);
     const [searchQuery, setSearchQuery] = useState('');
-
-    // Update selected aspect if it was removed or if aspects changed initially
-    if (!aspects.find(a => a.id === selectedAspect.id) && aspects.length > 0) {
-        setSelectedAspect(aspects[0]);
-    }
-
-    const filteredStandards = standards
-        .filter(s => s.category === selectedAspect.code)
-        .filter(s =>
-            s.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-            s.code.toLowerCase().includes(searchQuery.toLowerCase())
-        )
-        .sort((a, b) => a.orderIndex - b.orderIndex);
-
     const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
     const [isAspectModalOpen, setIsAspectModalOpen] = useState(false);
     const [isHistoryModalOpen, setIsHistoryModalOpen] = useState(false);
@@ -91,6 +78,35 @@ export default function StandardsManagement() {
             coordinateGetter: sortableKeyboardCoordinates,
         })
     );
+
+    // Update selected aspect if it was removed or if aspects changed initially
+    useEffect(() => {
+        if (aspects.length > 0 && !selectedAspect) {
+            setSelectedAspect(aspects[0]);
+        } else if (selectedAspect && !aspects.find(a => a.id === selectedAspect.id)) {
+            setSelectedAspect(aspects[0]);
+        }
+    }, [aspects, selectedAspect]);
+
+    if (isLoading) {
+        return <div className="flex items-center justify-center h-screen">Loading...</div>;
+    }
+
+    if (!selectedAspect && aspects.length > 0) return null; // Wait for effect to set selected aspect
+
+    const currentAspect = selectedAspect || aspects[0]; // Fallback
+
+    const filteredStandards = currentAspect
+        ? standards
+            .filter(s => (s as any).aspectId === currentAspect.id || s.category === currentAspect.code) // Handle both API and legacy mock structure if needed
+            .filter(s =>
+                s.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+                s.code.toLowerCase().includes(searchQuery.toLowerCase())
+            )
+            .sort((a, b) => (a.orderIndex || 0) - (b.orderIndex || 0))
+        : [];
+
+
 
     const handleDragEnd = (event: DragEndEvent) => {
         const { active, over } = event;
@@ -187,7 +203,7 @@ export default function StandardsManagement() {
 
         if (itemToDelete.type === 'aspect') {
             deleteAspect(itemToDelete.id);
-            if (selectedAspect.id === itemToDelete.id) {
+            if (currentAspect.id === itemToDelete.id) {
                 setSelectedAspect(aspects[0]);
             }
         } else {
@@ -196,6 +212,29 @@ export default function StandardsManagement() {
         setDeleteModalOpen(false);
         setItemToDelete(null);
     };
+
+    if (!currentAspect) {
+        return (
+            <div className="container mx-auto py-6 max-w-7xl h-[calc(100vh-4rem)] flex flex-col items-center justify-center">
+                <div className="text-center">
+                    <h3 className="text-lg font-medium">No aspects found</h3>
+                    <p className="text-muted-foreground mt-1 mb-4">
+                        Get started by creating your first aspect.
+                    </p>
+                    <Button onClick={() => setIsAspectModalOpen(true)}>
+                        <Plus className="mr-2 h-4 w-4" />
+                        Create Aspect
+                    </Button>
+                </div>
+                <CreateAspectModal
+                    open={isAspectModalOpen}
+                    onOpenChange={setIsAspectModalOpen}
+                    onSave={handleSaveAspect}
+                    aspect={editingAspect}
+                />
+            </div>
+        );
+    }
 
     return (
         <div className="container mx-auto py-6 max-w-7xl h-[calc(100vh-4rem)] flex flex-col">
@@ -214,13 +253,13 @@ export default function StandardsManagement() {
                             </Button>
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end">
-                            <DropdownMenuItem onClick={() => handleEditAspect(selectedAspect)}>
+                            <DropdownMenuItem onClick={() => handleEditAspect(currentAspect)}>
                                 <Edit2 className="mr-2 h-3 w-3" />
-                                Edit {selectedAspect.name}
+                                Edit {currentAspect.name}
                             </DropdownMenuItem>
-                            {selectedAspect.isCustom && (
+                            {currentAspect.isCustom && (
                                 <DropdownMenuItem
-                                    onClick={() => handleDeleteAspect(selectedAspect.id)}
+                                    onClick={() => handleDeleteAspect(currentAspect.id)}
                                     className="text-destructive focus:text-destructive"
                                 >
                                     <Trash2 className="mr-2 h-3 w-3" />
@@ -261,14 +300,14 @@ export default function StandardsManagement() {
                     <ScrollArea className="flex-1">
                         <div className="p-2 space-y-1">
                             {aspects.map((aspect) => {
-                                const count = standards.filter(s => s.category === aspect.code).length;
+                                const count = standards.filter(s => (s as any).aspectId === aspect.id).length;
                                 return (
                                     <button
                                         key={aspect.id}
                                         onClick={() => setSelectedAspect(aspect)}
                                         className={cn(
                                             "w-full text-left px-3 py-2 rounded-md text-sm font-medium transition-colors flex justify-between items-center group",
-                                            selectedAspect.id === aspect.id
+                                            currentAspect.id === aspect.id
                                                 ? "bg-primary/10 text-primary"
                                                 : "hover:bg-muted text-muted-foreground hover:text-foreground"
                                         )}
@@ -297,7 +336,7 @@ export default function StandardsManagement() {
                         <div className="relative flex-1">
                             <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
                             <Input
-                                placeholder={`Search ${selectedAspect.name} standards...`}
+                                placeholder={`Search ${currentAspect.name} standards...`}
                                 className="pl-9"
                                 value={searchQuery}
                                 onChange={(e) => setSearchQuery(e.target.value)}
@@ -317,7 +356,7 @@ export default function StandardsManagement() {
                                     </div>
                                     <h3 className="text-lg font-medium">No standards found</h3>
                                     <p className="text-muted-foreground max-w-sm mx-auto mt-1">
-                                        No standards match your search in {selectedAspect.name}.
+                                        No standards match your search in {currentAspect.name}.
                                     </p>
                                     <Button variant="outline" className="mt-4" onClick={handleCreate}>
                                         <Plus className="mr-2 h-4 w-4" />
@@ -355,7 +394,7 @@ export default function StandardsManagement() {
                 onOpenChange={setIsCreateModalOpen}
                 onSave={handleSaveStandard}
                 standard={editingStandard}
-                defaultCategory={selectedAspect.code}
+                defaultAspectId={currentAspect.id}
                 aspects={aspects}
             />
 

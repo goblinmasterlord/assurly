@@ -1,6 +1,6 @@
 import apiClient from '@/lib/api-client';
 import { transformAssessmentSummary, transformAssessmentDetail, transformSchoolResponse, transformStandardResponse } from '@/lib/data-transformers';
-import type { Assessment, Rating, AssessmentCategory, AcademicTerm, AcademicYear, School, Standard } from '@/types/assessment';
+import type { Assessment, Rating, AssessmentCategory, AcademicTerm, AcademicYear, School, Standard, Aspect } from '@/types/assessment';
 
 // Add new types for the API responses
 interface ApiSchoolResponse {
@@ -111,7 +111,7 @@ export const getStandards = async (aspectId?: string): Promise<Standard[]> => {
       url += `?aspect_id=${aspectId}`;
     }
     const response = await apiClient.get(url);
-    
+
     return response.data.map(transformStandardResponse);
   } catch (error) {
     console.error('Failed to fetch standards:', error);
@@ -135,11 +135,11 @@ export const submitAssessment = async (assessmentId: string, standards: { standa
     };
 
     const response = await apiClient.post(`/api/assessments/${assessmentId}/submit`, payload);
-    
+
     if (response.data.status !== 'success') {
       throw new Error('Submission failed');
     }
-    
+
     console.log('Assessment submitted successfully:', response.data.message);
   } catch (error) {
     console.error('Failed to submit assessment:', error);
@@ -156,7 +156,7 @@ export const createAssessments = async (request: CreateAssessmentRequest): Promi
     // Map frontend categories to backend categories
     const categoryMap: Record<string, string> = {
       'Education': 'education',
-      'Finance & Procurement': 'finance', 
+      'Finance & Procurement': 'finance',
       'Human Resources': 'hr',
       'Estates': 'estates',
       'Governance': 'governance',
@@ -165,9 +165,9 @@ export const createAssessments = async (request: CreateAssessmentRequest): Promi
       // Note: Backend only has 6 categories (education, finance, hr, estates, governance, it, is)
       // 'is' appears to be an alias for information services
     };
-    
+
     const backendCategory = categoryMap[request.category] || request.category.toLowerCase();
-    
+
     const payload = {
       category: backendCategory,
       school_ids: request.schoolIds,
@@ -194,10 +194,10 @@ export const createAssessments = async (request: CreateAssessmentRequest): Promi
  * This is useful for auto-save functionality.
  */
 export const updateStandard = async (
-  assessmentId: string, 
-  standardId: string, 
-  rating: Rating, 
-  evidence: string, 
+  assessmentId: string,
+  standardId: string,
+  rating: Rating,
+  evidence: string,
   submittedBy: string = 'user1'
 ): Promise<void> => {
   try {
@@ -219,7 +219,135 @@ export const getTerms = async () => {
   return [];
 };
 
-export const getAreas = async () => {
-  // TODO: Implement when backend provides /api/areas endpoint
-  return [];
+
+
+
+// --- Aspects CRUD ---
+
+export const getAspects = async (): Promise<Aspect[]> => {
+  try {
+    const response = await apiClient.get('/api/aspects');
+    // Transform response if necessary, assuming backend returns matching structure for now
+    // or map it:
+    return response.data.map((a: any) => ({
+      id: a.aspect_id,
+      code: a.code,
+      name: a.name || a.aspect_name || a.title || 'Untitled Aspect',
+      description: a.description,
+      isCustom: a.is_custom,
+      standardCount: a.standard_count || 0
+    }));
+  } catch (error) {
+    console.error('Failed to fetch aspects:', error);
+    throw new Error('Failed to load aspects.');
+  }
+};
+
+export const createAspect = async (aspect: Omit<Aspect, 'id' | 'standardCount'>): Promise<Aspect> => {
+  try {
+    const payload = {
+      name: aspect.name,
+      code: aspect.code,
+      description: aspect.description,
+      is_custom: aspect.isCustom
+    };
+    const response = await apiClient.post('/api/aspects', payload);
+    return {
+      id: response.data.aspect_id,
+      code: response.data.code,
+      name: response.data.name,
+      description: response.data.description,
+      isCustom: response.data.is_custom,
+      standardCount: 0
+    };
+  } catch (error) {
+    console.error('Failed to create aspect:', error);
+    throw new Error('Failed to create aspect.');
+  }
+};
+
+export const updateAspect = async (aspect: Aspect): Promise<Aspect> => {
+  try {
+    const payload = {
+      name: aspect.name,
+      description: aspect.description,
+      // code and is_custom usually shouldn't change
+    };
+    const response = await apiClient.put(`/api/aspects/${aspect.id}`, payload);
+    return {
+      ...aspect,
+      name: response.data.name,
+      description: response.data.description
+    };
+  } catch (error) {
+    console.error('Failed to update aspect:', error);
+    throw new Error('Failed to update aspect.');
+  }
+};
+
+export const deleteAspect = async (id: string): Promise<void> => {
+  try {
+    await apiClient.delete(`/api/aspects/${id}`);
+  } catch (error) {
+    console.error('Failed to delete aspect:', error);
+    throw new Error('Failed to delete aspect.');
+  }
+};
+
+// --- Standards CRUD ---
+
+export const createStandard = async (standard: Omit<Standard, 'id' | 'lastUpdated' | 'versions'> & { aspectId: string, orderIndex: number }): Promise<Standard> => {
+  try {
+    const payload = {
+      aspect_id: standard.aspectId,
+      code: standard.code,
+      title: standard.title,
+      description: standard.description,
+      order_index: standard.orderIndex
+    };
+    const response = await apiClient.post('/api/standards', payload);
+    return transformStandardResponse(response.data);
+  } catch (error) {
+    console.error('Failed to create standard:', error);
+    throw new Error('Failed to create standard.');
+  }
+};
+
+export const updateStandardDefinition = async (standard: Standard): Promise<Standard> => {
+  try {
+    const payload = {
+      code: standard.code,
+      title: standard.title,
+      description: standard.description,
+    };
+    const response = await apiClient.put(`/api/standards/${standard.id}`, payload);
+    return transformStandardResponse(response.data);
+  } catch (error) {
+    console.error('Failed to update standard:', error);
+    throw new Error('Failed to update standard.');
+  }
+};
+
+export const deleteStandard = async (id: string): Promise<void> => {
+  try {
+    await apiClient.delete(`/api/standards/${id}`);
+  } catch (error) {
+    console.error('Failed to delete standard:', error);
+    throw new Error('Failed to delete standard.');
+  }
+};
+
+export const reorderStandards = async (standards: { id: string; orderIndex: number }[]): Promise<void> => {
+  try {
+    const payload = {
+      updates: standards.map(s => ({
+        standard_id: s.id,
+        new_order_index: s.orderIndex
+      }))
+    };
+    await apiClient.put('/api/standards/reorder', payload);
+  } catch (error) {
+    console.error('Failed to reorder standards:', error);
+    throw new Error('Failed to reorder standards.');
+  }
 }; 

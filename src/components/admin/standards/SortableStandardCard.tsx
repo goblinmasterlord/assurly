@@ -1,4 +1,5 @@
 import { useSortable } from '@dnd-kit/sortable';
+import { format } from 'date-fns';
 import { CSS } from '@dnd-kit/utilities';
 import {
     MoreVertical,
@@ -18,7 +19,7 @@ import {
     DropdownMenuItem,
     DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu';
-import { type Standard } from '@/lib/mock-standards-data';
+import { type Standard } from '@/types/assessment';
 
 interface SortableStandardCardProps {
     standard: Standard;
@@ -79,7 +80,7 @@ export function SortableStandardCard({ standard, onEdit, onHistory }: SortableSt
                         <div className="flex items-center gap-4 text-xs text-muted-foreground">
                             <span className="flex items-center">
                                 <History className="mr-1 h-3 w-3" />
-                                Updated {new Date(standard.lastModified).toLocaleDateString()}
+                                Updated {format(new Date(standard.lastModified || new Date()), 'MMM d, yyyy')}
                             </span>
                             <span>by {standard.lastModifiedBy}</span>
                         </div>

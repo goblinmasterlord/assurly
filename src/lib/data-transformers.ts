@@ -103,7 +103,7 @@ const expandAcademicYear = (year: string): string => {
 const mapTermIdToTerm = (termId: string): string => {
   const termMap: Record<string, string> = {
     'T1': 'Autumn',
-    'T2': 'Spring', 
+    'T2': 'Spring',
     'T3': 'Summer',
   };
   return termMap[termId] || termId; // Fallback to original if not found
@@ -200,12 +200,17 @@ export const transformStandard = (apiStandard: ApiStandardDetail): Standard => {
 export const transformStandardResponse = (apiStandard: ApiStandardResponse): Standard => {
   return {
     id: apiStandard.standard_id,
-    code: apiStandard.standard_id,
+    code: apiStandard.standard_id, // Or code if available, but using standard_id as fallback
     title: apiStandard.standard_name,
     description: apiStandard.description,
     rating: null, // Standards from this endpoint don't have ratings yet
     evidence: '',
     attachments: [],
+    aspectId: apiStandard.aspect_id,
+    category: apiStandard.aspect_name as any, // Use aspect name as category for display if needed
+    orderIndex: apiStandard.sort_order,
+    version: 1, // Default
+    status: 'active', // Default
   };
 };
 
