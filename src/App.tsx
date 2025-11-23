@@ -4,6 +4,7 @@ import { HomePage } from "@/pages/Home";
 import { AssessmentsPage } from "@/pages/Assessments";
 import { AssessmentDetailPage } from "@/pages/AssessmentDetail";
 import { AnalyticsPage } from "@/pages/Analytics";
+import StandardsManagement from "@/pages/admin/StandardsManagement";
 import LoginPage from "@/pages/auth/Login";
 import VerifyPage from "@/pages/auth/Verify";
 import { Toaster } from "@/components/ui/toaster";
@@ -18,7 +19,7 @@ function AppContent() {
         {/* Public auth routes */}
         <Route path="/auth/login" element={<LoginPage />} />
         <Route path="/auth/verify" element={<VerifyPage />} />
-        
+
         {/* Protected application routes */}
         <Route
           path="/"
@@ -32,8 +33,9 @@ function AppContent() {
           <Route path="assessments" element={<AssessmentsPage />} />
           <Route path="assessments/:id" element={<AssessmentDetailPage />} />
           <Route path="analytics" element={<AnalyticsPage />} />
+          <Route path="admin/standards" element={<StandardsManagement />} />
         </Route>
-        
+
         {/* Redirect any unknown routes to home */}
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>

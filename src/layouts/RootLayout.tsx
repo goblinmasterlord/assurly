@@ -14,12 +14,12 @@ export function RootLayout() {
   const { role } = useUser();
   const { user, logout } = useAuth();
   const [showShortcuts, setShowShortcuts] = useState(false);
-  
+
   // Set up keyboard shortcuts
   useKeyboardShortcuts({
     onShowShortcuts: () => setShowShortcuts(true)
   });
-  
+
   return (
     <div className="relative flex min-h-screen flex-col">
       <TopLoader />
@@ -33,15 +33,23 @@ export function RootLayout() {
             <nav className="hidden md:flex space-x-4">
               <Button variant="link" size="sm" asChild>
                 <Link to="/assessments" className="flex items-center">
-                  <ClipboardList className="mr-1 h-4 w-4" /> 
+                  <ClipboardList className="mr-1 h-4 w-4" />
                   {role === "mat-admin" ? "All Ratings" : "My Ratings"}
                 </Link>
               </Button>
               {role === "mat-admin" && (
                 <Button variant="link" size="sm" asChild>
                   <Link to="/analytics" className="flex items-center">
-                    <BarChart3 className="mr-1 h-4 w-4" /> 
+                    <BarChart3 className="mr-1 h-4 w-4" />
                     Analytics
+                  </Link>
+                </Button>
+              )}
+              {role === "mat-admin" && (
+                <Button variant="link" size="sm" asChild>
+                  <Link to="/admin/standards" className="flex items-center">
+                    <ClipboardList className="mr-1 h-4 w-4" />
+                    Standards
                   </Link>
                 </Button>
               )}
@@ -50,7 +58,7 @@ export function RootLayout() {
           <div className="flex items-center space-x-4">
             {/* Only show role switcher in development */}
             {import.meta.env.DEV && <RoleSwitcher />}
-            
+
             {/* User info and actions */}
             {user && (
               <div className="flex items-center space-x-3">
@@ -63,8 +71,8 @@ export function RootLayout() {
                     </span>
                   )}
                 </div>
-                <Button 
-                  size="sm" 
+                <Button
+                  size="sm"
                   variant="outline"
                   onClick={() => logout()}
                   className="flex items-center gap-2"
@@ -74,11 +82,11 @@ export function RootLayout() {
                 </Button>
               </div>
             )}
-            
+
             <Button size="sm" asChild>
-              <a 
-                href="https://app.goconfigur.com" 
-                target="_blank" 
+              <a
+                href="https://app.goconfigur.com"
+                target="_blank"
                 rel="noopener noreferrer"
                 className="flex items-center gap-2"
               >
@@ -87,8 +95,8 @@ export function RootLayout() {
               </a>
             </Button>
           </div>
-        </div>
-      </header>
+        </div >
+      </header >
       <main className="flex-1 bg-slate-50">
         <Outlet />
       </main>
@@ -100,6 +108,6 @@ export function RootLayout() {
           </p>
         </div>
       </footer>
-    </div>
+    </div >
   );
 } 

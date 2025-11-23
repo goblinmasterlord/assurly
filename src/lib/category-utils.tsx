@@ -1,14 +1,14 @@
 import React from "react";
 import type { AssessmentCategory } from "@/types/assessment";
-import { 
-  BookOpen, 
-  ClipboardCheck, 
-  DollarSign, 
-  Building, 
-  Shield, 
-  Monitor, 
+import {
+  BookOpen,
+  ClipboardCheck,
+  DollarSign,
+  Building,
+  Shield,
+  Monitor,
   Settings,
-  Users 
+  Users
 } from "lucide-react";
 
 // Mapping from backend category values to display names
@@ -20,12 +20,14 @@ export const categoryDisplayNames: Record<AssessmentCategory, string> = {
   "governance": "Governance",
   "is": "IT & Information Services",
   "it": "IT (Digital Aspects)",
+  "safeguarding": "Safeguarding",
+  "faith": "Faith",
 };
 
 // Mapping from short codes/abbreviations to backend category values
 export const categoryAbbreviationMap: Record<string, AssessmentCategory> = {
   "Ed": "education",
-  "Hr": "hr", 
+  "Hr": "hr",
   "Fm": "finance",
   "Bo": "estates", // Building Operations
   "Eg": "governance", // Executive Governance
@@ -37,11 +39,13 @@ export const categoryAbbreviationMap: Record<string, AssessmentCategory> = {
 export const categoryToAbbreviation: Record<AssessmentCategory, string> = {
   "education": "Ed",
   "hr": "Hr",
-  "finance": "Fm", 
+  "finance": "Fm",
   "estates": "Bo",
   "governance": "Eg",
-  "is": "Is",
-  "it": "It",
+  "is": "IS",
+  "it": "IT",
+  "safeguarding": "SG",
+  "faith": "FT",
 };
 
 // Category icons mapping using backend category values
@@ -89,16 +93,16 @@ export const normalizeCategoryName = (input: string): AssessmentCategory | null 
   if (Object.keys(categoryDisplayNames).includes(input as AssessmentCategory)) {
     return input as AssessmentCategory;
   }
-  
+
   // Then check if it's a display name - reverse lookup
   const backendCategory = Object.entries(categoryDisplayNames).find(
     ([key, displayName]) => displayName === input
   )?.[0] as AssessmentCategory;
-  
+
   if (backendCategory) {
     return backendCategory;
   }
-  
+
   // Finally check if it's an abbreviation
   return getCategoryFromAbbreviation(input);
 };

@@ -52,10 +52,26 @@ export function AuthProvider({ children }: AuthProviderProps) {
   }, []);
 
   const initializeAuth = useCallback(async () => {
+    // Bypass auth in development
+    if (import.meta.env.DEV) {
+      const MOCK_USER: User = {
+        id: 'mock-user-id',
+        email: 'dev@assurly.com',
+        name: 'Developer User',
+        role: 'mat-admin',
+        schools: ['cedar-park-primary'],
+        permissions: ['all']
+      };
+
+      setUser(MOCK_USER);
+      setLoading(false);
+      return;
+    }
+
     try {
       setLoading(true);
       const session = await authService.getCurrentSession();
-      
+
       if (session?.user) {
         setUser(session.user);
       } else {
@@ -87,10 +103,10 @@ export function AuthProvider({ children }: AuthProviderProps) {
       setLoading(true);
       setError(null);
       const response = await authService.verifyToken(request);
-      
+
       if (response.user) {
         setUser(response.user);
-        
+
         const from = location.state?.from?.pathname || '/assessments';
         navigate(from, { replace: true });
       }
