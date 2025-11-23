@@ -62,11 +62,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
         schools: ['cedar-park-primary'],
         permissions: ['all']
       };
-<<<<<<< HEAD
       
-=======
-
->>>>>>> marci-work
       setUser(MOCK_USER);
       setLoading(false);
       return;
