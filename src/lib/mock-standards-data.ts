@@ -37,50 +37,50 @@ export const MOCK_ASPECTS: Aspect[] = [
     {
         id: 'education',
         code: 'education',
-        name: 'Quality of Education',
+        name: 'Education',
         description: 'Curriculum, teaching quality, and outcomes.',
         isCustom: false,
-        standardCount: 12
+        standardCount: 0
     },
     {
         id: 'governance',
         code: 'governance',
-        name: 'Governance & Leadership',
+        name: 'Governance',
         description: 'Trustees, local governors, and leadership structure.',
         isCustom: false,
-        standardCount: 8
+        standardCount: 0
     },
     {
         id: 'hr',
         code: 'hr',
-        name: 'Human Resources',
+        name: 'HR',
         description: 'Staffing, wellbeing, and employment compliance.',
         isCustom: false,
-        standardCount: 10
+        standardCount: 0
     },
     {
         id: 'finance',
         code: 'finance',
-        name: 'Finance & Operations',
-        description: 'Budgeting, procurement, and estate management.',
+        name: 'Finance',
+        description: 'Budgeting, procurement, and financial management.',
         isCustom: false,
-        standardCount: 15
+        standardCount: 0
     },
     {
-        id: 'safeguarding',
-        code: 'safeguarding',
-        name: 'Safeguarding',
-        description: 'Child protection and safety procedures.',
+        id: 'estates',
+        code: 'estates',
+        name: 'Estates',
+        description: 'Health & safety, estate management, and compliance.',
         isCustom: false,
-        standardCount: 6
+        standardCount: 0
     },
     {
-        id: 'custom-faith',
-        code: 'faith',
-        name: 'Catholic Life',
-        description: 'Religious character and collective worship.',
-        isCustom: true,
-        standardCount: 4
+        id: 'it',
+        code: 'it',
+        name: 'IT',
+        description: 'IT strategy, infrastructure, and digital safety.',
+        isCustom: false,
+        standardCount: 0
     }
 ];
 

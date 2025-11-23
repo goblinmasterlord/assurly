@@ -1,17 +1,15 @@
 import { useState } from 'react';
 import {
-    LayoutDashboard,
     Plus,
     Search,
-    Settings,
     MoreVertical,
+    MoreHorizontal,
+    Settings,
     History,
     Edit2,
     Trash2,
     GripVertical,
-    AlertTriangle,
-    FileText,
-    CheckCircle2
+    FileText
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -25,10 +23,11 @@ import {
     DropdownMenuItem,
     DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu';
-import { MOCK_ASPECTS, MOCK_STANDARDS, type Aspect, type Standard } from '@/lib/mock-standards-data';
+import { type Aspect, type Standard } from '@/lib/mock-standards-data';
 import { cn } from '@/lib/utils';
 import { CreateStandardModal } from '@/components/admin/standards/CreateStandardModal';
 import { CreateAspectModal } from '@/components/admin/standards/CreateAspectModal';
+import { DeleteConfirmationModal } from '@/components/admin/standards/DeleteConfirmationModal';
 import { VersionHistoryModal } from '@/components/admin/standards/VersionHistoryModal';
 import {
     DndContext,
@@ -46,11 +45,28 @@ import {
     verticalListSortingStrategy
 } from '@dnd-kit/sortable';
 import { SortableStandardCard } from '@/components/admin/standards/SortableStandardCard';
+import { useStandardsPersistence } from '@/hooks/use-standards-persistence';
 
 export default function StandardsManagement() {
-    const [selectedAspect, setSelectedAspect] = useState<Aspect>(MOCK_ASPECTS[0]);
+    const {
+        aspects,
+        standards,
+        addStandard,
+        updateStandard,
+        deleteStandard,
+        reorderStandards,
+        addAspect,
+        updateAspect,
+        deleteAspect
+    } = useStandardsPersistence();
+
+    const [selectedAspect, setSelectedAspect] = useState<Aspect>(aspects[0]);
     const [searchQuery, setSearchQuery] = useState('');
-    const [standards, setStandards] = useState<Standard[]>(MOCK_STANDARDS);
+
+    // Update selected aspect if it was removed or if aspects changed initially
+    if (!aspects.find(a => a.id === selectedAspect.id) && aspects.length > 0) {
+        setSelectedAspect(aspects[0]);
+    }
 
     const filteredStandards = standards
         .filter(s => s.category === selectedAspect.code)
@@ -64,7 +80,10 @@ export default function StandardsManagement() {
     const [isAspectModalOpen, setIsAspectModalOpen] = useState(false);
     const [isHistoryModalOpen, setIsHistoryModalOpen] = useState(false);
     const [editingStandard, setEditingStandard] = useState<Standard | undefined>(undefined);
+    const [editingAspect, setEditingAspect] = useState<Aspect | undefined>(undefined);
     const [historyStandard, setHistoryStandard] = useState<Standard | null>(null);
+    const [deleteModalOpen, setDeleteModalOpen] = useState(false);
+    const [itemToDelete, setItemToDelete] = useState<{ type: 'aspect' | 'standard', id: string, name: string } | null>(null);
 
     const sensors = useSensors(
         useSensor(PointerSensor),
@@ -77,17 +96,27 @@ export default function StandardsManagement() {
         const { active, over } = event;
 
         if (active.id !== over?.id) {
-            setStandards((items) => {
-                const oldIndex = items.findIndex((item) => item.id === active.id);
-                const newIndex = items.findIndex((item) => item.id === over?.id);
+            const oldIndex = standards.findIndex((item) => item.id === active.id);
+            const newIndex = standards.findIndex((item) => item.id === over?.id);
 
-                // Update orderIndex for all affected items
-                const newItems = arrayMove(items, oldIndex, newIndex);
-                return newItems.map((item, index) => ({
-                    ...item,
-                    orderIndex: index
-                }));
-            });
+            // We need to reorder the full list, but only the items in the current view are relevant for the visual drag
+            // However, for persistence, we just need to update the orderIndex of the moved item and potentially others
+            // A simpler approach for this mock implementation is to just move them in the array if they are siblings
+            // But since we filter by category, we should be careful.
+
+            // Let's just reorder the filtered list and update the main list based on that
+            const newFiltered = arrayMove(filteredStandards,
+                filteredStandards.findIndex(s => s.id === active.id),
+                filteredStandards.findIndex(s => s.id === over?.id)
+            );
+
+            // Update orderIndex for these items
+            const updatedStandards = newFiltered.map((item, index) => ({
+                ...item,
+                orderIndex: index
+            }));
+
+            reorderStandards(updatedStandards);
         }
     };
 
@@ -106,6 +135,68 @@ export default function StandardsManagement() {
         setIsHistoryModalOpen(true);
     };
 
+    const handleSaveStandard = (standard: Standard) => {
+        if (editingStandard) {
+            updateStandard(standard);
+        } else {
+            addStandard({
+                ...standard,
+                orderIndex: standards.filter(s => s.category === standard.category).length
+            });
+        }
+        setIsCreateModalOpen(false);
+    };
+
+    const handleSaveAspect = (aspect: Aspect) => {
+        if (editingAspect) {
+            updateAspect(aspect);
+        } else {
+            addAspect(aspect);
+        }
+        setIsAspectModalOpen(false);
+    };
+
+    const handleEditAspect = (aspect: Aspect) => {
+        setEditingAspect(aspect);
+        setIsAspectModalOpen(true);
+    };
+
+    const handleDeleteAspect = (id: string) => {
+        const aspectToDelete = aspects.find(a => a.id === id);
+        if (aspectToDelete) {
+            setItemToDelete({ type: 'aspect', id, name: aspectToDelete.name });
+            setDeleteModalOpen(true);
+        }
+    };
+
+    const handleCreateAspect = () => {
+        setEditingAspect(undefined);
+        setIsAspectModalOpen(true);
+    };
+
+    const handleDeleteStandard = (id: string) => {
+        const standardToDelete = standards.find(s => s.id === id);
+        if (standardToDelete) {
+            setItemToDelete({ type: 'standard', id, name: standardToDelete.code });
+            setDeleteModalOpen(true);
+        }
+    };
+
+    const handleConfirmDelete = () => {
+        if (!itemToDelete) return;
+
+        if (itemToDelete.type === 'aspect') {
+            deleteAspect(itemToDelete.id);
+            if (selectedAspect.id === itemToDelete.id) {
+                setSelectedAspect(aspects[0]);
+            }
+        } else {
+            deleteStandard(itemToDelete.id);
+        }
+        setDeleteModalOpen(false);
+        setItemToDelete(null);
+    };
+
     return (
         <div className="container mx-auto py-6 max-w-7xl h-[calc(100vh-4rem)] flex flex-col">
             <div className="flex justify-between items-center mb-6">
@@ -116,6 +207,28 @@ export default function StandardsManagement() {
                     </p>
                 </div>
                 <div className="flex gap-3">
+                    <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                            <Button variant="outline" size="icon">
+                                <Settings className="h-4 w-4" />
+                            </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end">
+                            <DropdownMenuItem onClick={() => handleEditAspect(selectedAspect)}>
+                                <Edit2 className="mr-2 h-3 w-3" />
+                                Edit {selectedAspect.name}
+                            </DropdownMenuItem>
+                            {selectedAspect.isCustom && (
+                                <DropdownMenuItem
+                                    onClick={() => handleDeleteAspect(selectedAspect.id)}
+                                    className="text-destructive focus:text-destructive"
+                                >
+                                    <Trash2 className="mr-2 h-3 w-3" />
+                                    Delete Aspect
+                                </DropdownMenuItem>
+                            )}
+                        </DropdownMenuContent>
+                    </DropdownMenu>
                     <Button variant="outline">
                         <History className="mr-2 h-4 w-4" />
                         Audit Log
@@ -138,7 +251,7 @@ export default function StandardsManagement() {
                         <Button
                             variant="outline"
                             className="w-full justify-start text-xs h-8"
-                            onClick={() => setIsAspectModalOpen(true)}
+                            onClick={handleCreateAspect}
                         >
                             <Plus className="mr-2 h-3 w-3" />
                             Add Custom Aspect
@@ -147,23 +260,33 @@ export default function StandardsManagement() {
                     <Separator />
                     <ScrollArea className="flex-1">
                         <div className="p-2 space-y-1">
-                            {MOCK_ASPECTS.map((aspect) => (
-                                <button
-                                    key={aspect.id}
-                                    onClick={() => setSelectedAspect(aspect)}
-                                    className={cn(
-                                        "w-full text-left px-3 py-2 rounded-md text-sm font-medium transition-colors flex justify-between items-center group",
-                                        selectedAspect.id === aspect.id
-                                            ? "bg-primary/10 text-primary"
-                                            : "hover:bg-muted text-muted-foreground hover:text-foreground"
-                                    )}
-                                >
-                                    <span>{aspect.name}</span>
-                                    {aspect.isCustom && (
-                                        <Badge variant="secondary" className="text-[10px] h-4 px-1">Custom</Badge>
-                                    )}
-                                </button>
-                            ))}
+                            {aspects.map((aspect) => {
+                                const count = standards.filter(s => s.category === aspect.code).length;
+                                return (
+                                    <button
+                                        key={aspect.id}
+                                        onClick={() => setSelectedAspect(aspect)}
+                                        className={cn(
+                                            "w-full text-left px-3 py-2 rounded-md text-sm font-medium transition-colors flex justify-between items-center group",
+                                            selectedAspect.id === aspect.id
+                                                ? "bg-primary/10 text-primary"
+                                                : "hover:bg-muted text-muted-foreground hover:text-foreground"
+                                        )}
+                                    >
+                                        <div className="flex flex-col items-start">
+                                            <span>{aspect.name}</span>
+                                            <span className="text-[10px] text-muted-foreground font-normal">
+                                                {count} standard{count !== 1 ? 's' : ''}
+                                            </span>
+                                        </div>
+                                        {aspect.isCustom ? (
+                                            <Badge variant="secondary" className="text-[10px] h-4 px-1">Custom</Badge>
+                                        ) : (
+                                            <Badge variant="outline" className="text-[10px] h-4 px-1 text-muted-foreground">Default</Badge>
+                                        )}
+                                    </button>
+                                );
+                            })}
                         </div>
                     </ScrollArea>
                 </Card>
@@ -230,19 +353,34 @@ export default function StandardsManagement() {
             <CreateStandardModal
                 open={isCreateModalOpen}
                 onOpenChange={setIsCreateModalOpen}
+                onSave={handleSaveStandard}
                 standard={editingStandard}
                 defaultCategory={selectedAspect.code}
+                aspects={aspects}
             />
 
             <CreateAspectModal
                 open={isAspectModalOpen}
                 onOpenChange={setIsAspectModalOpen}
+                onSave={handleSaveAspect}
+                aspect={editingAspect}
             />
 
             <VersionHistoryModal
                 open={isHistoryModalOpen}
                 onOpenChange={setIsHistoryModalOpen}
                 standard={historyStandard}
+            />
+
+            <DeleteConfirmationModal
+                open={deleteModalOpen}
+                onOpenChange={setDeleteModalOpen}
+                onConfirm={handleConfirmDelete}
+                title={itemToDelete?.type === 'aspect' ? 'Delete Aspect' : 'Delete Standard'}
+                description={itemToDelete?.type === 'aspect'
+                    ? 'Are you sure you want to delete this aspect? All associated standards will be hidden.'
+                    : 'Are you sure you want to delete this standard? This action cannot be undone.'}
+                itemName={itemToDelete?.name}
             />
         </div>
     );
