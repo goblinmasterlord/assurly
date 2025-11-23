@@ -14,8 +14,6 @@ import { AISummaryPanel } from "@/components/AISummaryPanel";
 import { ButtonLoader } from "@/components/ui/micro-loaders";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
-// @ts-ignore - PDF import
-import pdfFile from "@/assets/Springwell_pack .pdf";
 
 export function ExportPage() {
   const [isGenerating, setIsGenerating] = useState(false);
@@ -30,9 +28,9 @@ export function ExportPage() {
 
     setTimeout(async () => {
       try {
-        // Create a link to download the PDF
+        // Create a link to download the PDF from public directory
         const link = document.createElement("a");
-        link.href = pdfFile;
+        link.href = "/Springwell_pack.pdf";
         link.download = "MAT_Assessment_Report_2024-2025.pdf";
         link.target = "_blank";
         document.body.appendChild(link);
@@ -83,7 +81,7 @@ export function ExportPage() {
               <CardContent className="p-0">
                 <div className="overflow-hidden bg-slate-50">
                   <iframe
-                    src={pdfFile}
+                    src="/Springwell_pack.pdf"
                     className="w-full h-[calc(100vh-180px)]"
                     title="PDF Preview"
                   />
