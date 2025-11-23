@@ -71,11 +71,9 @@ export function RootLayout() {
                 <div className="hidden md:flex items-center space-x-2 text-sm text-muted-foreground">
                   <User className="h-4 w-4" />
                   <span>{user.email}</span>
-                  {user.role && (
-                    <span className="px-2 py-0.5 text-xs bg-slate-100 text-slate-700 rounded">
-                      {user.role === 'mat-admin' ? 'MAT Admin' : 'Department Head'}
-                    </span>
-                  )}
+                  <span className="px-2 py-0.5 text-xs bg-slate-100 text-slate-700 rounded">
+                    {role === 'mat-admin' ? 'MAT Admin' : 'Department Head'}
+                  </span>
                 </div>
                 <Button
                   size="sm"
