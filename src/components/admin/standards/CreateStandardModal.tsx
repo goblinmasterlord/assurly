@@ -22,7 +22,7 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { MOCK_ASPECTS, type Standard } from '@/lib/mock-standards-data';
+import { type Standard } from '@/lib/mock-standards-data';
 import { useEffect } from 'react';
 
 const formSchema = z.object({
@@ -32,14 +32,18 @@ const formSchema = z.object({
     category: z.string().min(1, 'Please select a category'),
 });
 
+import { type Aspect } from '@/lib/mock-standards-data';
+
 interface CreateStandardModalProps {
     open: boolean;
     onOpenChange: (open: boolean) => void;
+    onSave: (data: any) => void;
     standard?: Standard; // If provided, we are in edit mode
     defaultCategory?: string;
+    aspects: Aspect[];
 }
 
-export function CreateStandardModal({ open, onOpenChange, standard, defaultCategory }: CreateStandardModalProps) {
+export function CreateStandardModal({ open, onOpenChange, onSave, standard, defaultCategory, aspects }: CreateStandardModalProps) {
     const form = useForm<z.infer<typeof formSchema>>({
         resolver: zodResolver(formSchema),
         defaultValues: {
@@ -69,8 +73,22 @@ export function CreateStandardModal({ open, onOpenChange, standard, defaultCateg
     }, [standard, defaultCategory, form]);
 
     function onSubmit(values: z.infer<typeof formSchema>) {
-        console.log(values);
-        // In a real app, this would call an API
+        // Create a standard object from the form values
+        const standardData = {
+            ...standard, // Keep existing ID and other fields if editing
+            id: standard?.id || `std-${Date.now()}`,
+            code: values.code,
+            title: values.title,
+            description: values.description,
+            category: values.category,
+            version: standard ? standard.version + 1 : 1,
+            status: standard?.status || 'active',
+            lastModified: new Date().toISOString(),
+            lastModifiedBy: 'Current User', // In a real app, get from auth context
+            versions: standard?.versions || []
+        };
+
+        onSave(standardData);
         onOpenChange(false);
     }
 
@@ -102,7 +120,7 @@ export function CreateStandardModal({ open, onOpenChange, standard, defaultCateg
                                                 </SelectTrigger>
                                             </FormControl>
                                             <SelectContent>
-                                                {MOCK_ASPECTS.map((aspect) => (
+                                                {aspects.map((aspect) => (
                                                     <SelectItem key={aspect.id} value={aspect.code}>
                                                         {aspect.name}
                                                     </SelectItem>
@@ -121,7 +139,7 @@ export function CreateStandardModal({ open, onOpenChange, standard, defaultCateg
                                     <FormItem>
                                         <FormLabel>Standard Code</FormLabel>
                                         <FormControl>
-                                            <Input placeholder="e.g. ED1" {...field} />
+                                            <Input placeholder="e.g. LDR1" {...field} />
                                         </FormControl>
                                         <FormDescription>Unique identifier</FormDescription>
                                         <FormMessage />
@@ -137,7 +155,7 @@ export function CreateStandardModal({ open, onOpenChange, standard, defaultCateg
                                 <FormItem>
                                     <FormLabel>Title</FormLabel>
                                     <FormControl>
-                                        <Input placeholder="e.g. Curriculum Intent" {...field} />
+                                        <Input placeholder="e.g. Strategic Leadership" {...field} />
                                     </FormControl>
                                     <FormMessage />
                                 </FormItem>

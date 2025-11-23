@@ -1,4 +1,5 @@
 import { useForm } from 'react-hook-form';
+import { useEffect } from 'react';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import {
@@ -20,6 +21,7 @@ import {
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Button } from '@/components/ui/button';
+import { type Aspect } from '@/lib/mock-standards-data';
 
 const formSchema = z.object({
     name: z.string().min(3, 'Name must be at least 3 characters'),
@@ -30,9 +32,11 @@ const formSchema = z.object({
 interface CreateAspectModalProps {
     open: boolean;
     onOpenChange: (open: boolean) => void;
+    onSave: (data: any) => void;
+    aspect?: Aspect;
 }
 
-export function CreateAspectModal({ open, onOpenChange }: CreateAspectModalProps) {
+export function CreateAspectModal({ open, onOpenChange, onSave, aspect }: CreateAspectModalProps) {
     const form = useForm<z.infer<typeof formSchema>>({
         resolver: zodResolver(formSchema),
         defaultValues: {
@@ -42,8 +46,36 @@ export function CreateAspectModal({ open, onOpenChange }: CreateAspectModalProps
         },
     });
 
+    // Reset form when opening/closing or changing aspect
+    useEffect(() => {
+        if (open) {
+            if (aspect) {
+                form.reset({
+                    name: aspect.name,
+                    code: aspect.code.toUpperCase(),
+                    description: aspect.description,
+                });
+            } else {
+                form.reset({
+                    name: '',
+                    code: '',
+                    description: '',
+                });
+            }
+        }
+    }, [open, aspect, form]);
+
     function onSubmit(values: z.infer<typeof formSchema>) {
-        console.log(values);
+        const aspectData = {
+            id: aspect?.id || `custom-${values.code.toLowerCase()}`,
+            code: values.code.toLowerCase(),
+            name: values.name,
+            description: values.description || '',
+            isCustom: aspect ? aspect.isCustom : true,
+            standardCount: aspect ? aspect.standardCount : 0
+        };
+
+        onSave(aspectData);
         onOpenChange(false);
     }
 
@@ -51,9 +83,11 @@ export function CreateAspectModal({ open, onOpenChange }: CreateAspectModalProps
         <Dialog open={open} onOpenChange={onOpenChange}>
             <DialogContent className="sm:max-w-[500px]">
                 <DialogHeader>
-                    <DialogTitle>Create Custom Aspect</DialogTitle>
+                    <DialogTitle>{aspect ? 'Edit Aspect' : 'Create Custom Aspect'}</DialogTitle>
                     <DialogDescription>
-                        Add a new area for assessment. This will be available for all schools in the trust.
+                        {aspect
+                            ? 'Update the details of this assessment area.'
+                            : 'Add a new area for assessment. This will be available for all schools in the trust.'}
                     </DialogDescription>
                 </DialogHeader>
 
@@ -66,7 +100,7 @@ export function CreateAspectModal({ open, onOpenChange }: CreateAspectModalProps
                                 <FormItem>
                                     <FormLabel>Aspect Name</FormLabel>
                                     <FormControl>
-                                        <Input placeholder="e.g. Catholic Life" {...field} />
+                                        <Input placeholder="e.g. Sustainability" {...field} />
                                     </FormControl>
                                     <FormMessage />
                                 </FormItem>
@@ -80,7 +114,7 @@ export function CreateAspectModal({ open, onOpenChange }: CreateAspectModalProps
                                 <FormItem>
                                     <FormLabel>Code</FormLabel>
                                     <FormControl>
-                                        <Input placeholder="e.g. FAITH" {...field} />
+                                        <Input placeholder="e.g. SUSTAIN" {...field} disabled={!!aspect} />
                                     </FormControl>
                                     <FormMessage />
                                 </FormItem>
@@ -109,7 +143,7 @@ export function CreateAspectModal({ open, onOpenChange }: CreateAspectModalProps
                                 Cancel
                             </Button>
                             <Button type="submit">
-                                Create Aspect
+                                {aspect ? 'Save Changes' : 'Create Aspect'}
                             </Button>
                         </DialogFooter>
                     </form>

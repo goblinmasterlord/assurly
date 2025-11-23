@@ -517,6 +517,37 @@ This section details the reusable UI components, many of which are based on Radi
     - Returns: `assessments`, `isLoading`, `isRefreshing`, `error`, `refreshAssessments`.
     - Smart refresh logic that maintains UI state during updates.
 
+## Admin Components
+
+### `src/pages/admin/StandardsManagement.tsx`
+- **Description:** The central hub for managing assessment standards, aspects, and version history.
+- **Key Properties/Functionality:**
+    - **Aspect Management:**
+        - Sidebar navigation for filtering standards by aspect.
+        - "Settings" dropdown (cog icon) in the header to Edit/Delete the currently selected aspect.
+        - Custom aspects can be deleted (with confirmation), while default aspects are protected.
+    - **Standards Management:**
+        - List view of standards with drag-and-drop reordering (`@dnd-kit`).
+        - Search functionality to filter standards within an aspect.
+        - Create/Edit modals for standards.
+    - **Persistence:** Uses `useStandardsPersistence` hook to persist changes to `localStorage` (mock mode).
+
+### `src/components/admin/standards/CreateAspectModal.tsx`
+- **Description:** A modal component for creating and editing assessment aspects.
+- **Key Properties/Functionality:**
+    - **Modes:** Supports both creation and editing via the `aspect` prop.
+    - **Validation:** Uses Zod schema for form validation.
+    - **Edit Mode:** Pre-fills existing data and locks the "Code" field to prevent identifier changes.
+    - **Dynamic UI:** Updates title and button text based on mode (Create vs Edit).
+
+### `src/components/admin/standards/DeleteConfirmationModal.tsx`
+- **Description:** A reusable, custom-designed modal for confirming destructive actions.
+- **Key Properties/Functionality:**
+    - **Purpose:** Replaces native browser alerts for a better UX.
+    - **Props:** `open`, `onOpenChange`, `onConfirm`, `title`, `description`, `itemName`.
+    - **Styling:** Uses destructive styling for the confirm button to indicate danger.
+    - **Context:** Can display the name of the item being deleted for clarity.
+
 ### Key Design Principles Applied:
 1. **Consistent Heights**: All interactive elements use h-9 (36px) for perfect alignment
 2. **Professional Spacing**: gap-4 (16px) standard, with contextual adjustments
