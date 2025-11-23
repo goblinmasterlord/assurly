@@ -4,6 +4,7 @@ import { HomePage } from "@/pages/Home";
 import { AssessmentsPage } from "@/pages/Assessments";
 import { AssessmentDetailPage } from "@/pages/AssessmentDetail";
 import { AnalyticsPage } from "@/pages/Analytics";
+import { ExportPage } from "@/pages/Export";
 import LoginPage from "@/pages/auth/Login";
 import VerifyPage from "@/pages/auth/Verify";
 import { Toaster } from "@/components/ui/toaster";
@@ -32,6 +33,7 @@ function AppContent() {
           <Route path="assessments" element={<AssessmentsPage />} />
           <Route path="assessments/:id" element={<AssessmentDetailPage />} />
           <Route path="analytics" element={<AnalyticsPage />} />
+          <Route path="export" element={<ExportPage />} />
         </Route>
         
         {/* Redirect any unknown routes to home */}
