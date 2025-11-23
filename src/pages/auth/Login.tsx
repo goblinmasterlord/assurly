@@ -181,8 +181,8 @@ export default function LoginPage() {
                 Terms of Service
               </Link>{' '}
               and{' '}
-              <Link to="/privacy" className="text-blue-600 hover:underline">
-                Privacy Policy
+              <Link to="/dpa" className="text-blue-600 hover:underline">
+                Data Processing Agreement
               </Link>
             </div>
           </CardFooter>

@@ -14,7 +14,7 @@ export function HomePage() {
         <div className="flex flex-col items-center text-center space-y-6">
           <div className="space-y-4 max-w-2xl mx-auto">
             <h1 className="text-4xl font-bold tracking-tight sm:text-5xl md:text-6xl">
-              Welcome to <span className="text-transparent bg-clip-text bg-gradient-to-r from-indigo-600 to-indigo-400">Assurly</span>
+              Welcome to <span className="text-transparent bg-clip-text bg-gradient-to-r from-teal-700 to-amber-500">Assurly</span>
             </h1>
             <p className="text-xl text-muted-foreground">
               A comprehensive platform for Multi-Academy Trusts to manage school maturity ratings
@@ -32,12 +32,12 @@ export function HomePage() {
           </div>
           
           <div className="grid md:grid-cols-2 gap-6">
-            <Card className={`border-2 transition-colors ${role === "mat-admin" ? "border-indigo-500" : "border-slate-200"}`} 
+            <Card className={`border-2 transition-colors ${role === "mat-admin" ? "border-teal-600" : "border-slate-200"}`} 
                   onClick={() => setRole("mat-admin")}>
               <CardHeader>
                 <div className="flex items-center gap-3">
-                  <div className="w-12 h-12 rounded-full bg-indigo-100 flex items-center justify-center">
-                    <Building2 className="h-6 w-6 text-indigo-600" />
+                  <div className="w-12 h-12 rounded-full bg-teal-100 flex items-center justify-center">
+                    <Building2 className="h-6 w-6 text-teal-700" />
                   </div>
                   <div>
                     <CardTitle>MAT Management</CardTitle>
@@ -62,12 +62,12 @@ export function HomePage() {
               </CardContent>
             </Card>
             
-            <Card className={`border-2 transition-colors ${role === "department-head" ? "border-indigo-500" : "border-slate-200"}`} 
+            <Card className={`border-2 transition-colors ${role === "department-head" ? "border-amber-600" : "border-slate-200"}`} 
                   onClick={() => setRole("department-head")}>
               <CardHeader>
                 <div className="flex items-center gap-3">
-                  <div className="w-12 h-12 rounded-full bg-indigo-100 flex items-center justify-center">
-                    <User2 className="h-6 w-6 text-indigo-600" />
+                  <div className="w-12 h-12 rounded-full bg-amber-100 flex items-center justify-center">
+                    <User2 className="h-6 w-6 text-amber-700" />
                   </div>
                   <div>
                     <CardTitle>Department Head</CardTitle>
@@ -98,7 +98,7 @@ export function HomePage() {
         <div className="flex flex-col items-center text-center space-y-6 pt-4">
           <h2 className="text-2xl font-bold">Ready to explore?</h2>
           <Button asChild size="lg" className="gap-2">
-            <Link to="/assessments">
+            <Link to="/app/assessments">
                                   View Ratings <ArrowRight className="h-4 w-4" />
             </Link>
           </Button>
@@ -123,14 +123,14 @@ export function HomePage() {
               <ul className="space-y-3">
                 {[
                   "School self-rating against defined standards",
-                  "Centralized dashboard for MAT administrators",
+                  "Centralised dashboard for MAT administrators",
                   "Rating scales with clear descriptors",
                   "Evidence collection and documentation",
                   "Progress tracking and completion status",
                   "Secure user management"
                 ].map((feature, i) => (
                   <li key={i} className="flex items-start gap-2">
-                    <CheckCircle2 className="h-5 w-5 text-indigo-600 mt-0.5 flex-shrink-0" />
+                    <CheckCircle2 className="h-5 w-5 text-teal-700 mt-0.5 flex-shrink-0" />
                     <span>{feature}</span>
                   </li>
                 ))}

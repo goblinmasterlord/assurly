@@ -336,7 +336,7 @@ export function AssessmentDetailPage() {
           </CardHeader>
           <CardFooter>
             <Button asChild>
-              <Link to="/assessments">Return to Ratings</Link>
+              <Link to="/app/assessments">Return to Ratings</Link>
             </Button>
           </CardFooter>
         </Card>

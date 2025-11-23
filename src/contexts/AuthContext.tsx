@@ -107,7 +107,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
       if (response.user) {
         setUser(response.user);
         
-        const from = location.state?.from?.pathname || '/assessments';
+        const from = location.state?.from?.pathname || '/app/assessments';
         navigate(from, { replace: true });
       }
     } catch (error: any) {

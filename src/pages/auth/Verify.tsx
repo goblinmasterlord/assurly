@@ -76,7 +76,7 @@ export default function VerifyPage() {
             <div className="text-center text-sm text-slate-500">
               If you're not redirected automatically,{' '}
               <button
-                onClick={() => navigate('/assessments')}
+                onClick={() => navigate('/app/assessments')}
                 className="text-blue-600 hover:underline"
               >
                 click here
