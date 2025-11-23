@@ -12,6 +12,7 @@ import { PricingPage } from "@/pages/Pricing";
 import { SecurityPage } from "@/pages/Security";
 import { TermsPage } from "@/pages/Terms";
 import { DPAPage } from "@/pages/DPA";
+import { ExportPage } from "@/pages/Export";
 import LoginPage from "@/pages/auth/Login";
 import VerifyPage from "@/pages/auth/Verify";
 import { Toaster } from "@/components/ui/toaster";
@@ -51,6 +52,7 @@ function AppContent() {
           <Route path="assessments" element={<AssessmentsPage />} />
           <Route path="assessments/:id" element={<AssessmentDetailPage />} />
           <Route path="analytics" element={<AnalyticsPage />} />
+          <Route path="export" element={<ExportPage />} />
         </Route>
         
         {/* Redirect any unknown routes to landing */}
