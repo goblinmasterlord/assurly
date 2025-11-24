@@ -25,7 +25,8 @@ export function useStandardsPersistence() {
     const [standards, setStandards] = useState<Standard[]>([]);
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
-    const [useMemoryFallback, setUseMemoryFallback] = useState(false);
+    // Always use session storage for standards management - no API integration yet
+    const useMemoryFallback = true;
 
     // Load from sessionStorage or initialize
     const loadFromSession = useCallback(() => {
@@ -36,7 +37,6 @@ export function useStandardsPersistence() {
             if (storedAspects && storedStandards) {
                 setAspects(JSON.parse(storedAspects));
                 setStandards(JSON.parse(storedStandards));
-                setUseMemoryFallback(true); // Enable memory fallback when loading from session
                 return true;
             }
         } catch (err) {
@@ -65,26 +65,14 @@ export function useStandardsPersistence() {
                 return;
             }
 
-            // Try API call
-            try {
-                const [fetchedAspects, fetchedStandards] = await Promise.all([
-                    assessmentService.getAspects(),
-                    assessmentService.getStandards()
-                ]);
-                setAspects(fetchedAspects);
-                setStandards(fetchedStandards);
-                saveToSession(fetchedAspects, fetchedStandards);
-                setError(null);
-            } catch (apiError) {
-                console.warn('API unavailable, using memory fallback');
-                setUseMemoryFallback(true);
-                // Initialize with mock data
-                const initialAspects = getInitialAspects();
-                const initialStandards = getInitialStandards();
-                setAspects(initialAspects);
-                setStandards(initialStandards);
-                saveToSession(initialAspects, initialStandards);
-            }
+            // Initialize with mock data on first load
+            console.log('Initializing standards with mock data');
+            const initialAspects = getInitialAspects();
+            const initialStandards = getInitialStandards();
+            setAspects(initialAspects);
+            setStandards(initialStandards);
+            saveToSession(initialAspects, initialStandards);
+            setError(null);
         } catch (err) {
             console.error('Failed to load standards data:', err);
             setError('Failed to load data');
@@ -99,60 +87,45 @@ export function useStandardsPersistence() {
 
     const addStandard = useCallback(async (standard: any) => {
         try {
-            if (useMemoryFallback) {
-                // In-memory/session storage mode
-                const newStandard: Standard = {
-                    ...standard,
-                    id: `std-${Date.now()}`,
-                    lastUpdated: new Date().toISOString(),
-                    versions: []
-                };
-                const newStandards = [...standards, newStandard];
-                setStandards(newStandards);
-                saveToSession(aspects, newStandards);
-            } else {
-                await assessmentService.createStandard(standard);
-                await loadData();
-            }
+            // Session storage mode
+            const newStandard: Standard = {
+                ...standard,
+                id: `std-${Date.now()}`,
+                lastUpdated: new Date().toISOString(),
+                versions: []
+            };
+            const newStandards = [...standards, newStandard];
+            setStandards(newStandards);
+            saveToSession(aspects, newStandards);
         } catch (err) {
             console.error(err);
             throw err;
         }
-    }, [useMemoryFallback, standards, aspects, saveToSession, loadData]);
+    }, [standards, aspects, saveToSession]);
 
     const updateStandard = useCallback(async (standard: Standard) => {
         try {
-            if (useMemoryFallback) {
-                const newStandards = standards.map(s => 
-                    s.id === standard.id ? { ...standard, lastUpdated: new Date().toISOString() } : s
-                );
-                setStandards(newStandards);
-                saveToSession(aspects, newStandards);
-            } else {
-                await assessmentService.updateStandardDefinition(standard);
-                await loadData();
-            }
+            const newStandards = standards.map(s => 
+                s.id === standard.id ? { ...standard, lastUpdated: new Date().toISOString() } : s
+            );
+            setStandards(newStandards);
+            saveToSession(aspects, newStandards);
         } catch (err) {
             console.error(err);
             throw err;
         }
-    }, [useMemoryFallback, standards, aspects, saveToSession, loadData]);
+    }, [standards, aspects, saveToSession]);
 
     const deleteStandard = useCallback(async (id: string) => {
         try {
-            if (useMemoryFallback) {
-                const newStandards = standards.filter(s => s.id !== id);
-                setStandards(newStandards);
-                saveToSession(aspects, newStandards);
-            } else {
-                await assessmentService.deleteStandard(id);
-                await loadData();
-            }
+            const newStandards = standards.filter(s => s.id !== id);
+            setStandards(newStandards);
+            saveToSession(aspects, newStandards);
         } catch (err) {
             console.error(err);
             throw err;
         }
-    }, [useMemoryFallback, standards, aspects, saveToSession, loadData]);
+    }, [standards, aspects, saveToSession]);
 
     const reorderStandards = useCallback(async (items: any[]) => {
         // Optimistic update
@@ -165,71 +138,46 @@ export function useStandardsPersistence() {
         });
         const sorted = newStandards.sort((a, b) => (a.orderIndex || 0) - (b.orderIndex || 0));
         setStandards(sorted);
-
-        try {
-            if (useMemoryFallback) {
-                saveToSession(aspects, sorted);
-            } else {
-                await assessmentService.reorderStandards(items);
-            }
-        } catch (err) {
-            console.error(err);
-            await loadData(); // Revert on error
-        }
-    }, [useMemoryFallback, standards, aspects, saveToSession, loadData]);
+        saveToSession(aspects, sorted);
+    }, [standards, aspects, saveToSession]);
 
     const addAspect = useCallback(async (aspect: any) => {
         try {
-            if (useMemoryFallback) {
-                const newAspect: Aspect = {
-                    ...aspect,
-                    id: `asp-${Date.now()}`,
-                    standardCount: 0
-                };
-                const newAspects = [...aspects, newAspect];
-                setAspects(newAspects);
-                saveToSession(newAspects, standards);
-            } else {
-                await assessmentService.createAspect(aspect);
-                await loadData();
-            }
+            const newAspect: Aspect = {
+                ...aspect,
+                id: `asp-${Date.now()}`,
+                standardCount: 0
+            };
+            const newAspects = [...aspects, newAspect];
+            setAspects(newAspects);
+            saveToSession(newAspects, standards);
         } catch (err) {
             console.error(err);
             throw err;
         }
-    }, [useMemoryFallback, aspects, standards, saveToSession, loadData]);
+    }, [aspects, standards, saveToSession]);
 
     const updateAspect = useCallback(async (aspect: Aspect) => {
         try {
-            if (useMemoryFallback) {
-                const newAspects = aspects.map(a => a.id === aspect.id ? aspect : a);
-                setAspects(newAspects);
-                saveToSession(newAspects, standards);
-            } else {
-                await assessmentService.updateAspect(aspect);
-                await loadData();
-            }
+            const newAspects = aspects.map(a => a.id === aspect.id ? aspect : a);
+            setAspects(newAspects);
+            saveToSession(newAspects, standards);
         } catch (err) {
             console.error(err);
             throw err;
         }
-    }, [useMemoryFallback, aspects, standards, saveToSession, loadData]);
+    }, [aspects, standards, saveToSession]);
 
     const deleteAspect = useCallback(async (id: string) => {
         try {
-            if (useMemoryFallback) {
-                const newAspects = aspects.filter(a => a.id !== id);
-                setAspects(newAspects);
-                saveToSession(newAspects, standards);
-            } else {
-                await assessmentService.deleteAspect(id);
-                await loadData();
-            }
+            const newAspects = aspects.filter(a => a.id !== id);
+            setAspects(newAspects);
+            saveToSession(newAspects, standards);
         } catch (err) {
             console.error(err);
             throw err;
         }
-    }, [useMemoryFallback, aspects, standards, saveToSession, loadData]);
+    }, [aspects, standards, saveToSession]);
 
     const resetToDefaults = useCallback(() => {
         const initialAspects = getInitialAspects();

@@ -261,9 +261,10 @@ export default function StandardsManagement() {
                     </p>
                 </div>
                 <div className="flex gap-3">
+                    {/* TODO: Fix cogwheel dropdown freezing issue - temporarily disabled */}
                     <DropdownMenu open={isEditAspectDropdownOpen} onOpenChange={setIsEditAspectDropdownOpen}>
                         <DropdownMenuTrigger asChild>
-                            <Button variant="outline" size="icon" title="Options">
+                            <Button variant="outline" size="icon" title="Options" disabled>
                                 <Settings className="h-4 w-4" />
                             </Button>
                         </DropdownMenuTrigger>

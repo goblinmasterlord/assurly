@@ -54,21 +54,12 @@ apiClient.interceptors.request.use(
     }
     
     // Add auth token if available
-    // Use a sync method to get token to avoid circular dependency
+    // Direct access to localStorage where tokens are now stored
     if (!config.url?.includes('/auth/') && typeof window !== 'undefined') {
       try {
-        // Direct access to secure storage
-        const stored = sessionStorage.getItem('assurly_secure');
-        if (stored) {
-          const data = JSON.parse(stored);
-          if (data.auth_token?.v) {
-            // Simple deobfuscation for the token
-            const decoded = atob(data.auth_token.v);
-            const token = decoded.split(':')[1];
-            if (token) {
-              config.headers.Authorization = `Bearer ${token}`;
-            }
-          }
+        const token = localStorage.getItem('assurly_auth_token');
+        if (token) {
+          config.headers.Authorization = `Bearer ${token}`;
         }
       } catch {
         // Silent fail - no auth header
