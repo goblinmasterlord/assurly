@@ -66,6 +66,7 @@ export default function StandardsManagement() {
     const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
     const [isAspectModalOpen, setIsAspectModalOpen] = useState(false);
     const [isHistoryModalOpen, setIsHistoryModalOpen] = useState(false);
+    const [isEditAspectDropdownOpen, setIsEditAspectDropdownOpen] = useState(false);
     const [editingStandard, setEditingStandard] = useState<Standard | undefined>(undefined);
     const [editingAspect, setEditingAspect] = useState<Aspect | undefined>(undefined);
     const [historyStandard, setHistoryStandard] = useState<Standard | null>(null);
@@ -251,7 +252,7 @@ export default function StandardsManagement() {
                     </p>
                 </div>
                 <div className="flex gap-3">
-                    <DropdownMenu>
+                    <DropdownMenu open={isEditAspectDropdownOpen} onOpenChange={setIsEditAspectDropdownOpen}>
                         <DropdownMenuTrigger asChild>
                             <Button variant="outline" size="icon" title="Options">
                                 <Settings className="h-4 w-4" />
@@ -262,6 +263,7 @@ export default function StandardsManagement() {
                                 onClick={(e) => {
                                     e.stopPropagation();
                                     handleEditAspect(currentAspect);
+                                    setIsEditAspectDropdownOpen(false);
                                 }}
                             >
                                 <Edit2 className="mr-2 h-3 w-3" />
@@ -272,6 +274,7 @@ export default function StandardsManagement() {
                                     onClick={(e) => {
                                         e.stopPropagation();
                                         handleDeleteAspect(currentAspect.id);
+                                        setIsEditAspectDropdownOpen(false);
                                     }}
                                     className="text-destructive focus:text-destructive"
                                 >

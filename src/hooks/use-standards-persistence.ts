@@ -36,6 +36,7 @@ export function useStandardsPersistence() {
             if (storedAspects && storedStandards) {
                 setAspects(JSON.parse(storedAspects));
                 setStandards(JSON.parse(storedStandards));
+                setUseMemoryFallback(true); // Enable memory fallback when loading from session
                 return true;
             }
         } catch (err) {
