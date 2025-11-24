@@ -280,20 +280,26 @@ export function AssessmentDetailPage() {
     const handleKeyDown = (e: KeyboardEvent) => {
       // Only activate keyboard shortcuts when we're in the assessment detail view
       if (!activeStandard || !canEdit) return;
+      
+      // Don't trigger shortcuts when typing in input fields
+      const target = e.target as HTMLElement;
+      const isTyping = target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable;
 
-      // Arrow right or 'j': Next standard
-      if ((e.key === "ArrowRight" || e.key.toLowerCase() === "j") && !e.ctrlKey && !e.metaKey) {
+      // Arrow right or Cmd/Ctrl+J: Next standard
+      if (e.key === "ArrowRight" || (e.key.toLowerCase() === "j" && (e.ctrlKey || e.metaKey))) {
+        e.preventDefault();
         goToNextStandard();
       }
-      // Arrow left or 'k': Previous standard
-      else if ((e.key === "ArrowLeft" || e.key.toLowerCase() === "k") && !e.ctrlKey && !e.metaKey) {
+      // Arrow left or Cmd/Ctrl+K: Previous standard
+      else if (e.key === "ArrowLeft" || (e.key.toLowerCase() === "k" && (e.ctrlKey || e.metaKey))) {
+        e.preventDefault();
         goToPreviousStandard();
       }
-      // Numbers 1-4: Set rating for current standard
-      else if (["1", "2", "3", "4"].includes(e.key) && !e.ctrlKey && !e.metaKey) {
+      // Numbers 1-4: Set rating for current standard (only when not typing)
+      else if (!isTyping && ["1", "2", "3", "4"].includes(e.key) && !e.ctrlKey && !e.metaKey) {
         handleRatingChange(activeStandard.id, parseInt(e.key) as Rating);
       }
-      // 's': Save progress
+      // Cmd/Ctrl+S: Save progress
       else if (e.key.toLowerCase() === "s" && (e.ctrlKey || e.metaKey)) {
         e.preventDefault(); // Prevent browser save dialog
         handleSave();
@@ -308,8 +314,8 @@ export function AssessmentDetailPage() {
 
   // Update the UI for keyboard shortcuts help
   const keyboardShortcuts = [
-    { key: "→ / J", action: "Next standard" },
-    { key: "← / K", action: "Previous standard" },
+    { key: "→ / ⌘J", action: "Next standard" },
+    { key: "← / ⌘K", action: "Previous standard" },
     { key: "1-4", action: "Set rating" },
     { key: "⌘S / Ctrl+S", action: "Save progress" }
   ];

@@ -215,12 +215,26 @@ export function AnalyticsPage() {
     };
 
     // Helper: Get status label for school
-    const getSchoolStatus = (avgScore: number, hasOverdue: boolean): string => {
-      if (avgScore === 0) return 'Not Started';
-      if (avgScore < 1.5) return 'Critical';
-      if (avgScore < 2.0 || hasOverdue) return 'Needs Attention';
-      if (avgScore >= 3.5) return 'Excellent';
-      return 'Good';
+    const getSchoolStatus = (avgScore: number, hasOverdue: boolean, inProgress: number, notStarted: number, totalAssessments: number): string => {
+      // If there are no assessments at all, it's truly not started
+      if (totalAssessments === 0) return 'Not Started';
+      
+      // If all assessments are "Not Started" status
+      if (notStarted === totalAssessments) return 'Not Started';
+      
+      // If there are assessments in progress but none completed yet
+      if (avgScore === 0 && inProgress > 0) return 'In Progress';
+      
+      // If we have a score, evaluate it
+      if (avgScore > 0) {
+        if (avgScore < 1.5) return 'Critical';
+        if (avgScore < 2.0 || hasOverdue) return 'Needs Attention';
+        if (avgScore >= 3.5) return 'Excellent';
+        return 'Good';
+      }
+      
+      // Default to Not Started if no score and no progress
+      return 'Not Started';
     };
 
     // 1. Calculate basic metrics
@@ -311,6 +325,8 @@ export function AnalyticsPage() {
     const schoolPerformance = schools.map(school => {
       const schoolAssessments = schoolMap.get(school.id) || [];
       const completed = schoolAssessments.filter(a => a.status === 'Completed');
+      const inProgress = schoolAssessments.filter(a => a.status === 'In Progress').length;
+      const notStarted = schoolAssessments.filter(a => a.status === 'Not Started').length;
       const hasOverdue = schoolAssessments.some(a => a.status === 'Overdue');
       
       const scores = completed.map(calculateAssessmentScore).filter(s => s > 0);
@@ -323,7 +339,7 @@ export function AnalyticsPage() {
         overallScore,
         completedAssessments: completed.length,
         totalAssessments: schoolAssessments.length,
-        status: getSchoolStatus(overallScore, hasOverdue),
+        status: getSchoolStatus(overallScore, hasOverdue, inProgress, notStarted, schoolAssessments.length),
         interventionRequired: needsIntervention(schoolAssessments)
       };
     }).sort((a, b) => b.overallScore - a.overallScore); // Sort by score descending
