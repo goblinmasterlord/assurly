@@ -5,16 +5,24 @@
 ### Tech Stack
 - **Frontend**: React 18 + TypeScript + Vite
 - **Styling**: Tailwind CSS + shadcn/ui components
-- **State**: React Context API (UserContext)
-- **Routing**: React Router v6
+- **State Management**: React Context API (UserContext, AuthContext)
+- **Routing**: React Router v6 (public and protected routes)
 - **Icons**: Lucide React
-- **Data**: Mock data (preparing for API integration)
+- **Authentication**: Magic link authentication with JWT tokens
+- **Data**: API integration with enhanced caching and optimistic updates
+- **Backend**: Google Cloud Run (Python/FastAPI)
+- **Drag & Drop**: @dnd-kit for standards management
+- **Charts**: Recharts for analytics visualization
 
 ### Key Architecture Decisions
-1. **Role-based views**: Single codebase serves both MAT Admins and Department Heads
+1. **Role-based views**: Single codebase serves both MAT Admins and Department Heads with route protection
 2. **Component library**: Built on shadcn/ui for consistent, accessible components
 3. **Responsive design**: Mobile-first with careful breakpoint management
-4. **Performance**: Lazy loading, memoization, and optimized re-renders
+4. **Performance**: Lazy loading, memoization, optimistic updates, and request caching
+5. **Authentication**: Magic link flow with token-based session management
+6. **API Integration**: Enhanced service layer with caching, background refresh, and optimistic updates
+7. **Data Persistence**: Mix of API calls for core data and sessionStorage for temporary mock data
+8. **Public/Private Routes**: Marketing pages on public routes, application on `/app/*` protected routes
 
 ### Common Development Patterns
 ```typescript
@@ -50,6 +58,16 @@
 
 ## 4. Core Epics & Features
 
+### Epic 0: Authentication & Security
+
+Modern, secure authentication flow with persistent sessions.
+
+*   **Feature: Magic Link Authentication:** Users receive a secure, time-limited link via email to access the platform without passwords.
+*   **Feature: Session Management:** JWT tokens stored in localStorage ensure users stay logged in across browser sessions and page refreshes.
+*   **Feature: Route Protection:** Private routes (`/app/*`) require authentication; Department Heads are restricted from Admin-only pages (Analytics, Export, Standards Management).
+*   **Feature: Auto Token Refresh:** Transparent token refresh on API 401 responses maintains session continuity.
+*   **Feature: SEO Protection:** Comprehensive robots.txt and meta tags prevent search engine indexing of sensitive data.
+
 ### Epic 1: Centralized Assessment Orchestration (Admin)
 
 Administrators must have a seamless, trust-wide view to manage the assessment process from start to finish.
@@ -64,10 +82,53 @@ Administrators must have a seamless, trust-wide view to manage the assessment pr
 The assessee's journey must be optimized for clarity, efficiency, and completion.
 
 *   **Feature: Dedicated Assessment Workspace:** Users are taken to a dedicated page (`AssessmentDetailPage`) for the specific assessment they need to complete.
-*   **Feature: Standard-by-Standard Workflow:** The interface presents one standard at a time, with clear descriptions, a 4-point rating scale (`Inadequate` to `Outstanding`), and a dedicated text area for evidence and comments.
+*   **Feature: Standard-by-Standard Workflow:** The interface presents one standard at a time, with clear descriptions, a 4-point rating scale (`Inadequate` to `Outstanding`), and dedicated text areas for evidence/comments and action items.
 *   **Feature: Real-time Progress Tracking:** A visual progress bar and a navigable list of all standards provide immediate feedback on completion status.
 *   **Feature: Save & Continue / Submit:** Users can save their progress at any time and return later. Once all standards are rated, they can formally submit the assessment.
-*   **Feature: Keyboard Shortcuts:** Power users can navigate between standards, apply ratings, and save progress using intuitive keyboard shortcuts, significantly speeding up the completion process.
+*   **Feature: Keyboard Shortcuts:** Power users can navigate between standards (`Cmd/Ctrl+J/K`), apply ratings (`1-4`), and save progress (`Cmd/Ctrl+S`) using intuitive keyboard shortcuts.
+*   **Feature: Actions Pane:** Alongside comments, users can add actionable items with checkboxes to track remediation steps for each standard.
+*   **Feature: Filter Persistence:** Assessment filters (category, status, school) persist in localStorage, maintaining user context across navigation.
+
+### Epic 3: Analytics & Insights (Admin)
+
+Data-driven insights for strategic decision making across the trust.
+
+*   **Feature: Analytics Dashboard:** Comprehensive analytics page (`/app/analytics`) showing trust-wide performance metrics, trends, and completion rates.
+*   **Feature: Term-over-Term Analysis:** Line charts showing performance trends across academic terms with proper chronological ordering (Autumn → Spring → Summer).
+*   **Feature: School Performance Rankings:** Sortable table showing current scores, completion rates, and status for all schools with intervention flags.
+*   **Feature: Category Performance Breakdown:** Visual breakdown of average scores by assessment category with color-coded performance zones.
+*   **Feature: Term Selector:** Navigate between academic terms to view historical data and track progress over time.
+*   **Feature: Interventions Tracking:** Count of aspects requiring attention (score ≤ 1.5) at school and category levels.
+
+### Epic 4: Standards Management (Admin)
+
+Centralized control over assessment frameworks and criteria.
+
+*   **Feature: Standards Management Page:** Dedicated interface (`/app/standards-management`) for managing aspects and standards.
+*   **Feature: Drag-and-Drop Reordering:** Standards can be reordered within aspects using intuitive drag-and-drop (@dnd-kit).
+*   **Feature: Aspect Management:** Create, edit, and delete assessment aspects with validation and conflict prevention.
+*   **Feature: Standard CRUD:** Full create, read, update, delete operations for individual standards within aspects.
+*   **Feature: Session Storage Persistence:** Changes persist in browser session until synced with API (preparing for full API integration).
+*   **Feature: Search Functionality:** Filter standards within an aspect by title, code, or description.
+
+### Epic 5: Data Export & Reporting (Admin)
+
+Export assessment data for external analysis and reporting.
+
+*   **Feature: Export Page:** Dedicated page (`/app/export`) for generating CSV exports and downloading assessment packs.
+*   **Feature: CSV Generation:** Export filtered assessment data to CSV format for use in Excel or other tools.
+*   **Feature: Assessment Pack Downloads:** Download pre-formatted PDF documentation and guidance materials.
+*   **Feature: School Filtering:** Export data for specific schools or trust-wide reports.
+
+### Epic 6: Marketing & Public Pages
+
+Professional public-facing website for organizational transparency.
+
+*   **Feature: Landing Page:** Modern landing page (`/`) with value proposition and role-based navigation.
+*   **Feature: About & Mission:** Information pages about Assurly's purpose and organizational mission.
+*   **Feature: Pricing & Security:** Transparent pricing information and security/compliance documentation.
+*   **Feature: Legal Pages:** Terms & Conditions, Data Processing Agreement, and compliance documentation.
+*   **Feature: Branding:** Consistent teal and amber color scheme throughout public and private pages.
 
 ## 5. Design & UX Principles
 
@@ -92,14 +153,23 @@ src/
 ```
 
 ### Key Files to Know
-- `src/lib/mock-data.ts` - All mock data for development
+- `src/services/enhanced-assessment-service.ts` - Assessment API integration with caching
+- `src/services/auth-service.ts` - Authentication and user management
+- `src/lib/api-client.ts` - Core API client with token management
+- `src/lib/request-cache.ts` - Request caching and deduplication
 - `src/types/assessment.ts` - Core type definitions
-- `src/contexts/UserContext.tsx` - Role switching logic
+- `src/contexts/UserContext.tsx` - Role switching logic (development)
+- `src/contexts/AuthContext.tsx` - Authentication state and session management
 - `src/components/ui/filter-bar.tsx` - Reusable filter component
 - `src/lib/assessment-utils.tsx` - Helper functions for data transformation
+- `src/hooks/use-standards-persistence.ts` - Standards/aspects data management
 
 ### Styling Guidelines
-1. **Color Palette**: Use Tailwind's slate/blue/emerald/rose/amber scales
+1. **Color Palette**: 
+   - Primary: Teal/green (`teal-600`, `emerald-600`) for CTAs and highlights
+   - Accent: Amber/gold (`amber-500`, `amber-600`) for warnings and secondary actions
+   - Neutral: Tailwind's slate scale for backgrounds and text
+   - Status colors: `emerald` (success), `rose` (error/warning), `blue` (info)
 2. **Spacing**: Stick to Tailwind's spacing scale (p-2, p-3, p-4, etc.)
 3. **Borders**: Default to `border-slate-200` for subtle borders
 4. **Shadows**: Use sparingly, prefer borders for definition
@@ -107,6 +177,7 @@ src/
    - Headers: `font-semibold text-xs uppercase tracking-wider`
    - Body: `text-sm` primary, `text-xs` secondary
    - Numbers: Add `tabular-nums` for alignment
+6. **Branding**: Teal and amber colors applied throughout for consistent brand identity
 
 ### State Management Patterns
 - **Local state**: For UI-only concerns (modals, dropdowns)
@@ -126,9 +197,13 @@ src/
 - E2E tests: Playwright for critical user journeys
 - Visual regression: Chromatic integration planned
 
-### API Integration Notes
-Currently using mock data, but designed for easy API integration:
-- All data fetching abstracted to `services/` layer
-- TypeScript interfaces match expected API responses
-- Loading and error states already implemented
-- Pagination and filtering ready for backend support
+### API Integration
+Production API integration with comprehensive caching:
+- **Base URL**: `https://assurly-frontend-400616570417.europe-west2.run.app/api`
+- **Services Layer**: All API calls in `src/services/` directory
+- **Caching Strategy**: Request cache with stale-while-revalidate pattern
+- **Optimistic Updates**: Immediate UI feedback with background sync
+- **Token Management**: JWT tokens stored in localStorage with automatic refresh
+- **Error Handling**: Comprehensive error boundaries and fallback UI
+- **Authentication**: Magic link flow with session persistence
+- **Endpoints**: See `.cursor/rules/api-documentation.md` for full API reference

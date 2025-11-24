@@ -104,17 +104,72 @@ This document provides a functional description of the frontend components in th
     - Error Handling: Shows a "Not Found" message if the assessment doesn't exist or isn't accessible.
     - Navigation: "Back to Assessments" button.
 
-### `src/pages/Reports.tsx`
-- **Description:** This page is intended for viewing and generating reports based on assessment data. Currently, it displays a static list of mock reports.
+### `src/pages/Analytics.tsx`
+- **Description:** Comprehensive analytics dashboard for MAT Administrators showing trust-wide performance metrics, trends, and insights.
 - **Key Properties/Functionality:**
-    - Mock Data: Uses a `mockReports` array to display a table of reports.
-    - Display:
-        - Page title "Reports" and a subtitle.
-        - A "Generate Report" button (currently likely non-functional or placeholder).
-        - A table listing reports with columns for Name, Category, Schools Included, Generated Date, Author, and Actions (View/Download buttons).
-    - State: `reports` state initialized with `mockReports`.
-    - UI Components: `Button`.
-    - Current Status: Appears to be a placeholder or early version of the reports feature.
+    - **Term Navigation:** TermStepper component for switching between academic periods
+    - **Term-over-Term Analysis:** Line charts showing average scores across terms with proper chronological ordering (Autumn → Spring → Summer)
+    - **School Performance Rankings:** Sortable table with current scores, completion rates, status, and intervention indicators
+    - **Category Performance:** Visual breakdown of assessment scores by category with progress bars
+    - **Interventions Tracking:** Count of aspects requiring attention (score ≤ 1.5)
+    - **Data Visualization:** Recharts integration for interactive charts with proper 1-4 scale and performance zones
+    - **Real-time Data:** Uses `useAssessments` hook with caching and background refresh
+    - **Filtering:** Term-based filtering with all calculations based on selected term
+    - **Number Formatting:** All scores rounded to 1 decimal place for readability
+    - **Responsive Design:** Mobile-first layout with grid-based card system
+    - **UI Components:** `Card`, `TermStepper`, `Table`, `Badge`, `Progress`, Recharts (`LineChart`, `BarChart`)
+
+### `src/pages/Export.tsx`
+- **Description:** Data export page for MAT Administrators to generate CSV exports and download assessment documentation.
+- **Key Properties/Functionality:**
+    - **CSV Export:** Generate and download filtered assessment data in Excel-compatible format
+    - **School Filtering:** Multi-select dropdown to filter exported data by school
+    - **Assessment Pack Downloads:** Download PDF documentation and guidance materials
+    - **Export Configuration:** Select data fields and filters before export
+    - **UI Components:** `Card`, `Button`, `MultiSelect`, `Select`
+    - **File Handling:** Direct download of CSV files using blob URLs
+    - **PDF Access:** Links to downloadable PDF assessment packs from `public/` directory
+
+### `src/pages/StandardsManagement.tsx`
+- **Description:** Admin interface for managing assessment standards and aspects with drag-and-drop reordering.
+- **Key Properties/Functionality:**
+    - **Aspect Sidebar:** Navigation sidebar showing all assessment aspects/categories
+    - **Aspect Management:** Create, edit, and delete aspects via modals
+    - **Standards List:** Sortable, searchable list of standards within selected aspect
+    - **Drag-and-Drop:** Reorder standards using @dnd-kit library
+    - **Standard CRUD:** Create, edit, and delete individual standards
+    - **Search Functionality:** Filter standards by title, code, or description
+    - **Persistence:** Uses `useStandardsPersistence` hook for sessionStorage and API integration
+    - **Protected Operations:** Prevent deletion of default/system aspects
+    - **UI Components:** `ScrollArea`, `Button`, `Input`, `DropdownMenu`, drag-and-drop sensors
+    - **Modals:** `CreateAspectModal`, `CreateStandardModal`, `DeleteConfirmationModal`
+
+### Marketing Pages
+
+#### `src/pages/Main.tsx`
+- **Description:** Public landing page with value proposition and call-to-action.
+- **Key Properties/Functionality:**
+    - Hero section with platform introduction
+    - Feature highlights for both MAT Admins and Department Heads
+    - Call-to-action buttons linking to authentication
+    - Responsive design with teal/amber branding
+    - Links to other marketing pages in footer
+
+#### `src/pages/About.tsx`, `src/pages/OurMission.tsx`, `src/pages/Pricing.tsx`
+- **Description:** Informational marketing pages about Assurly's purpose, mission, and pricing.
+- **Key Properties/Functionality:**
+    - Static content with consistent branding
+    - Clear typography and section layouts
+    - Links to related pages
+    - British English throughout
+
+#### `src/pages/TermsAndConditions.tsx`, `src/pages/DPA.tsx`, `src/pages/Security.tsx`
+- **Description:** Legal and compliance documentation pages.
+- **Key Properties/Functionality:**
+    - Comprehensive legal text
+    - Structured with clear headings and sections
+    - Contact information for inquiries
+    - GDPR and data protection information
 
 ## Custom Components
 
@@ -143,11 +198,22 @@ This document provides a functional description of the frontend components in th
 
 
 ### `src/components/RoleSwitcher.tsx`
-- **Description:** Development utility component for switching between user roles (MAT Admin, Department Head, etc.).
+- **Description:** Quick role switching component for testing different user perspectives.
 - **Key Properties/Functionality:**
-    - Props: Takes user context and provides role switching functionality.
-    - Only shown in development mode for testing different user perspectives.
-    - Allows easy testing of role-based UI changes without authentication system changes.
+    - **Visual Design:** Badge-style button showing current role with user icon
+    - **Dropdown Menu:** Select between "MAT Admin" and "Department Head" roles
+    - **Header Integration:** Positioned between username and sign-out button in header
+    - **Instant Switching:** Changes take effect immediately across all pages
+    - **Route Protection:** Redirects Department Heads away from restricted pages
+    - **UI Components:** `DropdownMenu`, `Badge`, `User` icon
+    - **Context Integration:** Uses `UserContext` for role state management
+
+### `src/components/AISummaryPanel.tsx`
+- **Description:** Intelligent summary panel for assessment analysis (future enhancement).
+- **Key Properties/Functionality:**
+    - Placeholder for AI-powered assessment insights
+    - Integration point for ML-based recommendations
+    - Currently not actively used in production
 
 ## UI Library (`src/components/ui/`)
 
@@ -429,9 +495,25 @@ This section details the reusable UI components, many of which are based on Radi
 - **Description:** Academic term navigation component with previous/next buttons and dropdown selector for terms.
 - **Key Properties/Functionality:**
     - Props: `terms` (string[]), `currentTerm` (string), `onTermChange` (callback), `showDropdown` (boolean), `className`.
-    - Features: Chronological term ordering (Autumn > Summer > Spring within academic years), navigation buttons, dropdown fallback.
+    - **Chronological Ordering:** Proper academic year flow - Autumn (Sept) → Spring (Jan) → Summer (May)
+    - **Smart Sorting:** Compares academic years first, then term position within year
+    - **Navigation:** Previous/next buttons with disabled states at boundaries
+    - **Dropdown Fallback:** Shows dropdown selector when buttons not desired
     - **UX Design**: Fixed width (220px) to prevent layout jumping, truncation for long terms, consistent styling between button and dropdown modes.
     - Layout: Shows "X of Y" counter, supports both interactive (with dropdown) and display-only modes.
+    - Used in: `Analytics.tsx` and `Assessments.tsx` for term filtering
+
+### `src/components/ui/mini-trend-chart.tsx`
+- **Description:** Compact line chart component for displaying performance trends in table cells.
+- **Key Properties/Functionality:**
+    - Props: `data` (array of score values), `width`, `height`, `showLabels` (boolean)
+    - **Visual Design:** Fixed 1-4 scale with performance zone backgrounds
+    - **Reference Line:** Dotted line at 2.5 threshold
+    - **Value Labels:** First and last data points labeled
+    - **Color Coding:** Line color based on current performance level
+    - **Smart Display:** Only renders when 2+ data points available
+    - **Responsive:** Adapts to different sizes (100x32 for schools, 80x24 for aspects)
+    - Used in: `SchoolPerformanceView.tsx` for "Previous 3 Terms" column
 
 ### `src/components/ui/filter-bar.tsx`
 - **Description:** Professional, reusable filter container component with intelligent layout system for different view contexts.
@@ -519,36 +601,105 @@ This section details the reusable UI components, many of which are based on Radi
 
 ## Admin Components
 
-### `src/pages/admin/StandardsManagement.tsx`
-- **Description:** The central hub for managing assessment standards, aspects, and version history.
-- **Key Properties/Functionality:**
-    - **Aspect Management:**
-        - Sidebar navigation for filtering standards by aspect.
-        - "Settings" dropdown (cog icon) in the header to Edit/Delete the currently selected aspect.
-        - Custom aspects can be deleted (with confirmation), while default aspects are protected.
-    - **Standards Management:**
-        - List view of standards with drag-and-drop reordering (`@dnd-kit`).
-        - Search functionality to filter standards within an aspect.
-        - Create/Edit modals for standards.
-    - **Persistence:** Uses `useStandardsPersistence` hook to persist changes to `localStorage` (mock mode).
-
 ### `src/components/admin/standards/CreateAspectModal.tsx`
-- **Description:** A modal component for creating and editing assessment aspects.
+- **Description:** Modal component for creating and editing assessment aspects.
 - **Key Properties/Functionality:**
-    - **Modes:** Supports both creation and editing via the `aspect` prop.
-    - **Validation:** Uses Zod schema for form validation.
-    - **Edit Mode:** Pre-fills existing data and locks the "Code" field to prevent identifier changes.
-    - **Dynamic UI:** Updates title and button text based on mode (Create vs Edit).
+    - **Dual Mode:** Supports both creation and editing via the `aspect` prop
+    - **Form Validation:** Zod schema validation for all fields
+    - **Edit Mode:** Pre-fills existing data and locks the "Code" field to prevent identifier changes
+    - **Dynamic UI:** Updates title and button text based on mode (Create vs Edit)
+    - **Fields:** Code, name, description, icon selection
+    - **Icons:** Dropdown selector with preview of available category icons
+    - **UI Components:** `Dialog`, `Form`, `Input`, `Textarea`, `Select`, `Button`
+
+### `src/components/admin/standards/CreateStandardModal.tsx`
+- **Description:** Modal component for creating and editing individual assessment standards.
+- **Key Properties/Functionality:**
+    - **Dual Mode:** Create new or edit existing standards
+    - **Form Fields:** Code, title, description, aspect assignment
+    - **Validation:** Required fields and format checking
+    - **Edit Mode:** Pre-populates form with existing standard data
+    - **UI Components:** `Dialog`, `Form`, `Input`, `Textarea`, `Select`
 
 ### `src/components/admin/standards/DeleteConfirmationModal.tsx`
-- **Description:** A reusable, custom-designed modal for confirming destructive actions.
+- **Description:** Reusable confirmation modal for destructive actions.
 - **Key Properties/Functionality:**
-    - **Purpose:** Replaces native browser alerts for a better UX.
-    - **Props:** `open`, `onOpenChange`, `onConfirm`, `title`, `description`, `itemName`.
-    - **Styling:** Uses destructive styling for the confirm button to indicate danger.
-    - **Context:** Can display the name of the item being deleted for clarity.
+    - **Purpose:** Replaces native browser alerts for better UX
+    - **Props:** `open`, `onOpenChange`, `onConfirm`, `title`, `description`, `itemName`
+    - **Visual Design:** Red/destructive styling with warning icon
+    - **Context Display:** Shows the name of item being deleted
+    - **Two-Step Process:** User must click "Delete" button to confirm
+    - **UI Components:** `Dialog`, `Button` (destructive variant), `AlertTriangle` icon
 
-### Key Design Principles Applied:
+### `src/components/admin/standards/SortableStandardCard.tsx`
+- **Description:** Draggable card component for individual standards in the standards list.
+- **Key Properties/Functionality:**
+    - **Drag Handle:** GripVertical icon for grab-and-drop interaction
+    - **Standard Display:** Shows code, title, and description
+    - **Actions Dropdown:** Edit and delete options via dropdown menu
+    - **@dnd-kit Integration:** Uses `useSortable` hook for drag-and-drop
+    - **Visual Feedback:** Opacity changes during drag, transform effects
+    - **Callbacks:** `onEdit` and `onDelete` props for parent component handling
+    - **UI Components:** `Card`, `DropdownMenu`, `Button`, icons
+
+## Services & Hooks
+
+### `src/services/enhanced-assessment-service.ts`
+- **Description:** Core service for assessment API integration with caching and optimistic updates.
+- **Key Methods:**
+    - `getAssessments()`: Fetch all assessments with SWR-style caching
+    - `getAssessmentById(id)`: Get detailed assessment with standards array
+    - `submitAssessment(id, standards, user)`: Submit ratings with optimistic updates
+    - `createAssessments(data)`: Create new assessment requests
+    - `subscribeToAssessment(id, callback)`: Real-time subscription (future enhancement)
+- **Features:**
+    - Request caching with stale-while-revalidate
+    - Automatic deduplication of concurrent requests
+    - Optimistic UI updates with rollback on error
+    - Background refresh for up-to-date data
+
+### `src/services/auth-service.ts`
+- **Description:** Authentication service handling magic link flow and session management.
+- **Key Methods:**
+    - `requestMagicLink(email)`: Send magic link to user's email
+    - `verifyMagicLink(token)`: Verify token and establish session
+    - `getCurrentUser()`: Get authenticated user information
+    - `logout()`: Clear session and tokens
+- **Features:**
+    - JWT token storage in localStorage
+    - Automatic token refresh on 401 responses
+    - Session persistence across browser sessions
+    - Secure token validation
+
+### `src/hooks/use-assessments.ts`
+- **Description:** React hook for fetching and managing assessment data.
+- **Returns:** `assessments`, `isLoading`, `isRefreshing`, `error`, `refreshAssessments`
+- **Features:**
+    - Automatic background refresh
+    - Caching with SWR pattern
+    - Loading and error states
+    - Manual refresh capability
+
+### `src/hooks/use-standards-persistence.ts`
+- **Description:** Hook for managing standards and aspects with API and sessionStorage.
+- **Returns:** `aspects`, `standards`, `addStandard`, `updateStandard`, `deleteStandard`, `reorderStandards`, `addAspect`, `updateAspect`, `deleteAspect`
+- **Features:**
+    - Fetches from API on mount
+    - Persists changes to sessionStorage
+    - CRUD operations for both aspects and standards
+    - Drag-and-drop reordering support
+
+### `src/lib/request-cache.ts`
+- **Description:** Request caching utility for optimizing API calls.
+- **Features:**
+    - In-memory cache with TTL (time-to-live)
+    - Request deduplication
+    - Stale-while-revalidate pattern
+    - Optimistic update support with rollback
+    - Cache invalidation strategies
+
+## Key Design Principles Applied
+
 1. **Consistent Heights**: All interactive elements use h-9 (36px) for perfect alignment
 2. **Professional Spacing**: gap-4 (16px) standard, with contextual adjustments
 3. **Responsive Design**: Mobile-first with intelligent breakpoints
@@ -559,3 +710,8 @@ This section details the reusable UI components, many of which are based on Radi
 8. **Performance First**: Optimistic updates, smart caching, perceived performance optimizations
 9. **Anatomically Correct Skeletons**: Loading states that match exact component structure
 10. **Smooth Animations**: Staggered effects, transitions, and micro-interactions
+11. **British English**: All user-facing text uses British spelling (Organisation, Realise, etc.)
+12. **Brand Colors**: Teal/green and amber/gold throughout for visual consistency
+13. **Keyboard Navigation**: Comprehensive keyboard shortcuts for power users
+14. **Filter Persistence**: User preferences saved in localStorage across sessions
+15. **Route Protection**: Role-based access control with automatic redirects

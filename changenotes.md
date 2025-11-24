@@ -1,5 +1,124 @@
 # Change Notes
 
+## 2025-11-24 - Production Release & Documentation Update
+
+### Summary
+Major production release with full API integration, analytics dashboard, comprehensive documentation updates, and numerous UX enhancements based on user feedback.
+
+### Key Features Delivered
+
+#### 1. **Analytics Dashboard** (`/app/analytics`)
+- Complete analytics page with trust-wide performance insights
+- Term-over-term trend analysis with line charts (Recharts)
+- School performance rankings with sortable metrics
+- Category performance breakdown with visual progress bars
+- Interventions tracking (aspects with score ≤ 1.5)
+- Term selector with proper chronological ordering (Autumn → Spring → Summer)
+- Number formatting: all scores rounded to 1 decimal place
+- Real-time data from API with proper summary field usage
+
+#### 2. **Filter Persistence**
+- Assessment filters now persist in localStorage
+- Includes: search term, category, status, and school filters
+- Filters automatically restored after navigation
+- Validation against current options to prevent stale data
+- Visual feedback: golden/amber background when filters active
+- Clear filters button with active filter count badge
+
+#### 3. **Enhanced Keyboard Navigation**
+- Updated navigation shortcuts: `Cmd/Ctrl + J/K` (prevents typing interference)
+- Number shortcuts (1-4) disabled when typing in input/textarea fields
+- UI hints updated to reflect new keyboard combinations
+- Arrow keys (← / →) still supported for quick navigation
+- `Cmd/Ctrl + S` for save progress
+
+#### 4. **Actions Pane**
+- 50/50 split layout: Comments and Actions side-by-side
+- Checkbox list for tracking actionable items per standard
+- Add, complete, and delete actions
+- Actions persist per standard in assessment data
+- Clean, modern tabbed interface
+
+#### 5. **Role Management Improvements**
+- Quick role switcher in header (between username and sign-out)
+- Removed redundant role badge label
+- Department Head route protection: auto-redirect from restricted pages
+- Restricted paths: `/app/analytics`, `/app/export`, `/app/standards-management`
+- Console logging for debugging redirect behavior
+
+#### 6. **Term Ordering Fix**
+- Corrected chronological term sorting across all pages
+- Academic year structure: Autumn (Sept) → Spring (Jan) → Summer (May)
+- Fixed term stepping: now shows proper previous/next terms
+- Applied to both Analytics and Assessments pages
+- Trend calculations now use correct previous term for comparisons
+
+#### 7. **Intervention Required Fix**
+- Now correctly counts aspects with rating=1 (not just completed assessments)
+- Checks both 'Completed' AND 'In Progress' assessments
+- Moved intervention logic outside completed-only block
+- Flags low-scoring aspects (≤ 1.5) even if partially complete
+
+#### 8. **Category Name Updates**
+- 'it': Now displays as 'IT & Info Services'
+- 'is': Now displays as 'Information Standards'
+- Applied to Analytics page category labels
+- Consistent with organizational terminology
+
+### Authentication & Security
+- Magic link authentication fully functional
+- Session persistence across browser refreshes
+- Token storage in localStorage with automatic refresh
+- 401 error handling with token clearance
+- Route protection for Department Heads
+
+### API Integration
+- Full production API integration: `https://assurly-frontend-400616570417.europe-west2.run.app/api`
+- Enhanced assessment service with caching
+- Request cache with stale-while-revalidate pattern
+- Optimistic updates for instant feedback
+- Background data refresh
+
+### Standards Management
+- API-driven standards and aspects loading
+- SessionStorage persistence for mock data
+- Drag-and-drop reordering with @dnd-kit
+- Full CRUD operations
+- Delete functionality now active on Standards page
+
+### Documentation Updates
+- **project-info.md**: Updated with current tech stack, API integration, new features
+- **README.md**: Comprehensive usage guide for both roles, deployment info, development patterns
+- **components.mdc**: Added Analytics, Export, Standards Management pages; updated component descriptions
+- **api-documentation.md**: Already comprehensive, no changes needed
+
+### Technical Improvements
+- Proper term chronological sorting algorithm
+- Number rounding to 1 decimal place across Analytics
+- Filter restoration with validation logic
+- Event propagation fixes (e.stopPropagation for dropdowns)
+- TypeScript improvements and type safety enhancements
+- Consistent error handling and loading states
+
+### UX Polish
+- Golden highlighting for active filters
+- Staggered animations and smooth transitions
+- Comprehensive skeleton loaders
+- Toast notifications for all actions
+- Mobile-first responsive design
+- Consistent teal/amber branding throughout
+
+### Bug Fixes
+- Fixed cogwheel freeze on Standards Management page
+- Fixed aspect edit modal freezing
+- Fixed assessment ratings not persisting
+- Fixed magic link auth breaking on refresh
+- Fixed term ordering in Analytics and Assessments
+- Fixed intervention required not counting in-progress assessments
+- Fixed filter restoration causing crashes
+- Fixed Analytics showing "Not Started" for completed assessments
+- Fixed keyboard shortcuts interfering with typing
+
 ## 2025-11-23 - Initial UI/UX Analysis & Setup
 
 ### Summary
