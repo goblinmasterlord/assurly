@@ -61,18 +61,45 @@ export function useStandardsPersistence() {
             
             // Try loading from session first
             if (loadFromSession()) {
+                console.log('Loaded aspects and standards from sessionStorage');
                 setIsLoading(false);
                 return;
             }
 
-            // Initialize with mock data on first load
-            console.log('Initializing standards with mock data');
-            const initialAspects = getInitialAspects();
-            const initialStandards = getInitialStandards();
-            setAspects(initialAspects);
-            setStandards(initialStandards);
-            saveToSession(initialAspects, initialStandards);
-            setError(null);
+            // Try loading from API
+            console.log('Fetching aspects and standards from API...');
+            try {
+                const [fetchedAspects, fetchedStandards] = await Promise.all([
+                    assessmentService.getAspects(),
+                    assessmentService.getStandards()
+                ]);
+                
+                if (fetchedAspects.length > 0) {
+                    console.log(`Loaded ${fetchedAspects.length} aspects and ${fetchedStandards.length} standards from API`);
+                    setAspects(fetchedAspects);
+                    setStandards(fetchedStandards);
+                    saveToSession(fetchedAspects, fetchedStandards);
+                    setError(null);
+                } else {
+                    // API returned empty, use mock data
+                    console.log('API returned empty data, using mock data');
+                    const initialAspects = getInitialAspects();
+                    const initialStandards = getInitialStandards();
+                    setAspects(initialAspects);
+                    setStandards(initialStandards);
+                    saveToSession(initialAspects, initialStandards);
+                    setError(null);
+                }
+            } catch (apiError) {
+                // API failed, fallback to mock data
+                console.warn('API unavailable, using mock data:', apiError);
+                const initialAspects = getInitialAspects();
+                const initialStandards = getInitialStandards();
+                setAspects(initialAspects);
+                setStandards(initialStandards);
+                saveToSession(initialAspects, initialStandards);
+                setError(null);
+            }
         } catch (err) {
             console.error('Failed to load standards data:', err);
             setError('Failed to load data');

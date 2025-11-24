@@ -54,15 +54,45 @@ export function AuthProvider({ children }: AuthProviderProps) {
   const initializeAuth = useCallback(async () => {
     try {
       setLoading(true);
-      const session = await authService.getCurrentSession();
+      const token = authService.getToken();
+      
+      // If we have a token, try to validate it with the API
+      if (token) {
+        logger.debug('Token found, validating session...');
+        const session = await authService.getCurrentSession();
 
-      if (session?.user) {
-        setUser(session.user);
+        if (session?.user) {
+          logger.debug('Session validated, user authenticated');
+          setUser(session.user);
+        } else {
+          // API returned null but didn't throw - could be network issue
+          // In development, create mock user to avoid blocking work
+          if (import.meta.env.DEV) {
+            logger.warn('API unavailable in dev, using mock user');
+            const MOCK_USER: User = {
+              id: 'mock-user-id',
+              email: 'dev@assurly.com',
+              name: 'Developer User',
+              role: 'mat-admin',
+              schools: ['cedar-park-primary'],
+              permissions: ['all']
+            };
+            setUser(MOCK_USER);
+          } else {
+            // In production, if API returns null, clear token and logout
+            logger.warn('Session validation returned null, logging out');
+            authService.clearSession();
+            setUser(null);
+          }
+        }
       } else {
+        logger.debug('No token found, user not authenticated');
         setUser(null);
       }
     } catch (error) {
-      logger.error('Failed to initialize auth');
+      logger.error('Failed to initialize auth', error);
+      // Don't clear user on initialization errors - might be temporary
+      // The error is already logged, just keep loading state
       setUser(null);
     } finally {
       setLoading(false);

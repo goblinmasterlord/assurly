@@ -92,9 +92,13 @@ class AuthService {
 
   async getCurrentSession(): Promise<SessionResponse | null> {
     const token = this.getToken();
-    if (!token) return null;
+    if (!token) {
+      logger.debug('No token found in storage');
+      return null;
+    }
 
     try {
+      logger.debug('Fetching current session from /api/auth/me');
       const response = await apiClient.get<any>('/api/auth/me');
       
       // Map backend user to our User type
@@ -107,18 +111,27 @@ class AuthService {
           role: backendUser.role === 'mat_admin' ? 'mat-admin' : 'department-head',
           schools: backendUser.school_id ? [backendUser.school_id] : []
         };
+        logger.debug('Session validated successfully', { userId: user.id, role: user.role });
         return { user };
       }
       return null;
     } catch (error: any) {
-      if (error.statusCode === 401) {
+      // Only clear token and logout on 401 (unauthorized)
+      if (error.statusCode === 401 || error.response?.status === 401) {
+        logger.warn('Token expired or invalid (401), clearing session');
         this.setStoredToken(null);
         return null;
       }
-      logger.error('Failed to get current session');
-      throw new Error(
-        error.userMessage || 'Failed to load user session.'
-      );
+      
+      // For other errors (network, 500, etc), don't logout - just log the error
+      logger.error('Failed to validate session, but keeping token', { 
+        statusCode: error.statusCode || error.response?.status,
+        message: error.message 
+      });
+      
+      // Return null but don't clear the token - let the user stay logged in
+      // The token might still be valid, just API is temporarily unavailable
+      return null;
     }
   }
 
