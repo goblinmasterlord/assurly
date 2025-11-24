@@ -175,12 +175,20 @@ export default function StandardsManagement() {
         } else {
             addAspect(aspect);
         }
+        setEditingAspect(undefined);
         setIsAspectModalOpen(false);
     };
 
     const handleEditAspect = (aspect: Aspect) => {
         setEditingAspect(aspect);
         setIsAspectModalOpen(true);
+    };
+    
+    const handleAspectModalClose = (open: boolean) => {
+        setIsAspectModalOpen(open);
+        if (!open) {
+            setEditingAspect(undefined);
+        }
     };
 
     const handleDeleteAspect = (id: string) => {
@@ -233,8 +241,9 @@ export default function StandardsManagement() {
                     </Button>
                 </div>
                 <CreateAspectModal
+                    key={editingAspect?.id || 'new'}
                     open={isAspectModalOpen}
-                    onOpenChange={setIsAspectModalOpen}
+                    onOpenChange={handleAspectModalClose}
                     onSave={handleSaveAspect}
                     aspect={editingAspect}
                 />
@@ -415,8 +424,9 @@ export default function StandardsManagement() {
             />
 
             <CreateAspectModal
+                key={editingAspect?.id || 'new'}
                 open={isAspectModalOpen}
-                onOpenChange={setIsAspectModalOpen}
+                onOpenChange={handleAspectModalClose}
                 onSave={handleSaveAspect}
                 aspect={editingAspect}
             />

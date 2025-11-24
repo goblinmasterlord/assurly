@@ -646,7 +646,7 @@ export function AssessmentsPage() {
                       </TableCell>
                       <TableCell className="text-right pr-6">
                         <Button asChild variant="outline" size="sm" className="h-8 px-3">
-                          <Link to={`/assessments/${assessment.id}`}>
+                          <Link to={`/app/assessments/${assessment.id}`}>
                             {assessment.status === "Completed" ? (
                               <>
                                 <Eye className="mr-1.5 h-3.5 w-3.5" />

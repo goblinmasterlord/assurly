@@ -190,17 +190,36 @@ class SecureStorage {
 // Export singleton instance
 export const secureStorage = new SecureStorage();
 
-// Export for auth token specifically
+// Export for auth token specifically - uses localStorage for persistence across page refreshes
 export const tokenStorage = {
   setToken(token: string): void {
-    secureStorage.set('auth_token', token);
+    if (typeof window !== 'undefined' && window.localStorage) {
+      try {
+        localStorage.setItem('assurly_auth_token', token);
+      } catch (error) {
+        logger.error('Failed to persist auth token');
+      }
+    }
   },
   
   getToken(): string | null {
-    return secureStorage.get('auth_token');
+    if (typeof window !== 'undefined' && window.localStorage) {
+      try {
+        return localStorage.getItem('assurly_auth_token');
+      } catch {
+        return null;
+      }
+    }
+    return null;
   },
   
   clearToken(): void {
-    secureStorage.remove('auth_token');
+    if (typeof window !== 'undefined' && window.localStorage) {
+      try {
+        localStorage.removeItem('assurly_auth_token');
+      } catch {
+        // Silent fail
+      }
+    }
   }
 };

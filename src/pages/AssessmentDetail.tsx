@@ -1332,7 +1332,7 @@ export function AssessmentDetailPage() {
           <DialogFooter>
             <Button onClick={() => {
               setShowSuccessDialog(false);
-              navigate("/assessments");
+              navigate("/app/assessments");
             }}>
                               Return to Ratings
             </Button>
