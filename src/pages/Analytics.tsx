@@ -441,7 +441,7 @@ export function AnalyticsPage() {
 
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Average Score</CardTitle>
+            <CardTitle className="text-sm font-medium">Average Assurance Rating</CardTitle>
             {isImproving ? (
               <TrendingUp className="h-4 w-4 text-green-600" />
             ) : (
@@ -473,7 +473,7 @@ export function AnalyticsPage() {
 
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Compliance Status</CardTitle>
+            <CardTitle className="text-sm font-medium">Assurly® Score</CardTitle>
             <Target className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
@@ -580,7 +580,7 @@ export function AnalyticsPage() {
               Assessment Area Performance Breakdown
             </CardTitle>
             <CardDescription>
-              Average scores across all 6 assessment areas
+              Average assurance ratings across all 6 assessment areas
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -607,7 +607,7 @@ export function AnalyticsPage() {
                       border: '1px solid #e2e8f0',
                       borderRadius: '6px'
                     }}
-                    formatter={(value: number) => [`${value.toFixed(1)}/4.0`, 'Average Score']}
+                    formatter={(value: number) => [`${value.toFixed(1)}/4.0`, 'Average Assurance Rating']}
                   />
                   <Bar dataKey="score" radius={[4, 4, 0, 0]}>
                     {analyticsData.categoryPerformance.map((entry, index) => {

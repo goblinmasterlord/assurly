@@ -193,10 +193,13 @@ export function AssessmentsPage() {
     return terms;
   }, [assessments, isMatAdmin]);
 
-  // Auto-select the first available term for department head view
+  // Auto-select the first (newest) available term for department head view
   useEffect(() => {
-    if (!isMatAdmin && availableTerms.length > 0 && !selectedTerm) {
-      setSelectedTerm(availableTerms[0]);
+    if (!isMatAdmin && availableTerms.length > 0) {
+      // Always update to the newest term if we don't have a selection or if the current selection isn't available
+      if (!selectedTerm || !availableTerms.includes(selectedTerm)) {
+        setSelectedTerm(availableTerms[0]); // First item is always the newest due to sorting
+      }
     }
   }, [availableTerms, selectedTerm, isMatAdmin]);
 

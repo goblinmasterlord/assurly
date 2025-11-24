@@ -16,6 +16,8 @@ import {
 import { Textarea } from "@/components/ui/textarea";
 import { Progress } from "@/components/ui/progress";
 import { Badge } from "@/components/ui/badge";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Input } from "@/components/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   Table,
@@ -168,6 +170,11 @@ export function AssessmentDetailPage() {
   const [ratings, setRatings] = useState<Record<string, Rating>>({});
   const [evidence, setEvidence] = useState<Record<string, string>>({});
   const [attachments, setAttachments] = useState<Record<string, FileAttachment[]>>({});
+  
+  // Actions state - per standard
+  type Action = { id: string; text: string; completed: boolean };
+  const [actions, setActions] = useState<Record<string, Action[]>>({});
+  const [newActionText, setNewActionText] = useState<Record<string, string>>({});
 
   // Initialize form state when assessment loads
   useEffect(() => {
@@ -186,6 +193,11 @@ export function AssessmentDetailPage() {
         acc[standard.id] = standard.attachments || [];
         return acc;
       }, {} as Record<string, FileAttachment[]>));
+      
+      setActions(assessment.standards.reduce((acc, standard) => {
+        acc[standard.id] = []; // Initialize with empty actions
+        return acc;
+      }, {} as Record<string, Action[]>));
     }
   }, [assessment]);
 
@@ -367,6 +379,44 @@ export function AssessmentDetailPage() {
     setAttachments(prev => ({
       ...prev,
       [standardId]: files,
+    }));
+  };
+  
+  // Action handlers
+  const handleAddAction = (standardId: string) => {
+    const text = newActionText[standardId]?.trim();
+    if (!text) return;
+    
+    const newAction: Action = {
+      id: `action-${Date.now()}`,
+      text,
+      completed: false
+    };
+    
+    setActions((prev) => ({
+      ...prev,
+      [standardId]: [...(prev[standardId] || []), newAction],
+    }));
+    
+    setNewActionText((prev) => ({
+      ...prev,
+      [standardId]: "",
+    }));
+  };
+  
+  const handleToggleAction = (standardId: string, actionId: string) => {
+    setActions((prev) => ({
+      ...prev,
+      [standardId]: (prev[standardId] || []).map(action =>
+        action.id === actionId ? { ...action, completed: !action.completed } : action
+      ),
+    }));
+  };
+  
+  const handleDeleteAction = (standardId: string, actionId: string) => {
+    setActions((prev) => ({
+      ...prev,
+      [standardId]: (prev[standardId] || []).filter(action => action.id !== actionId),
     }));
   };
   
@@ -864,27 +914,108 @@ export function AssessmentDetailPage() {
                       </div>
                     </div>
                     
-                    <div>
-                      <div className="flex items-center justify-between mb-3">
-                        <h3 className="text-base font-medium">Comments <span className="text-xs text-muted-foreground">(Optional)</span></h3>
-                        <span className="text-xs text-muted-foreground">
-                          {evidence[activeStandard.id]?.length || 0} / 500 characters
-                        </span>
+                    {/* Comments & Actions Grid */}
+                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                      {/* Comments Section */}
+                      <div>
+                        <div className="flex items-center justify-between mb-3">
+                          <h3 className="text-base font-medium">Comments <span className="text-xs text-muted-foreground">(Optional)</span></h3>
+                          <span className="text-xs text-muted-foreground">
+                            {evidence[activeStandard.id]?.length || 0} / 500
+                          </span>
+                        </div>
+                        <Textarea
+                          placeholder="Provide specific evidence to support your rating (optional)..."
+                          value={evidence[activeStandard.id] || ""}
+                          onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => 
+                            handleEvidenceChange(activeStandard.id, e.target.value)
+                          }
+                          disabled={!canEdit}
+                          className="min-h-[150px] resize-y"
+                          maxLength={500}
+                        />
+                        <p className="mt-2 text-sm text-muted-foreground">
+                          <Info className="inline h-3.5 w-3.5 mr-1" />
+                          Provide specific examples to support your rating
+                        </p>
                       </div>
-                      <Textarea
-                        placeholder="Provide specific evidence to support your rating (optional)..."
-                        value={evidence[activeStandard.id] || ""}
-                        onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => 
-                          handleEvidenceChange(activeStandard.id, e.target.value)
-                        }
-                        disabled={!canEdit}
-                        className="min-h-[150px] resize-y"
-                        maxLength={500}
-                      />
-                      <p className="mt-2 text-sm text-muted-foreground">
-                        <Info className="inline h-3.5 w-3.5 mr-1" />
-                        Please provide specific examples and relevant details to support your rating
-                      </p>
+                      
+                      {/* Actions Section */}
+                      <div>
+                        <div className="flex items-center justify-between mb-3">
+                          <h3 className="text-base font-medium">Actions <span className="text-xs text-muted-foreground">(Optional)</span></h3>
+                          <span className="text-xs text-muted-foreground">
+                            {actions[activeStandard.id]?.filter(a => a.completed).length || 0} / {actions[activeStandard.id]?.length || 0} completed
+                          </span>
+                        </div>
+                        
+                        {/* Add Action Input */}
+                        {canEdit && (
+                          <div className="flex gap-2 mb-3">
+                            <Input
+                              placeholder="Add an action item..."
+                              value={newActionText[activeStandard.id] || ""}
+                              onChange={(e) => setNewActionText(prev => ({
+                                ...prev,
+                                [activeStandard.id]: e.target.value
+                              }))}
+                              onKeyDown={(e) => {
+                                if (e.key === 'Enter') {
+                                  e.preventDefault();
+                                  handleAddAction(activeStandard.id);
+                                }
+                              }}
+                              className="flex-1"
+                            />
+                            <Button
+                              type="button"
+                              size="sm"
+                              onClick={() => handleAddAction(activeStandard.id)}
+                              disabled={!newActionText[activeStandard.id]?.trim()}
+                            >
+                              Add
+                            </Button>
+                          </div>
+                        )}
+                        
+                        {/* Actions List */}
+                        <div className="space-y-2 min-h-[150px] max-h-[200px] overflow-y-auto border rounded-md p-3">
+                          {!actions[activeStandard.id] || actions[activeStandard.id].length === 0 ? (
+                            <p className="text-sm text-muted-foreground text-center py-8">
+                              No actions added yet
+                            </p>
+                          ) : (
+                            actions[activeStandard.id].map((action) => (
+                              <div key={action.id} className="flex items-start gap-2 group">
+                                <Checkbox
+                                  checked={action.completed}
+                                  onCheckedChange={() => handleToggleAction(activeStandard.id, action.id)}
+                                  disabled={!canEdit}
+                                  className="mt-1"
+                                />
+                                <span className={`flex-1 text-sm ${action.completed ? 'line-through text-muted-foreground' : ''}`}>
+                                  {action.text}
+                                </span>
+                                {canEdit && (
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    className="h-6 px-2 opacity-0 group-hover:opacity-100 transition-opacity"
+                                    onClick={() => handleDeleteAction(activeStandard.id, action.id)}
+                                  >
+                                    <XCircle className="h-3 w-3" />
+                                  </Button>
+                                )}
+                              </div>
+                            ))
+                          )}
+                        </div>
+                        
+                        <p className="mt-2 text-sm text-muted-foreground">
+                          <Info className="inline h-3.5 w-3.5 mr-1" />
+                          Track follow-up actions required for this standard
+                        </p>
+                      </div>
                     </div>
 
                     {/* File Upload Section */}

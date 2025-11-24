@@ -1176,7 +1176,7 @@ export function SchoolPerformanceView({ assessments, refreshAssessments, isLoadi
                                           size="sm" 
                                           className="h-8 px-3"
                                         >
-                                          <Link to={`/assessments/${categoryData.id}?view=admin`}>
+                                          <Link to={`/app/assessments/${categoryData.id}?view=admin`}>
                                             <Eye className="mr-1.5 h-3.5 w-3.5" />
                                             View
                                           </Link>
