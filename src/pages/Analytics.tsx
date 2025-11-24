@@ -587,6 +587,7 @@ export function AnalyticsPage() {
                       border: '1px solid #e2e8f0',
                       borderRadius: '6px'
                     }}
+                    formatter={(value: number) => [value.toFixed(1), 'Score']}
                   />
                   <Line 
                     type="monotone" 
@@ -621,7 +622,7 @@ export function AnalyticsPage() {
                   <div key={cat.category} className="space-y-2">
                     <div className="flex justify-between text-sm">
                       <span className="font-medium">{cat.category}</span>
-                      <span className="text-muted-foreground">{cat.score}/4.0</span>
+                      <span className="text-muted-foreground">{cat.score.toFixed(1)}/4.0</span>
                     </div>
                     <Progress 
                       value={(cat.score / 4) * 100} 
