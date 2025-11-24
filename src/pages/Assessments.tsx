@@ -80,22 +80,10 @@ export function AssessmentsPage() {
   const [searchTerm, setSearchTerm] = useState("");
   const [isPending, startTransition] = useTransition();
   
-  // Load filters from localStorage
-  const loadFiltersFromStorage = () => {
-    try {
-      const saved = localStorage.getItem('assurly_assessment_filters');
-      if (saved) {
-        return JSON.parse(saved);
-      }
-    } catch (error) {
-      console.error('Failed to load filters from localStorage', error);
-    }
-    return { category: [], status: [], school: [] };
-  };
-  
-  // Individual filter states for optimistic updates
-  const [filters, setFilters] = useState(loadFiltersFromStorage());
-  const [optimisticFilters, setOptimisticFilters] = useState(loadFiltersFromStorage());
+  // Individual filter states for optimistic updates - start with empty, will restore after options load
+  const [filters, setFilters] = useState({ category: [] as string[], status: [] as string[], school: [] as string[] });
+  const [optimisticFilters, setOptimisticFilters] = useState({ category: [] as string[], status: [] as string[], school: [] as string[] });
+  const [filtersRestored, setFiltersRestored] = useState(false);
   const [view, setView] = useState<"table" | "cards">("table");
   const [selectedTerm, setSelectedTerm] = useState<string>(""); // Will be set to first available term
   const [sortConfig, setSortConfig] = useState<{ key: string; direction: SortDirection }>({
@@ -363,6 +351,33 @@ export function AssessmentsPage() {
   }, [searchTerm, filters.category, filters.status, filters.school, selectedTerm]);
   
   // Calculate how many assessments are overdue or in-progress (based on term-filtered assessments)
+  // Restore filters from localStorage AFTER options are loaded
+  useEffect(() => {
+    if (!filtersRestored && schools.length > 0 && assessmentCategories.length > 0) {
+      try {
+        const saved = localStorage.getItem('assurly_assessment_filters');
+        if (saved) {
+          const savedFilters = JSON.parse(saved);
+          // Validate that saved filter values exist in current options
+          const validatedFilters = {
+            category: savedFilters.category?.filter((c: string) => 
+              assessmentCategories.some(cat => cat.value === c)
+            ) || [],
+            status: savedFilters.status || [],
+            school: savedFilters.school?.filter((s: string) => 
+              schools.some(school => school.id === s)
+            ) || []
+          };
+          setFilters(validatedFilters);
+          setOptimisticFilters(validatedFilters);
+        }
+      } catch (error) {
+        console.error('Failed to restore filters from localStorage', error);
+      }
+      setFiltersRestored(true);
+    }
+  }, [schools, assessmentCategories, filtersRestored]);
+  
   const overdueCount = useMemo(() => {
     return termFilteredAssessments.filter(a => a.status === "Overdue").length;
   }, [termFilteredAssessments]);

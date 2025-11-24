@@ -62,15 +62,13 @@ export function RootLayout() {
             </nav>
           </div>
           <div className="flex items-center space-x-4">
-            {/* Only show role switcher in development */}
-            {import.meta.env.DEV && <RoleSwitcher />}
-
             {/* User info and actions */}
             {user && (
               <div className="flex items-center space-x-3">
                 <div className="hidden md:flex items-center space-x-2 text-sm text-muted-foreground">
                   <User className="h-4 w-4" />
                   <span>{user.email}</span>
+                  <RoleSwitcher />
                   <span className="px-2 py-0.5 text-xs bg-slate-100 text-slate-700 rounded">
                     {role === 'mat-admin' ? 'MAT Admin' : 'Department Head'}
                   </span>

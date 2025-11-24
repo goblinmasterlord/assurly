@@ -207,9 +207,14 @@ export function AnalyticsPage() {
     
     // Helper: Check if assessment is effectively complete (all standards rated)
     const isAssessmentComplete = (assessment: Assessment): boolean => {
-      if (!assessment.standards || assessment.standards.length === 0) return false;
+      if (!assessment.standards || assessment.standards.length === 0) {
+        console.log(`[Analytics] Assessment ${assessment.id} has no standards`);
+        return false;
+      }
       const ratedStandards = assessment.standards.filter(s => s.rating !== null);
-      return ratedStandards.length === assessment.standards.length;
+      const isComplete = ratedStandards.length === assessment.standards.length;
+      console.log(`[Analytics] Assessment ${assessment.id} (${assessment.school?.name || 'unknown'} - ${assessment.category}): ${ratedStandards.length}/${assessment.standards.length} rated, isComplete: ${isComplete}, status: ${assessment.status}`);
+      return isComplete;
     };
 
     // Helper: Determine if school needs intervention (any completed assessment with avg score < 2.0)
