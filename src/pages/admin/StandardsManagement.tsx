@@ -405,6 +405,7 @@ export default function StandardsManagement() {
                                                 standard={standard}
                                                 onEdit={handleEdit}
                                                 onHistory={handleHistory}
+                                                onDelete={handleDeleteStandard}
                                             />
                                         ))}
                                     </SortableContext>

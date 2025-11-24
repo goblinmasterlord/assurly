@@ -54,7 +54,9 @@ const CATEGORY_COLORS = {
   'estates': '#f59e0b', // Amber
   'governance': '#ef4444', // Red
   'it': '#06b6d4', // Cyan
-  'is': '#84cc16' // Lime
+  'is': '#84cc16', // Lime
+  'safeguarding': '#ec4899', // Pink
+  'faith': '#a855f7' // Purple
 };
 
 const RATING_COLORS = {
@@ -82,7 +84,9 @@ const getCategoryDisplayName = (category: AssessmentCategory): string => {
     'estates': 'Estates',
     'governance': 'Governance',
     'it': 'IT & Info\nServices',
-    'is': 'Information\nServices'
+    'is': 'Information\nServices',
+    'safeguarding': 'Safeguarding',
+    'faith': 'Faith'
   };
   return displayNames[category] || category;
 };

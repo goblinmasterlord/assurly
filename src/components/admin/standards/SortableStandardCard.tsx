@@ -25,9 +25,10 @@ interface SortableStandardCardProps {
     standard: Standard;
     onEdit: (standard: Standard) => void;
     onHistory: (standard: Standard) => void;
+    onDelete: (id: string) => void;
 }
 
-export function SortableStandardCard({ standard, onEdit, onHistory }: SortableStandardCardProps) {
+export function SortableStandardCard({ standard, onEdit, onHistory, onDelete }: SortableStandardCardProps) {
     const {
         attributes,
         listeners,
@@ -111,7 +112,10 @@ export function SortableStandardCard({ standard, onEdit, onHistory }: SortableSt
                                     Duplicate
                                 </DropdownMenuItem>
                                 <Separator className="my-1" />
-                                <DropdownMenuItem className="text-destructive focus:text-destructive">
+                                <DropdownMenuItem 
+                                    onClick={() => onDelete(standard.id)}
+                                    className="text-destructive focus:text-destructive"
+                                >
                                     <Trash2 className="mr-2 h-4 w-4" />
                                     Delete
                                 </DropdownMenuItem>
