@@ -216,10 +216,13 @@ export class EnhancedAssessmentService {
   // ===== ASPECTS OPERATIONS =====
 
   async getAspects(): Promise<Aspect[]> {
-    return requestCache.get(
+    console.log('[EnhancedAssessmentService] Fetching aspects from API...');
+    const aspects = await requestCache.get(
       'aspects',
       () => apiGetAspects()
     );
+    console.log(`[EnhancedAssessmentService] Fetched ${aspects.length} aspects`);
+    return aspects;
   }
 
   async createAspect(aspect: Omit<Aspect, 'id' | 'standardCount'>): Promise<Aspect> {
@@ -246,11 +249,14 @@ export class EnhancedAssessmentService {
    * Get standards with caching by aspect
    */
   async getStandards(aspectId?: string): Promise<Standard[]> {
-    return requestCache.get(
+    console.log(`[EnhancedAssessmentService] Fetching standards from API${aspectId ? ` for aspect ${aspectId}` : ''}...`);
+    const standards = await requestCache.get(
       'standards',
       () => apiGetStandards(aspectId),
       { aspectId: aspectId || 'all' }
     );
+    console.log(`[EnhancedAssessmentService] Fetched ${standards.length} standards`);
+    return standards;
   }
 
   async createStandard(standard: Omit<Standard, 'id' | 'lastUpdated' | 'versions'> & { aspectId: string, orderIndex: number }): Promise<Standard> {

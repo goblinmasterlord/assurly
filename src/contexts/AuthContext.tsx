@@ -65,25 +65,10 @@ export function AuthProvider({ children }: AuthProviderProps) {
           logger.debug('Session validated, user authenticated');
           setUser(session.user);
         } else {
-          // API returned null but didn't throw - could be network issue
-          // In development, create mock user to avoid blocking work
-          if (import.meta.env.DEV) {
-            logger.warn('API unavailable in dev, using mock user');
-            const MOCK_USER: User = {
-              id: 'mock-user-id',
-              email: 'dev@assurly.com',
-              name: 'Developer User',
-              role: 'mat-admin',
-              schools: ['cedar-park-primary'],
-              permissions: ['all']
-            };
-            setUser(MOCK_USER);
-          } else {
-            // In production, if API returns null, clear token and logout
-            logger.warn('Session validation returned null, logging out');
-            authService.clearSession();
-            setUser(null);
-          }
+          // API returned null - token might be invalid or API unavailable
+          logger.warn('Session validation returned null, clearing session');
+          authService.clearSession();
+          setUser(null);
         }
       } else {
         logger.debug('No token found, user not authenticated');

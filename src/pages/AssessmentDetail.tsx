@@ -521,7 +521,7 @@ export function AssessmentDetailPage() {
         <Button
           variant="outline"
           size="sm"
-          onClick={() => navigate("/assessments")}
+          onClick={() => navigate("/app/assessments")}
         >
           <ArrowLeft className="mr-2 h-4 w-4" />
           Back to Ratings
