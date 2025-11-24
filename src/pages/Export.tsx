@@ -72,19 +72,46 @@ export function ExportPage() {
               <CardHeader className="pb-3 bg-slate-50 border-b">
                 <CardTitle className="text-lg flex items-center gap-2">
                   <FileText className="h-5 w-5 text-blue-600" />
-                  Report Preview
+                  Sample Report
                 </CardTitle>
                 <CardDescription>
-                  Preview of the generated PDF report
+                  Download example assessment pack (PDF preview unavailable due to security policy)
                 </CardDescription>
               </CardHeader>
-              <CardContent className="p-0">
-                <div className="overflow-hidden bg-slate-50">
-                  <iframe
-                    src="/Springwell_pack.pdf"
-                    className="w-full h-[calc(100vh-180px)]"
-                    title="PDF Preview"
-                  />
+              <CardContent className="p-6">
+                <div className="overflow-hidden bg-slate-50 h-[calc(100vh-180px)] border-2 border-dashed border-slate-300 rounded-lg flex flex-col items-center justify-center gap-6 p-8">
+                  <div className="bg-white p-8 rounded-full shadow-sm">
+                    <FileText className="h-20 w-20 text-blue-600" />
+                  </div>
+                  <div className="text-center space-y-3 max-w-md">
+                    <h3 className="text-xl font-semibold text-slate-900">Springwell Assessment Pack</h3>
+                    <p className="text-sm text-slate-600">
+                      This sample report demonstrates how Assurly presents comprehensive assessment data in a professional PDF format suitable for stakeholders.
+                    </p>
+                  </div>
+                  <Button 
+                    onClick={handleDownloadPDF}
+                    disabled={isGenerating}
+                    size="lg"
+                    className="shadow-md"
+                  >
+                    {isGenerating ? (
+                      <>
+                        <ButtonLoader className="mr-2" />
+                        Generating...
+                      </>
+                    ) : (
+                      <>
+                        <Download className="mr-2 h-5 w-5" />
+                        Download Sample PDF
+                      </>
+                    )}
+                  </Button>
+                  <div className="flex items-center gap-4 text-xs text-slate-500">
+                    <span>File size: ~2.5 MB</span>
+                    <span>•</span>
+                    <span>Format: PDF</span>
+                  </div>
                 </div>
               </CardContent>
             </Card>

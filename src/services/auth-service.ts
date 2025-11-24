@@ -97,6 +97,8 @@ class AuthService {
       return null;
     }
 
+    logger.debug('Token found in localStorage:', token?.substring(0, 20) + '...');
+
     try {
       logger.debug('Fetching current session from /api/auth/me');
       const response = await apiClient.get<any>('/api/auth/me');

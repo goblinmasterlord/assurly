@@ -55,14 +55,17 @@ apiClient.interceptors.request.use(
     
     // Add auth token if available
     // Direct access to localStorage where tokens are now stored
-    if (!config.url?.includes('/auth/') && typeof window !== 'undefined') {
+    if (typeof window !== 'undefined') {
       try {
         const token = localStorage.getItem('assurly_auth_token');
-        if (token) {
+        if (token && !config.url?.includes('/auth/request-magic-link')) {
           config.headers.Authorization = `Bearer ${token}`;
+          if (DEBUG_API) {
+            logger.debug(`Adding auth token to request: ${config.url}`);
+          }
         }
-      } catch {
-        // Silent fail - no auth header
+      } catch (error) {
+        logger.warn('Failed to retrieve auth token from localStorage', error);
       }
     }
     
