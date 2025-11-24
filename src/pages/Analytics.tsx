@@ -129,6 +129,20 @@ export function AnalyticsPage() {
   const [selectedTerm, setSelectedTerm] = React.useState<string>("Autumn 2025-2026");
 
   const isLoading = assessmentsLoading || schoolsLoading;
+  
+  // Log assessment data structure for debugging
+  React.useEffect(() => {
+    if (assessments.length > 0) {
+      console.log('[Analytics] Sample assessment structure:', {
+        id: assessments[0].id,
+        hasStandards: !!assessments[0].standards,
+        standardsCount: assessments[0].standards?.length || 0,
+        completedStandards: assessments[0].completedStandards,
+        totalStandards: assessments[0].totalStandards,
+        overallScore: assessments[0].overallScore
+      });
+    }
+  }, [assessments]);
 
   // Extract available terms from assessments
   const availableTerms = useMemo(() => {
@@ -197,24 +211,36 @@ export function AnalyticsPage() {
     const currentTermAssessments = termFilteredAssessments;
 
     // Helper: Calculate average score from standards ratings
+    // NOTE: Assessment summaries don't include standards array, use overallScore field
     const calculateAssessmentScore = (assessment: Assessment): number => {
-      if (!assessment.standards || assessment.standards.length === 0) return 0;
-      const ratedStandards = assessment.standards.filter(s => s.rating !== null);
-      if (ratedStandards.length === 0) return 0;
-      const sum = ratedStandards.reduce((acc, s) => acc + (s.rating || 0), 0);
-      return sum / ratedStandards.length;
+      // If we have the standards array (from detailed endpoint), calculate from it
+      if (assessment.standards && assessment.standards.length > 0) {
+        const ratedStandards = assessment.standards.filter(s => s.rating !== null);
+        if (ratedStandards.length === 0) return 0;
+        const sum = ratedStandards.reduce((acc, s) => acc + (s.rating || 0), 0);
+        return sum / ratedStandards.length;
+      }
+      
+      // Fallback to overallScore field (from summary/list endpoint)
+      return assessment.overallScore || 0;
     };
     
     // Helper: Check if assessment is effectively complete (all standards rated)
+    // NOTE: Assessment summaries from list endpoint don't include standards array
+    // We need to use completedStandards and totalStandards fields instead
     const isAssessmentComplete = (assessment: Assessment): boolean => {
-      if (!assessment.standards || assessment.standards.length === 0) {
-        console.log(`[Analytics] Assessment ${assessment.id} has no standards`);
-        return false;
+      // Check if we have the standards array (from detailed endpoint)
+      if (assessment.standards && assessment.standards.length > 0) {
+        const ratedStandards = assessment.standards.filter(s => s.rating !== null);
+        return ratedStandards.length === assessment.standards.length;
       }
-      const ratedStandards = assessment.standards.filter(s => s.rating !== null);
-      const isComplete = ratedStandards.length === assessment.standards.length;
-      console.log(`[Analytics] Assessment ${assessment.id} (${assessment.school?.name || 'unknown'} - ${assessment.category}): ${ratedStandards.length}/${assessment.standards.length} rated, isComplete: ${isComplete}, status: ${assessment.status}`);
-      return isComplete;
+      
+      // Fallback to summary fields (from list endpoint)
+      if (assessment.completedStandards !== undefined && assessment.totalStandards !== undefined) {
+        return assessment.completedStandards === assessment.totalStandards && assessment.totalStandards > 0;
+      }
+      
+      return false;
     };
 
     // Helper: Determine if school needs intervention (any completed assessment with avg score < 2.0)

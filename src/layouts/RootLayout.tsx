@@ -1,4 +1,4 @@
-import { Link, Outlet } from "react-router-dom";
+import { Link, Outlet, useLocation, useNavigate } from "react-router-dom";
 import { RoleSwitcher } from "@/components/RoleSwitcher";
 import { Button } from "@/components/ui/button";
 import { useUser } from "@/contexts/UserContext";
@@ -6,7 +6,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { ClipboardList, LogIn, LogOut, User, BarChart3, FileDown } from "lucide-react";
 import { TopLoader } from "@/components/ui/top-loader";
 import { KeyboardHint } from "@/components/ui/keyboard-hint";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { KeyboardShortcutsModal } from "@/components/ui/keyboard-shortcuts-modal";
 import { useKeyboardShortcuts } from "@/hooks/use-keyboard-shortcuts";
 
@@ -14,11 +14,26 @@ export function RootLayout() {
   const { role } = useUser();
   const { user, logout } = useAuth();
   const [showShortcuts, setShowShortcuts] = useState(false);
+  const location = useLocation();
+  const navigate = useNavigate();
 
   // Set up keyboard shortcuts
   useKeyboardShortcuts({
     onShowShortcuts: () => setShowShortcuts(true)
   });
+
+  // Redirect Department Heads away from restricted pages
+  useEffect(() => {
+    if (role === 'department-head' && user) {
+      const restrictedPaths = ['/app/analytics', '/app/export', '/app/standards-management'];
+      const isOnRestrictedPath = restrictedPaths.some(path => location.pathname.startsWith(path));
+      
+      if (isOnRestrictedPath) {
+        console.log('[RootLayout] Department Head accessing restricted path, redirecting to /app/assessments');
+        navigate('/app/assessments', { replace: true });
+      }
+    }
+  }, [role, location.pathname, navigate, user]);
 
   return (
     <div className="relative flex min-h-screen flex-col">
@@ -69,9 +84,6 @@ export function RootLayout() {
                   <User className="h-4 w-4" />
                   <span>{user.email}</span>
                   <RoleSwitcher />
-                  <span className="px-2 py-0.5 text-xs bg-slate-100 text-slate-700 rounded">
-                    {role === 'mat-admin' ? 'MAT Admin' : 'Department Head'}
-                  </span>
                 </div>
                 <Button
                   size="sm"
