@@ -34,6 +34,7 @@ import {
 import { useAssessments, useSchools } from "@/hooks/use-assessments";
 import type { Assessment, AssessmentCategory, School } from "@/types/assessment";
 import { RatingLabels } from "@/types/assessment";
+import { TermStepper } from "@/components/ui/term-stepper";
 
 // Professional education sector color scheme
 const CHART_COLORS = {
@@ -47,16 +48,14 @@ const CHART_COLORS = {
 };
 
 // Harmonious colors for each assessment category
-const CATEGORY_COLORS = {
+const CATEGORY_COLORS: Partial<Record<AssessmentCategory, string>> = {
   'education': '#3b82f6', // Blue
   'finance': '#10b981', // Emerald
   'hr': '#8b5cf6', // Violet
   'estates': '#f59e0b', // Amber
   'governance': '#ef4444', // Red
   'it': '#06b6d4', // Cyan
-  'is': '#84cc16', // Lime
-  'safeguarding': '#ec4899', // Pink
-  'faith': '#a855f7' // Purple
+  'is': '#84cc16' // Lime
 };
 
 const RATING_COLORS = {
@@ -72,21 +71,20 @@ const ASSESSMENT_CATEGORIES: AssessmentCategory[] = [
   'hr',
   'estates',
   'governance',
-  'it'
+  'it',
+  'is'
 ];
 
 // Helper to convert backend category codes to display names
 const getCategoryDisplayName = (category: AssessmentCategory): string => {
-  const displayNames: Record<AssessmentCategory, string> = {
+  const displayNames: Partial<Record<AssessmentCategory, string>> = {
     'education': 'Education',
     'finance': 'Finance &\nProcurement',
     'hr': 'Human\nResources',
     'estates': 'Estates',
     'governance': 'Governance',
     'it': 'IT & Info\nServices',
-    'is': 'Information\nServices',
-    'safeguarding': 'Safeguarding',
-    'faith': 'Faith'
+    'is': 'Information\nServices'
   };
   return displayNames[category] || category;
 };
@@ -128,12 +126,57 @@ interface AnalyticsData {
 export function AnalyticsPage() {
   const { assessments, isLoading: assessmentsLoading } = useAssessments();
   const { schools, isLoading: schoolsLoading } = useSchools();
+  const [selectedTerm, setSelectedTerm] = React.useState<string>("Autumn 2025-2026");
 
   const isLoading = assessmentsLoading || schoolsLoading;
 
+  // Extract available terms from assessments
+  const availableTerms = useMemo(() => {
+    const termSet = new Set<string>();
+    assessments.forEach(assessment => {
+      if (assessment.term && assessment.academicYear) {
+        termSet.add(`${assessment.term} ${assessment.academicYear}`);
+      }
+    });
+    
+    // Convert to array and sort (newest first)
+    const terms = Array.from(termSet).sort((a, b) => {
+      const termOrder: Record<string, number> = { 'Autumn': 3, 'Spring': 2, 'Summer': 1 };
+      const [termA, yearA] = a.split(' ');
+      const [termB, yearB] = b.split(' ');
+      
+      // Compare years first (descending)
+      if (yearA !== yearB) {
+        return yearB.localeCompare(yearA);
+      }
+      // Then compare terms (descending within year)
+      return (termOrder[termB] || 0) - (termOrder[termA] || 0);
+    });
+    
+    return terms;
+  }, [assessments]);
+
+  // Auto-select term
+  React.useEffect(() => {
+    if (availableTerms.length > 0 && !availableTerms.includes(selectedTerm)) {
+      // Try to find Autumn 2025-2026, otherwise use first available
+      const defaultTerm = availableTerms.find(t => t === "Autumn 2025-2026") || availableTerms[0];
+      setSelectedTerm(defaultTerm);
+    }
+  }, [availableTerms, selectedTerm]);
+
+  // Filter assessments by selected term
+  const termFilteredAssessments = useMemo(() => {
+    if (!selectedTerm) return [];
+    const [term, academicYear] = selectedTerm.split(" ");
+    return assessments.filter(assessment => 
+      assessment.term === term && assessment.academicYear === academicYear
+    );
+  }, [assessments, selectedTerm]);
+
   // Calculate analytics data from real assessment data
   const analyticsData: AnalyticsData = useMemo(() => {
-    if (assessments.length === 0 || schools.length === 0) {
+    if (termFilteredAssessments.length === 0 || schools.length === 0) {
       // Return minimal data structure if no data available
       return {
         totalSchools: 0,
@@ -149,6 +192,9 @@ export function AnalyticsPage() {
         recentActivity: []
       };
     }
+    
+    // Use term-filtered assessments for current term calculations
+    const currentTermAssessments = termFilteredAssessments;
 
     // Helper: Calculate average score from standards ratings
     const calculateAssessmentScore = (assessment: Assessment): number => {
@@ -179,7 +225,6 @@ export function AnalyticsPage() {
 
     // 1. Calculate basic metrics
     const totalSchools = schools.length;
-    const currentTermAssessments = assessments.filter(a => a.term === 'Summer' && a.academicYear === '2024-2025');
     const activeAssessments = currentTermAssessments.filter(a => a.status === 'In Progress' || a.status === 'Overdue').length;
     const completedAssessments = currentTermAssessments.filter(a => a.status === 'Completed').length;
     const completionRate = currentTermAssessments.length > 0 
@@ -329,7 +374,7 @@ export function AnalyticsPage() {
       schoolPerformance,
       recentActivity
     };
-  }, [assessments, schools]);
+  }, [termFilteredAssessments, assessments, schools]);
 
   if (isLoading) {
     return (
@@ -357,12 +402,13 @@ export function AnalyticsPage() {
             Comprehensive insights and performance metrics across your Multi-Academy Trust
           </p>
         </div>
-        <div className="flex items-center space-x-2">
-          <Badge variant="secondary" className="gap-1">
-            <Calendar className="h-3 w-3" />
-            Current Term: Autumn 2025-26
-          </Badge>
-        </div>
+        {availableTerms.length > 0 && (
+          <TermStepper
+            terms={availableTerms}
+            currentTerm={selectedTerm}
+            onTermChange={setSelectedTerm}
+          />
+        )}
       </div>
 
       {/* KPI Cards */}
