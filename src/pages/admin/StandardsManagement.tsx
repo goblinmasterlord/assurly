@@ -155,10 +155,15 @@ export default function StandardsManagement() {
         if (editingStandard) {
             updateStandard(standard);
         } else {
-            addStandard({
+            const standardWithAspect = {
                 ...standard,
-                orderIndex: standards.filter(s => s.category === standard.category).length
-            });
+                aspectId: (standard as any).aspectId || currentAspect.id,
+                category: standard.category || currentAspect.code,
+                orderIndex: standards.filter(s => 
+                    (s as any).aspectId === currentAspect.id || s.category === currentAspect.code
+                ).length
+            };
+            addStandard(standardWithAspect);
         }
         setIsCreateModalOpen(false);
     };
@@ -248,18 +253,26 @@ export default function StandardsManagement() {
                 <div className="flex gap-3">
                     <DropdownMenu>
                         <DropdownMenuTrigger asChild>
-                            <Button variant="outline" size="icon">
+                            <Button variant="outline" size="icon" title="Options">
                                 <Settings className="h-4 w-4" />
                             </Button>
                         </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end">
-                            <DropdownMenuItem onClick={() => handleEditAspect(currentAspect)}>
+                        <DropdownMenuContent align="end" className="w-56">
+                            <DropdownMenuItem 
+                                onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleEditAspect(currentAspect);
+                                }}
+                            >
                                 <Edit2 className="mr-2 h-3 w-3" />
                                 Edit {currentAspect.name}
                             </DropdownMenuItem>
                             {currentAspect.isCustom && (
                                 <DropdownMenuItem
-                                    onClick={() => handleDeleteAspect(currentAspect.id)}
+                                    onClick={(e) => {
+                                        e.stopPropagation();
+                                        handleDeleteAspect(currentAspect.id);
+                                    }}
                                     className="text-destructive focus:text-destructive"
                                 >
                                     <Trash2 className="mr-2 h-3 w-3" />
