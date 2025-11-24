@@ -1,6 +1,7 @@
 import React, { useState } from 'react'
 import { Filter, Search, ChevronDown, ChevronUp, TrendingUp, Users, School, BookOpen, DollarSign, Building, Shield, Monitor, Settings, AlertTriangle, X, Loader2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { Badge } from '@/components/ui/badge'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { MultiSelect, type MultiSelectOption } from '@/components/ui/multi-select'
@@ -170,12 +171,27 @@ export function FilterBar({
   const otherFilters = filters.filter(f => f.type !== 'search')
 
   return (
-    <Card className={className}>
+    <Card className={cn(
+      className,
+      hasActiveFilters && "bg-amber-50/30 border-amber-200/50"
+    )}>
       <CardHeader className="pb-4">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <Filter className="h-4 w-4 text-slate-600" />
+            <Filter className={cn(
+              "h-4 w-4",
+              hasActiveFilters ? "text-amber-600" : "text-slate-600"
+            )} />
             <CardTitle className="text-base font-semibold">{title}</CardTitle>
+            {hasActiveFilters && (
+              <Badge variant="secondary" className="bg-amber-100 text-amber-800 hover:bg-amber-200">
+                {filters.filter(f => {
+                  if (f.type === 'multiselect' && Array.isArray(f.value)) return f.value.length > 0;
+                  if (f.type === 'search' && typeof f.value === 'string') return f.value.length > 0;
+                  return false;
+                }).length} active
+              </Badge>
+            )}
             {isFiltering && (
               <div className="flex items-center gap-1.5 text-xs text-slate-500">
                 <Loader2 className="h-3 w-3 animate-spin" />

@@ -80,17 +80,22 @@ export function AssessmentsPage() {
   const [searchTerm, setSearchTerm] = useState("");
   const [isPending, startTransition] = useTransition();
   
+  // Load filters from localStorage
+  const loadFiltersFromStorage = () => {
+    try {
+      const saved = localStorage.getItem('assurly_assessment_filters');
+      if (saved) {
+        return JSON.parse(saved);
+      }
+    } catch (error) {
+      console.error('Failed to load filters from localStorage', error);
+    }
+    return { category: [], status: [], school: [] };
+  };
+  
   // Individual filter states for optimistic updates
-  const [filters, setFilters] = useState({
-    category: [] as string[],
-    status: [] as string[],
-    school: [] as string[]
-  });
-  const [optimisticFilters, setOptimisticFilters] = useState({
-    category: [] as string[],
-    status: [] as string[],
-    school: [] as string[]
-  });
+  const [filters, setFilters] = useState(loadFiltersFromStorage());
+  const [optimisticFilters, setOptimisticFilters] = useState(loadFiltersFromStorage());
   const [view, setView] = useState<"table" | "cards">("table");
   const [selectedTerm, setSelectedTerm] = useState<string>(""); // Will be set to first available term
   const [sortConfig, setSortConfig] = useState<{ key: string; direction: SortDirection }>({
@@ -101,16 +106,25 @@ export function AssessmentsPage() {
   const [schoolsLoading, setSchoolsLoading] = useState(true);
   const { preloadRoute, cancelPreload } = usePreload();
   
-  // Optimistic filter update handlers
+  // Optimistic filter update handlers with persistence
   const updateFilter = useCallback((filterType: keyof typeof filters, value: string[]) => {
+    const newFilters = { ...filters, [filterType]: value };
+    
+    // Save to localStorage
+    try {
+      localStorage.setItem('assurly_assessment_filters', JSON.stringify(newFilters));
+    } catch (error) {
+      console.error('Failed to save filters to localStorage', error);
+    }
+    
     // Immediate optimistic update
-    setOptimisticFilters(prev => ({ ...prev, [filterType]: value }));
+    setOptimisticFilters((prev: typeof filters) => ({ ...prev, [filterType]: value }));
     
     // Deferred actual update with transition
     startTransition(() => {
-      setFilters(prev => ({ ...prev, [filterType]: value }));
+      setFilters((prev: typeof filters) => ({ ...prev, [filterType]: value }));
     });
-  }, []);
+  }, [filters]);
 
   const handleCategoryFilterChange = (newValue: string[]) => {
     updateFilter('category', newValue);
@@ -125,18 +139,19 @@ export function AssessmentsPage() {
   };
   
   const clearFilters = useCallback(() => {
+    const emptyFilters = { category: [], status: [], school: [] };
+    
+    // Clear from localStorage
+    try {
+      localStorage.setItem('assurly_assessment_filters', JSON.stringify(emptyFilters));
+    } catch (error) {
+      console.error('Failed to clear filters from localStorage', error);
+    }
+    
     setSearchTerm("");
-    setOptimisticFilters({
-      category: [],
-      status: [],
-      school: []
-    });
+    setOptimisticFilters(emptyFilters);
     startTransition(() => {
-      setFilters({
-        category: [],
-        status: [],
-        school: []
-      });
+      setFilters(emptyFilters);
     });
   }, []);
   
@@ -263,7 +278,7 @@ export function AssessmentsPage() {
         const matchesCategory = activeFilters.category.length === 0 || activeFilters.category.includes(assessment.category);
         
         // Status filter
-        const matchesStatus = activeFilters.status.length === 0 || activeFilters.status.some(status => {
+        const matchesStatus = activeFilters.status.length === 0 || activeFilters.status.some((status: string) => {
           switch (status) {
             case "completed": return assessment.status === "Completed";
             case "in-progress": return assessment.status === "In Progress";

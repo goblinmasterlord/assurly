@@ -1241,7 +1241,7 @@ export function AssessmentDetailPage() {
             <div className="border-t border-slate-200/60 py-2">
               <div className="flex items-center justify-center gap-6 text-xs text-slate-500">
                 <span className="flex items-center gap-1">
-                  <kbd className="bg-slate-100 px-1.5 py-0.5 rounded text-xs font-mono">J/K</kbd>
+                  <kbd className="bg-slate-100 px-1.5 py-0.5 rounded text-xs font-mono">⌘J/⌘K</kbd>
                   Navigate
                 </span>
                 <span className="flex items-center gap-1">

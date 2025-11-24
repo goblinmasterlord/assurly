@@ -204,11 +204,20 @@ export function AnalyticsPage() {
       const sum = ratedStandards.reduce((acc, s) => acc + (s.rating || 0), 0);
       return sum / ratedStandards.length;
     };
+    
+    // Helper: Check if assessment is effectively complete (all standards rated)
+    const isAssessmentComplete = (assessment: Assessment): boolean => {
+      if (!assessment.standards || assessment.standards.length === 0) return false;
+      const ratedStandards = assessment.standards.filter(s => s.rating !== null);
+      return ratedStandards.length === assessment.standards.length;
+    };
 
     // Helper: Determine if school needs intervention (any completed assessment with avg score < 2.0)
     const needsIntervention = (schoolAssessments: Assessment[]): boolean => {
       return schoolAssessments.some(a => {
-        if (a.status !== 'Completed') return false;
+        // Count both explicitly completed AND assessments that are 100% filled (all standards rated)
+        const isComplete = a.status === 'Completed' || isAssessmentComplete(a);
+        if (!isComplete) return false;
         const score = calculateAssessmentScore(a);
         return score < 2.0;
       });
@@ -245,8 +254,10 @@ export function AnalyticsPage() {
       ? (completedAssessments / currentTermAssessments.length) * 100 
       : 0;
 
-    // 2. Calculate current average score from completed assessments
-    const completedWithRatings = currentTermAssessments.filter(a => a.status === 'Completed');
+    // 2. Calculate current average score from completed assessments (including 100% filled)
+    const completedWithRatings = currentTermAssessments.filter(a => 
+      a.status === 'Completed' || isAssessmentComplete(a)
+    );
     const currentScores = completedWithRatings.map(calculateAssessmentScore).filter(s => s > 0);
     const averageScore = currentScores.length > 0
       ? currentScores.reduce((sum, s) => sum + s, 0) / currentScores.length
@@ -263,7 +274,8 @@ export function AnalyticsPage() {
     // 4. Calculate term trends (group by term/year)
     const termMap = new Map<string, number[]>();
     assessments.forEach(assessment => {
-      if (assessment.status === 'Completed' && assessment.term && assessment.academicYear) {
+      const isComplete = assessment.status === 'Completed' || isAssessmentComplete(assessment);
+      if (isComplete && assessment.term && assessment.academicYear) {
         const key = `${assessment.term} ${assessment.academicYear.split('-')[0].slice(-2)}-${assessment.academicYear.split('-')[1].slice(-2)}`;
         const score = calculateAssessmentScore(assessment);
         if (score > 0) {
@@ -295,7 +307,9 @@ export function AnalyticsPage() {
       const catData = categoryMap.get(assessment.category);
       if (catData) {
         catData.count++;
-        if (assessment.status === 'Completed') {
+        // Count both explicitly completed AND assessments that are 100% filled
+        const isComplete = assessment.status === 'Completed' || isAssessmentComplete(assessment);
+        if (isComplete) {
           const score = calculateAssessmentScore(assessment);
           if (score > 0) catData.scores.push(score);
         }
@@ -324,8 +338,13 @@ export function AnalyticsPage() {
 
     const schoolPerformance = schools.map(school => {
       const schoolAssessments = schoolMap.get(school.id) || [];
-      const completed = schoolAssessments.filter(a => a.status === 'Completed');
-      const inProgress = schoolAssessments.filter(a => a.status === 'In Progress').length;
+      // Count both explicitly completed AND assessments that are 100% filled
+      const completed = schoolAssessments.filter(a => 
+        a.status === 'Completed' || isAssessmentComplete(a)
+      );
+      const inProgress = schoolAssessments.filter(a => 
+        a.status === 'In Progress' && !isAssessmentComplete(a)
+      ).length;
       const notStarted = schoolAssessments.filter(a => a.status === 'Not Started').length;
       const hasOverdue = schoolAssessments.some(a => a.status === 'Overdue');
       
@@ -351,7 +370,8 @@ export function AnalyticsPage() {
     const recentActivity = currentTermAssessments
       .filter(a => a.lastUpdated && a.lastUpdated !== '-')
       .map(a => {
-        const type = a.status === 'Completed' ? 'Assessment Completed' :
+        const isComplete = a.status === 'Completed' || isAssessmentComplete(a);
+        const type = isComplete ? 'Assessment Completed' :
                     a.status === 'In Progress' ? 'Assessment Updated' :
                     'Assessment Started';
         
