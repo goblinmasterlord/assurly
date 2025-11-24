@@ -154,16 +154,23 @@ export function AnalyticsPage() {
     });
     
     // Convert to array and sort (newest first)
+    // Academic year order: Autumn (Sept) → Spring (Jan) → Summer (May)
     const terms = Array.from(termSet).sort((a, b) => {
-      const termOrder: Record<string, number> = { 'Autumn': 3, 'Spring': 2, 'Summer': 1 };
       const [termA, yearA] = a.split(' ');
       const [termB, yearB] = b.split(' ');
       
-      // Compare years first (descending)
-      if (yearA !== yearB) {
-        return yearB.localeCompare(yearA);
+      // Parse academic years (e.g., "2025-2026" → start year 2025)
+      const yearNumA = parseInt(yearA.split('-')[0]);
+      const yearNumB = parseInt(yearB.split('-')[0]);
+      
+      // Compare years first (descending - newer years first)
+      if (yearNumA !== yearNumB) {
+        return yearNumB - yearNumA;
       }
-      // Then compare terms (descending within year)
+      
+      // Same academic year - order by term position (Autumn=Sept, Spring=Jan, Summer=May)
+      // Higher number = later in academic year, so we want reverse order for newest first
+      const termOrder: Record<string, number> = { 'Autumn': 1, 'Spring': 2, 'Summer': 3 };
       return (termOrder[termB] || 0) - (termOrder[termA] || 0);
     });
     
@@ -413,8 +420,8 @@ export function AnalyticsPage() {
           'hr': 'Human Resources',
           'estates': 'Estates',
           'governance': 'Governance',
-          'it': 'IT & Information Services',
-          'is': 'Information Services'
+          'it': 'IT',
+          'is': 'Information Standanrds'
         };
 
         return {

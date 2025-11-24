@@ -172,7 +172,8 @@ export function AssessmentsPage() {
       }
     });
     
-    // Convert to array and sort chronologically
+    // Convert to array and sort chronologically (newest first)
+    // Academic year order: Autumn (Sept) → Spring (Jan) → Summer (May)
     const terms = Array.from(termSet).sort((a, b) => {
       const [termA, yearA] = a.split(" ");
       const [termB, yearB] = b.split(" ");
@@ -185,12 +186,14 @@ export function AssessmentsPage() {
         return yearNumB - yearNumA; // Newest year first
       }
       
-      // If same year, sort by term with custom order: Autumn (newest), Summer, Spring
-      const termOrder = { "Autumn": 0, "Summer": 1, "Spring": 2 };
+      // Same academic year - order by term position in the year
+      // Autumn (Sept) = 1, Spring (Jan) = 2, Summer (May) = 3
+      // Higher number = later in year, so reverse for newest first
+      const termOrder = { "Autumn": 1, "Spring": 2, "Summer": 3 };
       const termOrderA = termOrder[termA as keyof typeof termOrder] ?? 99;
       const termOrderB = termOrder[termB as keyof typeof termOrder] ?? 99;
 
-      return termOrderA - termOrderB;
+      return termOrderB - termOrderA; // Reverse order for newest first
     });
     
     return terms;
