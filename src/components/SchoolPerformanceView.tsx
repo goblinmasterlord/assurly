@@ -440,17 +440,19 @@ export function SchoolPerformanceView({ assessments, refreshAssessments, isLoadi
       if (assessment.status === 'Completed') {
         schoolData.completedAssessments++;
         
-        // Check if this aspect requires intervention (score <= 1.5 means it has 1-rated standards)
-        if (assessment.overallScore && assessment.overallScore <= 1.5) {
-          schoolData.aspectsWithInterventionRequired!.add(assessment.category);
-        }
-        
         schoolData.overallScore += assessment.overallScore || 0;
         
         // Update last updated if this assessment is more recent
         if (assessment.lastUpdated && assessment.lastUpdated > schoolData.lastUpdated) {
           schoolData.lastUpdated = assessment.lastUpdated;
         }
+      }
+
+      // Check if this aspect requires intervention (for both completed AND in-progress assessments)
+      // Score <= 1.5 means it has 1-rated standards that need attention
+      if ((assessment.status === 'Completed' || assessment.status === 'In Progress') && 
+          assessment.overallScore && assessment.overallScore <= 1.5) {
+        schoolData.aspectsWithInterventionRequired!.add(assessment.category);
       }
 
       // Add to assessments by category (for all assessments, not just completed)

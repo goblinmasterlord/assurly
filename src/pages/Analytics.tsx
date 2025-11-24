@@ -84,7 +84,7 @@ const getCategoryDisplayName = (category: AssessmentCategory): string => {
     'estates': 'Estates',
     'governance': 'Governance',
     'it': 'IT & Info\nServices',
-    'is': 'Information\nServices'
+    'is': 'Information\nStandards'
   };
   return displayNames[category] || category;
 };
