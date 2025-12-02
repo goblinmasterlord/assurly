@@ -13,7 +13,7 @@ export function PublicLayout() {
         <div className="container flex h-16 items-center justify-between">
           <div className="flex items-center gap-8">
             <Link to="/" className="flex items-center space-x-2">
-              <img src={logoSvg} alt="Assurly" className="h-10 w-auto" />
+              <img src={logoSvg} alt="Assurly" className="h-40 w-auto" />
             </Link>
             
             {/* Desktop Navigation */}
