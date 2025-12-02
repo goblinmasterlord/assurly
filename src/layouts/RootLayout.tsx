@@ -44,7 +44,7 @@ export function RootLayout() {
         <div className="container flex h-16 items-center justify-between">
           <div className="flex items-center">
             <Link to="/app" className="mr-6 flex items-center space-x-2">
-              <img src={logoSvg} alt="Assurly" className="h-8" />
+              <img src={logoSvg} alt="Assurly" className="h-10 w-auto" />
             </Link>
             <nav className="hidden md:flex space-x-4">
               <Button variant="link" size="sm" asChild>
