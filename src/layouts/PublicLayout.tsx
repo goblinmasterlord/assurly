@@ -2,6 +2,7 @@ import { Link, Outlet } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Menu, X } from "lucide-react";
 import { useState } from "react";
+import logoSvg from "@/assets/assurly_rgb.svg";
 
 export function PublicLayout() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
@@ -12,7 +13,7 @@ export function PublicLayout() {
         <div className="container flex h-16 items-center justify-between">
           <div className="flex items-center gap-8">
             <Link to="/" className="flex items-center space-x-2">
-              <span className="text-xl font-bold">Assurly</span>
+              <img src={logoSvg} alt="Assurly" className="h-8" />
             </Link>
             
             {/* Desktop Navigation */}

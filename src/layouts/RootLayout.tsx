@@ -9,6 +9,7 @@ import { KeyboardHint } from "@/components/ui/keyboard-hint";
 import { useState, useEffect } from "react";
 import { KeyboardShortcutsModal } from "@/components/ui/keyboard-shortcuts-modal";
 import { useKeyboardShortcuts } from "@/hooks/use-keyboard-shortcuts";
+import logoSvg from "@/assets/assurly_rgb.svg";
 
 export function RootLayout() {
   const { role } = useUser();
@@ -43,7 +44,7 @@ export function RootLayout() {
         <div className="container flex h-16 items-center justify-between">
           <div className="flex items-center">
             <Link to="/app" className="mr-6 flex items-center space-x-2">
-              <span className="text-xl font-bold">Assurly</span>
+              <img src={logoSvg} alt="Assurly" className="h-8" />
             </Link>
             <nav className="hidden md:flex space-x-4">
               <Button variant="link" size="sm" asChild>
