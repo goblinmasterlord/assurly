@@ -152,31 +152,42 @@ export default function StandardsManagement() {
         setIsHistoryModalOpen(true);
     };
 
-    const handleSaveStandard = (standard: Standard) => {
-        if (editingStandard) {
-            updateStandard(standard);
-        } else {
-            const standardWithAspect = {
-                ...standard,
-                aspectId: (standard as any).aspectId || currentAspect.id,
-                category: standard.category || currentAspect.code,
-                orderIndex: standards.filter(s => 
-                    (s as any).aspectId === currentAspect.id || s.category === currentAspect.code
-                ).length
-            };
-            addStandard(standardWithAspect);
+    const handleSaveStandard = async (standard: Standard) => {
+        try {
+            if (editingStandard) {
+                await updateStandard(standard);
+            } else {
+                const standardWithAspect = {
+                    ...standard,
+                    aspectId: (standard as any).aspectId || currentAspect.id,
+                    category: standard.category || currentAspect.code,
+                    orderIndex: standards.filter(s => 
+                        (s as any).aspectId === currentAspect.id || s.category === currentAspect.code
+                    ).length
+                };
+                await addStandard(standardWithAspect);
+            }
+            setIsCreateModalOpen(false);
+            setEditingStandard(undefined);
+        } catch (error) {
+            // Error is already handled by the hook with toast
+            console.error('Error saving standard:', error);
         }
-        setIsCreateModalOpen(false);
     };
 
-    const handleSaveAspect = (aspect: Aspect) => {
-        if (editingAspect) {
-            updateAspect(aspect);
-        } else {
-            addAspect(aspect);
+    const handleSaveAspect = async (aspect: Aspect) => {
+        try {
+            if (editingAspect) {
+                await updateAspect(aspect);
+            } else {
+                await addAspect(aspect);
+            }
+            setEditingAspect(undefined);
+            setIsAspectModalOpen(false);
+        } catch (error) {
+            // Error is already handled by the hook with toast
+            console.error('Error saving aspect:', error);
         }
-        setEditingAspect(undefined);
-        setIsAspectModalOpen(false);
     };
 
     const handleEditAspect = (aspect: Aspect) => {
@@ -212,19 +223,25 @@ export default function StandardsManagement() {
         }
     };
 
-    const handleConfirmDelete = () => {
+    const handleConfirmDelete = async () => {
         if (!itemToDelete) return;
 
-        if (itemToDelete.type === 'aspect') {
-            deleteAspect(itemToDelete.id);
-            if (currentAspect.id === itemToDelete.id) {
-                setSelectedAspect(aspects[0]);
+        try {
+            if (itemToDelete.type === 'aspect') {
+                await deleteAspect(itemToDelete.id);
+                if (currentAspect.id === itemToDelete.id) {
+                    setSelectedAspect(aspects[0]);
+                }
+            } else {
+                await deleteStandard(itemToDelete.id);
             }
-        } else {
-            deleteStandard(itemToDelete.id);
+            setDeleteModalOpen(false);
+            setItemToDelete(null);
+        } catch (error) {
+            // Error is already handled by the hook with toast
+            console.error('Error deleting item:', error);
+            // Keep modal open so user can see the error and try again
         }
-        setDeleteModalOpen(false);
-        setItemToDelete(null);
     };
 
     if (!currentAspect) {

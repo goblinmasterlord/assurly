@@ -312,12 +312,16 @@ export const createStandard = async (standard: Omit<Standard, 'id' | 'lastUpdate
 
 export const updateStandardDefinition = async (standard: Standard): Promise<Standard> => {
   try {
-    const payload: any = {};
+    // Build payload with all fields that can be updated
+    const payload: any = {
+      standard_name: standard.title,
+      description: standard.description || ''
+    };
     
-    // Only include fields that are being updated
-    if (standard.title) payload.standard_name = standard.title;
-    if (standard.description !== undefined) payload.description = standard.description;
-    if (standard.aspectId) payload.aspect_id = standard.aspectId;
+    // Only include aspect_id if it's being changed
+    if (standard.aspectId) {
+      payload.aspect_id = standard.aspectId;
+    }
     
     const response = await apiClient.put(`/api/standards/${standard.id}`, payload);
     return transformStandardResponse(response.data);
@@ -339,15 +343,20 @@ export const deleteStandard = async (id: string): Promise<void> => {
 
 export const reorderStandards = async (standards: { id: string; orderIndex: number }[]): Promise<void> => {
   try {
-    const payload = {
-      updates: standards.map(s => ({
-        standard_id: s.id,
-        new_order_index: s.orderIndex
-      }))
-    };
-    await apiClient.put('/api/standards/reorder', payload);
-  } catch (error) {
+    // The backend doesn't have a bulk reorder endpoint yet
+    // So we need to update each standard individually
+    // We'll do this in parallel for better performance
+    const updatePromises = standards.map(s => 
+      apiClient.put(`/api/standards/${s.id}`, {
+        sort_order: s.orderIndex
+      })
+    );
+    
+    await Promise.all(updatePromises);
+    console.log(`Successfully reordered ${standards.length} standards`);
+  } catch (error: any) {
     console.error('Failed to reorder standards:', error);
-    throw new Error('Failed to reorder standards.');
+    const errorMsg = error.response?.data?.detail || 'Failed to reorder standards.';
+    throw new Error(errorMsg);
   }
 }; 

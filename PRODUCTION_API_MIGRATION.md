@@ -178,6 +178,7 @@ Similar flow with appropriate API calls and cache invalidation.
 - [ ] Verify order persists after page refresh
 - [ ] If reorder fails, verify list reverts to previous state
 - [ ] Verify reordering is scoped to current aspect only
+- **Note**: Reordering makes multiple API calls (one per standard) as backend doesn't have bulk endpoint yet
 
 ### Error Scenarios
 - [ ] Test with backend unavailable (should show error toast)
