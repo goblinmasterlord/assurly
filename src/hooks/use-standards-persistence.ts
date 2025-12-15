@@ -1,112 +1,41 @@
 import { useState, useEffect, useCallback } from 'react';
 import { assessmentService } from '@/services/enhanced-assessment-service';
 import type { Aspect, Standard } from '@/types/assessment';
-
-// Session storage keys
-const ASPECTS_KEY = 'assurly_session_aspects';
-const STANDARDS_KEY = 'assurly_session_standards';
-
-// Get initial mock data
-const getInitialAspects = (): Aspect[] => [
-    { id: '1', code: 'EDU', name: 'Education', description: 'Educational standards', isCustom: false, standardCount: 0 },
-    { id: '2', code: 'FIN', name: 'Finance & Procurement', description: 'Financial management', isCustom: false, standardCount: 0 },
-    { id: '3', code: 'HR', name: 'Human Resources', description: 'HR management', isCustom: false, standardCount: 0 },
-    { id: '4', code: 'GOV', name: 'Governance', description: 'Governance standards', isCustom: false, standardCount: 0 },
-];
-
-const getInitialStandards = (): any[] => [
-    { id: '1', code: 'EDU-001', title: 'Curriculum Planning', description: 'Standard for curriculum design', category: 'EDU', aspectId: '1', orderIndex: 0, lastUpdated: new Date().toISOString(), versions: [] },
-    { id: '2', code: 'EDU-002', title: 'Teaching Quality', description: 'Teaching quality standards', category: 'EDU', aspectId: '1', orderIndex: 1, lastUpdated: new Date().toISOString(), versions: [] },
-    { id: '3', code: 'FIN-001', title: 'Budget Management', description: 'Financial budget standards', category: 'FIN', aspectId: '2', orderIndex: 0, lastUpdated: new Date().toISOString(), versions: [] },
-];
+import { useToast } from '@/hooks/use-toast';
 
 export function useStandardsPersistence() {
     const [aspects, setAspects] = useState<Aspect[]>([]);
     const [standards, setStandards] = useState<Standard[]>([]);
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
-    // Always use session storage for standards management - no API integration yet
-    const useMemoryFallback = true;
-
-    // Load from sessionStorage or initialize
-    const loadFromSession = useCallback(() => {
-        try {
-            const storedAspects = sessionStorage.getItem(ASPECTS_KEY);
-            const storedStandards = sessionStorage.getItem(STANDARDS_KEY);
-            
-            if (storedAspects && storedStandards) {
-                setAspects(JSON.parse(storedAspects));
-                setStandards(JSON.parse(storedStandards));
-                return true;
-            }
-        } catch (err) {
-            console.warn('Failed to load from session storage:', err);
-        }
-        return false;
-    }, []);
-
-    // Save to sessionStorage
-    const saveToSession = useCallback((newAspects: Aspect[], newStandards: Standard[]) => {
-        try {
-            sessionStorage.setItem(ASPECTS_KEY, JSON.stringify(newAspects));
-            sessionStorage.setItem(STANDARDS_KEY, JSON.stringify(newStandards));
-        } catch (err) {
-            console.warn('Failed to save to session storage:', err);
-        }
-    }, []);
+    const { toast } = useToast();
 
     const loadData = useCallback(async () => {
         try {
             setIsLoading(true);
-            
-            // Try loading from session first
-            if (loadFromSession()) {
-                console.log('Loaded aspects and standards from sessionStorage');
-                setIsLoading(false);
-                return;
-            }
-
-            // Try loading from API
             console.log('Fetching aspects and standards from API...');
-            try {
-                const [fetchedAspects, fetchedStandards] = await Promise.all([
-                    assessmentService.getAspects(),
-                    assessmentService.getStandards()
-                ]);
-                
-                if (fetchedAspects.length > 0) {
-                    console.log(`Loaded ${fetchedAspects.length} aspects and ${fetchedStandards.length} standards from API`);
-                    setAspects(fetchedAspects);
-                    setStandards(fetchedStandards);
-                    saveToSession(fetchedAspects, fetchedStandards);
-                    setError(null);
-                } else {
-                    // API returned empty, use mock data
-                    console.log('API returned empty data, using mock data');
-                    const initialAspects = getInitialAspects();
-                    const initialStandards = getInitialStandards();
-                    setAspects(initialAspects);
-                    setStandards(initialStandards);
-                    saveToSession(initialAspects, initialStandards);
-                    setError(null);
-                }
-            } catch (apiError) {
-                // API failed, fallback to mock data
-                console.warn('API unavailable, using mock data:', apiError);
-                const initialAspects = getInitialAspects();
-                const initialStandards = getInitialStandards();
-                setAspects(initialAspects);
-                setStandards(initialStandards);
-                saveToSession(initialAspects, initialStandards);
-                setError(null);
-            }
+            
+            const [fetchedAspects, fetchedStandards] = await Promise.all([
+                assessmentService.getAspects(),
+                assessmentService.getStandards()
+            ]);
+            
+            console.log(`Loaded ${fetchedAspects.length} aspects and ${fetchedStandards.length} standards from API`);
+            setAspects(fetchedAspects);
+            setStandards(fetchedStandards);
+            setError(null);
         } catch (err) {
             console.error('Failed to load standards data:', err);
-            setError('Failed to load data');
+            setError('Failed to load data from API');
+            toast({
+                variant: 'destructive',
+                title: 'Error loading data',
+                description: 'Failed to load aspects and standards. Please refresh the page.',
+            });
         } finally {
             setIsLoading(false);
         }
-    }, [loadFromSession, saveToSession]);
+    }, [toast]);
 
     useEffect(() => {
         loadData();
@@ -114,105 +43,212 @@ export function useStandardsPersistence() {
 
     const addStandard = useCallback(async (standard: any) => {
         try {
-            // Session storage mode
-            const newStandard: Standard = {
-                ...standard,
-                id: `std-${Date.now()}`,
-                lastUpdated: new Date().toISOString(),
-                versions: []
-            };
-            const newStandards = [...standards, newStandard];
-            setStandards(newStandards);
-            saveToSession(aspects, newStandards);
+            // Call API to create standard
+            const newStandard = await assessmentService.createStandard({
+                code: standard.code,
+                title: standard.title,
+                description: standard.description || '',
+                aspectId: standard.aspectId,
+                orderIndex: standard.orderIndex,
+                rating: null,
+            });
+            
+            // Update local state
+            setStandards(prev => [...prev, newStandard]);
+            
+            // Refresh aspects to update standard counts
+            const updatedAspects = await assessmentService.getAspects();
+            setAspects(updatedAspects);
+            
+            toast({
+                title: 'Standard created',
+                description: `Successfully created standard ${newStandard.code}`,
+            });
         } catch (err) {
-            console.error(err);
+            console.error('Failed to create standard:', err);
+            toast({
+                variant: 'destructive',
+                title: 'Error creating standard',
+                description: err instanceof Error ? err.message : 'Failed to create standard',
+            });
             throw err;
         }
-    }, [standards, aspects, saveToSession]);
+    }, [toast]);
 
     const updateStandard = useCallback(async (standard: Standard) => {
         try {
-            const newStandards = standards.map(s => 
-                s.id === standard.id ? { ...standard, lastUpdated: new Date().toISOString() } : s
-            );
-            setStandards(newStandards);
-            saveToSession(aspects, newStandards);
+            // Call API to update standard
+            const updatedStandard = await assessmentService.updateStandardDefinition(standard);
+            
+            // Update local state
+            setStandards(prev => prev.map(s => 
+                s.id === standard.id ? updatedStandard : s
+            ));
+            
+            toast({
+                title: 'Standard updated',
+                description: `Successfully updated standard ${updatedStandard.code}`,
+            });
         } catch (err) {
-            console.error(err);
+            console.error('Failed to update standard:', err);
+            toast({
+                variant: 'destructive',
+                title: 'Error updating standard',
+                description: err instanceof Error ? err.message : 'Failed to update standard',
+            });
             throw err;
         }
-    }, [standards, aspects, saveToSession]);
+    }, [toast]);
 
     const deleteStandard = useCallback(async (id: string) => {
         try {
-            const newStandards = standards.filter(s => s.id !== id);
-            setStandards(newStandards);
-            saveToSession(aspects, newStandards);
+            // Call API to delete standard
+            await assessmentService.deleteStandard(id);
+            
+            // Update local state
+            setStandards(prev => prev.filter(s => s.id !== id));
+            
+            // Refresh aspects to update standard counts
+            const updatedAspects = await assessmentService.getAspects();
+            setAspects(updatedAspects);
+            
+            toast({
+                title: 'Standard deleted',
+                description: 'Successfully deleted standard',
+            });
         } catch (err) {
-            console.error(err);
+            console.error('Failed to delete standard:', err);
+            toast({
+                variant: 'destructive',
+                title: 'Error deleting standard',
+                description: err instanceof Error ? err.message : 'Failed to delete standard. It may be in use by assessments.',
+            });
             throw err;
         }
-    }, [standards, aspects, saveToSession]);
+    }, [toast]);
 
     const reorderStandards = useCallback(async (items: any[]) => {
-        // Optimistic update
-        const newStandards = [...standards];
-        items.forEach(item => {
-            const index = newStandards.findIndex(s => s.id === item.id);
-            if (index !== -1) {
-                newStandards[index] = { ...newStandards[index], ...item };
-            }
-        });
-        const sorted = newStandards.sort((a, b) => (a.orderIndex || 0) - (b.orderIndex || 0));
-        setStandards(sorted);
-        saveToSession(aspects, sorted);
-    }, [standards, aspects, saveToSession]);
+        try {
+            // Prepare reorder data
+            const reorderData = items.map(item => ({
+                id: item.id,
+                orderIndex: item.orderIndex
+            }));
+            
+            // Optimistic update
+            setStandards(prev => {
+                const newStandards = [...prev];
+                items.forEach(item => {
+                    const index = newStandards.findIndex(s => s.id === item.id);
+                    if (index !== -1) {
+                        newStandards[index] = { ...newStandards[index], ...item };
+                    }
+                });
+                return newStandards.sort((a, b) => (a.orderIndex || 0) - (b.orderIndex || 0));
+            });
+            
+            // Call API to persist reorder
+            await assessmentService.reorderStandards(reorderData);
+        } catch (err) {
+            console.error('Failed to reorder standards:', err);
+            // Reload data on failure to revert optimistic update
+            await loadData();
+            toast({
+                variant: 'destructive',
+                title: 'Error reordering standards',
+                description: err instanceof Error ? err.message : 'Failed to reorder standards',
+            });
+            throw err;
+        }
+    }, [loadData, toast]);
 
     const addAspect = useCallback(async (aspect: any) => {
         try {
-            const newAspect: Aspect = {
-                ...aspect,
-                id: `asp-${Date.now()}`,
-                standardCount: 0
-            };
-            const newAspects = [...aspects, newAspect];
-            setAspects(newAspects);
-            saveToSession(newAspects, standards);
+            // Call API to create aspect
+            const newAspect = await assessmentService.createAspect({
+                code: aspect.code,
+                name: aspect.name,
+                description: aspect.description || '',
+                isCustom: aspect.isCustom !== false, // Default to true for new aspects
+            });
+            
+            // Update local state
+            setAspects(prev => [...prev, newAspect]);
+            
+            toast({
+                title: 'Aspect created',
+                description: `Successfully created aspect ${newAspect.name}`,
+            });
         } catch (err) {
-            console.error(err);
+            console.error('Failed to create aspect:', err);
+            toast({
+                variant: 'destructive',
+                title: 'Error creating aspect',
+                description: err instanceof Error ? err.message : 'Failed to create aspect',
+            });
             throw err;
         }
-    }, [aspects, standards, saveToSession]);
+    }, [toast]);
 
     const updateAspect = useCallback(async (aspect: Aspect) => {
         try {
-            const newAspects = aspects.map(a => a.id === aspect.id ? aspect : a);
-            setAspects(newAspects);
-            saveToSession(newAspects, standards);
+            // Call API to update aspect
+            const updatedAspect = await assessmentService.updateAspect(aspect);
+            
+            // Update local state
+            setAspects(prev => prev.map(a => 
+                a.id === aspect.id ? updatedAspect : a
+            ));
+            
+            toast({
+                title: 'Aspect updated',
+                description: `Successfully updated aspect ${updatedAspect.name}`,
+            });
         } catch (err) {
-            console.error(err);
+            console.error('Failed to update aspect:', err);
+            toast({
+                variant: 'destructive',
+                title: 'Error updating aspect',
+                description: err instanceof Error ? err.message : 'Failed to update aspect',
+            });
             throw err;
         }
-    }, [aspects, standards, saveToSession]);
+    }, [toast]);
 
     const deleteAspect = useCallback(async (id: string) => {
         try {
-            const newAspects = aspects.filter(a => a.id !== id);
-            setAspects(newAspects);
-            saveToSession(newAspects, standards);
+            // Call API to delete aspect
+            await assessmentService.deleteAspect(id);
+            
+            // Update local state
+            setAspects(prev => prev.filter(a => a.id !== id));
+            
+            // Also remove standards associated with this aspect
+            setStandards(prev => prev.filter(s => s.aspectId !== id));
+            
+            toast({
+                title: 'Aspect deleted',
+                description: 'Successfully deleted aspect',
+            });
         } catch (err) {
-            console.error(err);
+            console.error('Failed to delete aspect:', err);
+            toast({
+                variant: 'destructive',
+                title: 'Error deleting aspect',
+                description: err instanceof Error ? err.message : 'Failed to delete aspect. It may have associated standards.',
+            });
             throw err;
         }
-    }, [aspects, standards, saveToSession]);
+    }, [toast]);
 
-    const resetToDefaults = useCallback(() => {
-        const initialAspects = getInitialAspects();
-        const initialStandards = getInitialStandards();
-        setAspects(initialAspects);
-        setStandards(initialStandards);
-        saveToSession(initialAspects, initialStandards);
-    }, [saveToSession]);
+    const resetToDefaults = useCallback(async () => {
+        // Reload data from API
+        await loadData();
+        toast({
+            title: 'Data refreshed',
+            description: 'Successfully reloaded aspects and standards',
+        });
+    }, [loadData, toast]);
 
     return {
         aspects,

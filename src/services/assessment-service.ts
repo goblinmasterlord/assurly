@@ -227,15 +227,13 @@ export const getTerms = async () => {
 export const getAspects = async (): Promise<Aspect[]> => {
   try {
     const response = await apiClient.get('/api/aspects');
-    // Transform response if necessary, assuming backend returns matching structure for now
-    // or map it:
     return response.data.map((a: any) => ({
       id: a.aspect_id,
-      code: a.code,
-      name: a.name || a.aspect_name || a.title || 'Untitled Aspect',
+      code: a.aspect_id,
+      name: a.aspect_name,
       description: a.description,
-      isCustom: a.is_custom,
-      standardCount: a.standard_count || 0
+      isCustom: a.is_custom !== false, // Assume custom unless explicitly marked otherwise
+      standardCount: a.standards_count || 0
     }));
   } catch (error) {
     console.error('Failed to fetch aspects:', error);
@@ -246,42 +244,41 @@ export const getAspects = async (): Promise<Aspect[]> => {
 export const createAspect = async (aspect: Omit<Aspect, 'id' | 'standardCount'>): Promise<Aspect> => {
   try {
     const payload = {
-      name: aspect.name,
-      code: aspect.code,
-      description: aspect.description,
-      is_custom: aspect.isCustom
+      aspect_id: aspect.code,
+      aspect_name: aspect.name
     };
     const response = await apiClient.post('/api/aspects', payload);
     return {
       id: response.data.aspect_id,
-      code: response.data.code,
-      name: response.data.name,
+      code: response.data.aspect_id,
+      name: response.data.aspect_name,
       description: response.data.description,
-      isCustom: response.data.is_custom,
-      standardCount: 0
+      isCustom: true, // Custom aspects created by users
+      standardCount: response.data.standards_count || 0
     };
-  } catch (error) {
+  } catch (error: any) {
     console.error('Failed to create aspect:', error);
-    throw new Error('Failed to create aspect.');
+    const errorMsg = error.response?.data?.detail || 'Failed to create aspect.';
+    throw new Error(errorMsg);
   }
 };
 
 export const updateAspect = async (aspect: Aspect): Promise<Aspect> => {
   try {
     const payload = {
-      name: aspect.name,
-      description: aspect.description,
-      // code and is_custom usually shouldn't change
+      aspect_name: aspect.name
     };
     const response = await apiClient.put(`/api/aspects/${aspect.id}`, payload);
     return {
       ...aspect,
-      name: response.data.name,
-      description: response.data.description
+      name: response.data.aspect_name,
+      description: response.data.description,
+      standardCount: response.data.standards_count || aspect.standardCount
     };
-  } catch (error) {
+  } catch (error: any) {
     console.error('Failed to update aspect:', error);
-    throw new Error('Failed to update aspect.');
+    const errorMsg = error.response?.data?.detail || 'Failed to update aspect.';
+    throw new Error(errorMsg);
   }
 };
 
@@ -299,32 +296,35 @@ export const deleteAspect = async (id: string): Promise<void> => {
 export const createStandard = async (standard: Omit<Standard, 'id' | 'lastUpdated' | 'versions'> & { aspectId: string, orderIndex: number }): Promise<Standard> => {
   try {
     const payload = {
+      standard_id: standard.code,
+      standard_name: standard.title,
       aspect_id: standard.aspectId,
-      code: standard.code,
-      title: standard.title,
-      description: standard.description,
-      order_index: standard.orderIndex
+      description: standard.description || ''
     };
     const response = await apiClient.post('/api/standards', payload);
     return transformStandardResponse(response.data);
-  } catch (error) {
+  } catch (error: any) {
     console.error('Failed to create standard:', error);
-    throw new Error('Failed to create standard.');
+    const errorMsg = error.response?.data?.detail || 'Failed to create standard.';
+    throw new Error(errorMsg);
   }
 };
 
 export const updateStandardDefinition = async (standard: Standard): Promise<Standard> => {
   try {
-    const payload = {
-      code: standard.code,
-      title: standard.title,
-      description: standard.description,
-    };
+    const payload: any = {};
+    
+    // Only include fields that are being updated
+    if (standard.title) payload.standard_name = standard.title;
+    if (standard.description !== undefined) payload.description = standard.description;
+    if (standard.aspectId) payload.aspect_id = standard.aspectId;
+    
     const response = await apiClient.put(`/api/standards/${standard.id}`, payload);
     return transformStandardResponse(response.data);
-  } catch (error) {
+  } catch (error: any) {
     console.error('Failed to update standard:', error);
-    throw new Error('Failed to update standard.');
+    const errorMsg = error.response?.data?.detail || 'Failed to update standard.';
+    throw new Error(errorMsg);
   }
 };
 
