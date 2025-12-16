@@ -139,7 +139,7 @@ export function CreateStandardModal({ open, onOpenChange, onSave, standard, defa
 
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
-            <DialogContent className="sm:max-w-[600px]">
+            <DialogContent className="sm:max-w-[600px]" key={standard?.id || 'new'}>
                 <DialogHeader>
                     <DialogTitle>{standard ? 'Edit Standard' : 'Create New Standard'}</DialogTitle>
                     <DialogDescription>
@@ -158,7 +158,11 @@ export function CreateStandardModal({ open, onOpenChange, onSave, standard, defa
                                 render={({ field }) => (
                                     <FormItem>
                                         <FormLabel>Aspect</FormLabel>
-                                        <Select onValueChange={field.onChange} defaultValue={field.value} disabled={!!standard}>
+                                        <Select 
+                                            onValueChange={field.onChange} 
+                                            value={field.value} 
+                                            disabled={!!standard}
+                                        >
                                             <FormControl>
                                                 <SelectTrigger>
                                                     <SelectValue placeholder="Select aspect" />
@@ -225,6 +229,7 @@ export function CreateStandardModal({ open, onOpenChange, onSave, standard, defa
                                                 placeholder="Detailed description of the standard..."
                                                 className="min-h-[100px] pr-12"
                                                 {...field}
+                                                value={field.value || ''}
                                                 onChange={(e) => {
                                                     const value = e.target.value;
                                                     if (value.length <= 250) {
@@ -232,9 +237,9 @@ export function CreateStandardModal({ open, onOpenChange, onSave, standard, defa
                                                     }
                                                 }}
                                             />
-                                            <div className={`absolute bottom-2 right-2 text-xs ${field.value.length >= 250 ? 'text-destructive font-medium' : 'text-muted-foreground'
+                                            <div className={`absolute bottom-2 right-2 text-xs ${(field.value?.length || 0) >= 250 ? 'text-destructive font-medium' : 'text-muted-foreground'
                                                 }`}>
-                                                {field.value.length}/250
+                                                {field.value?.length || 0}/250
                                             </div>
                                         </div>
                                     </FormControl>

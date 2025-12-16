@@ -380,3 +380,4 @@ If auto-ID doesn't work:
 3. **Check Aspect Code:** Ensure aspect has valid `code` field
 4. **Check Regex:** Verify standard codes match pattern (letters + numbers)
 
+
