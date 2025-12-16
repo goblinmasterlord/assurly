@@ -23,7 +23,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { type Standard, type Aspect } from '@/types/assessment';
-import { useEffect } from 'react';
+import { useEffect, useCallback } from 'react';
 
 const formSchema = z.object({
     code: z.string().min(2, 'Code must be at least 2 characters').max(10, 'Code must be less than 10 characters'),
@@ -55,8 +55,8 @@ export function CreateStandardModal({ open, onOpenChange, onSave, standard, defa
         },
     });
 
-    // Generate next standard ID for an aspect
-    const generateNextStandardId = (aspectId: string): string => {
+    // Generate next standard ID for an aspect - memoized to prevent recreation
+    const generateNextStandardId = useCallback((aspectId: string): string => {
         const aspect = aspects.find(a => a.id === aspectId);
         if (!aspect) return '';
         
@@ -82,9 +82,11 @@ export function CreateStandardModal({ open, onOpenChange, onSave, standard, defa
         // Get the highest number and add 1
         const maxNumber = numbers.length > 0 ? Math.max(...numbers) : 0;
         return `${aspectCode}${maxNumber + 1}`;
-    };
+    }, [aspects, allStandards]);
 
     useEffect(() => {
+        if (!open) return; // Don't run if modal is closed
+        
         if (standard) {
             form.reset({
                 code: standard.code,
@@ -101,16 +103,16 @@ export function CreateStandardModal({ open, onOpenChange, onSave, standard, defa
                 aspectId: defaultAspectId || '',
             });
         }
-    }, [standard, defaultAspectId, form, open]);
+    }, [standard, defaultAspectId, generateNextStandardId, open]);
 
-    // Update code when aspect changes
+    // Update code when aspect changes (only for new standards)
     const watchedAspectId = form.watch('aspectId');
     useEffect(() => {
         if (!standard && watchedAspectId && open) {
             const nextCode = generateNextStandardId(watchedAspectId);
             form.setValue('code', nextCode);
         }
-    }, [watchedAspectId, standard, open]);
+    }, [watchedAspectId, standard, open, generateNextStandardId]);
 
     function onSubmit(values: z.infer<typeof formSchema>) {
         // Create a standard object from the form values
