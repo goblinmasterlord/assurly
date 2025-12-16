@@ -157,13 +157,21 @@ export default function StandardsManagement() {
             if (editingStandard) {
                 await updateStandard(standard);
             } else {
+                // Get all standards for this aspect to calculate next orderIndex
+                const aspectStandards = standards.filter(s => 
+                    (s as any).aspectId === currentAspect.id || s.category === currentAspect.code
+                );
+                
+                // Find the highest orderIndex and add 1 to put new standard at bottom
+                const maxOrderIndex = aspectStandards.length > 0 
+                    ? Math.max(...aspectStandards.map(s => s.orderIndex || 0))
+                    : -1;
+                
                 const standardWithAspect = {
                     ...standard,
                     aspectId: (standard as any).aspectId || currentAspect.id,
                     category: standard.category || currentAspect.code,
-                    orderIndex: standards.filter(s => 
-                        (s as any).aspectId === currentAspect.id || s.category === currentAspect.code
-                    ).length
+                    orderIndex: maxOrderIndex + 1
                 };
                 await addStandard(standardWithAspect);
             }
@@ -440,6 +448,7 @@ export default function StandardsManagement() {
                 standard={editingStandard}
                 defaultAspectId={currentAspect.id}
                 aspects={aspects}
+                allStandards={standards}
             />
 
             <CreateAspectModal

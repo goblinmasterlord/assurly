@@ -41,9 +41,10 @@ interface CreateStandardModalProps {
     standard?: Standard; // If provided, we are in edit mode
     defaultAspectId?: string;
     aspects: Aspect[];
+    allStandards?: Standard[]; // All standards to help generate next ID
 }
 
-export function CreateStandardModal({ open, onOpenChange, onSave, standard, defaultAspectId, aspects }: CreateStandardModalProps) {
+export function CreateStandardModal({ open, onOpenChange, onSave, standard, defaultAspectId, aspects, allStandards = [] }: CreateStandardModalProps) {
     const form = useForm<z.infer<typeof formSchema>>({
         resolver: zodResolver(formSchema),
         defaultValues: {
@@ -54,6 +55,35 @@ export function CreateStandardModal({ open, onOpenChange, onSave, standard, defa
         },
     });
 
+    // Generate next standard ID for an aspect
+    const generateNextStandardId = (aspectId: string): string => {
+        const aspect = aspects.find(a => a.id === aspectId);
+        if (!aspect) return '';
+        
+        // Get aspect code prefix (first 2-3 letters uppercase)
+        const aspectCode = aspect.code.toUpperCase().slice(0, 3);
+        
+        // Find all standards for this aspect
+        const aspectStandards = allStandards.filter(s => s.aspectId === aspectId);
+        
+        if (aspectStandards.length === 0) {
+            return `${aspectCode}1`;
+        }
+        
+        // Extract numbers from existing standard codes
+        const numbers = aspectStandards
+            .map(s => {
+                // Extract number from codes like "ES1", "EDU2", etc.
+                const match = s.code.match(/\d+$/);
+                return match ? parseInt(match[0], 10) : 0;
+            })
+            .filter(n => n > 0);
+        
+        // Get the highest number and add 1
+        const maxNumber = numbers.length > 0 ? Math.max(...numbers) : 0;
+        return `${aspectCode}${maxNumber + 1}`;
+    };
+
     useEffect(() => {
         if (standard) {
             form.reset({
@@ -63,14 +93,24 @@ export function CreateStandardModal({ open, onOpenChange, onSave, standard, defa
                 aspectId: standard.aspectId || '',
             });
         } else {
+            const nextCode = defaultAspectId ? generateNextStandardId(defaultAspectId) : '';
             form.reset({
-                code: '',
+                code: nextCode,
                 title: '',
                 description: '',
                 aspectId: defaultAspectId || '',
             });
         }
-    }, [standard, defaultAspectId, form]);
+    }, [standard, defaultAspectId, form, open]);
+
+    // Update code when aspect changes
+    const watchedAspectId = form.watch('aspectId');
+    useEffect(() => {
+        if (!standard && watchedAspectId && open) {
+            const nextCode = generateNextStandardId(watchedAspectId);
+            form.setValue('code', nextCode);
+        }
+    }, [watchedAspectId, standard, open]);
 
     function onSubmit(values: z.infer<typeof formSchema>) {
         // Create a standard object from the form values
@@ -142,9 +182,15 @@ export function CreateStandardModal({ open, onOpenChange, onSave, standard, defa
                                     <FormItem>
                                         <FormLabel>Standard Code</FormLabel>
                                         <FormControl>
-                                            <Input placeholder="e.g. LDR1" {...field} />
+                                            <Input 
+                                                placeholder="e.g. EDU1" 
+                                                {...field} 
+                                                disabled={!!standard}
+                                            />
                                         </FormControl>
-                                        <FormDescription>Unique identifier</FormDescription>
+                                        <FormDescription>
+                                            {standard ? 'Cannot change code of existing standard' : 'Auto-generated based on aspect'}
+                                        </FormDescription>
                                         <FormMessage />
                                     </FormItem>
                                 )}

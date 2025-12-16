@@ -129,10 +129,12 @@ export function useStandardsPersistence() {
 
     const reorderStandards = useCallback(async (items: any[]) => {
         try {
-            // Prepare reorder data
+            // Prepare reorder data with full standard info
             const reorderData = items.map(item => ({
                 id: item.id,
-                orderIndex: item.orderIndex
+                orderIndex: item.orderIndex,
+                title: item.title,
+                description: item.description
             }));
             
             // Optimistic update
@@ -149,6 +151,11 @@ export function useStandardsPersistence() {
             
             // Call API to persist reorder
             await assessmentService.reorderStandards(reorderData);
+            
+            toast({
+                title: 'Standards reordered',
+                description: `Successfully reordered ${items.length} standard${items.length > 1 ? 's' : ''}`,
+            });
         } catch (err) {
             console.error('Failed to reorder standards:', err);
             // Reload data on failure to revert optimistic update

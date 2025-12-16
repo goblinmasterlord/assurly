@@ -341,19 +341,39 @@ export const deleteStandard = async (id: string): Promise<void> => {
   }
 };
 
-export const reorderStandards = async (standards: { id: string; orderIndex: number }[]): Promise<void> => {
+export const reorderStandards = async (standards: { id: string; orderIndex: number; title?: string; description?: string }[]): Promise<void> => {
   try {
+    console.log(`Reordering ${standards.length} standards...`, standards);
+    
     // The backend doesn't have a bulk reorder endpoint yet
     // So we need to update each standard individually
     // We'll do this in parallel for better performance
-    const updatePromises = standards.map(s => 
-      apiClient.put(`/api/standards/${s.id}`, {
-        sort_order: s.orderIndex
-      })
-    );
+    const updatePromises = standards.map(async (s) => {
+      try {
+        // Include all required fields for update
+        const payload: any = {
+          sort_order: s.orderIndex
+        };
+        
+        // If we have the standard's current data, include it to avoid validation errors
+        if (s.title) {
+          payload.standard_name = s.title;
+        }
+        if (s.description !== undefined) {
+          payload.description = s.description;
+        }
+        
+        console.log(`Updating standard ${s.id} with sort_order ${s.orderIndex}`);
+        const response = await apiClient.put(`/api/standards/${s.id}`, payload);
+        return response.data;
+      } catch (error: any) {
+        console.error(`Failed to update standard ${s.id}:`, error.response?.data || error.message);
+        throw error;
+      }
+    });
     
     await Promise.all(updatePromises);
-    console.log(`Successfully reordered ${standards.length} standards`);
+    console.log(`✅ Successfully reordered ${standards.length} standards`);
   } catch (error: any) {
     console.error('Failed to reorder standards:', error);
     const errorMsg = error.response?.data?.detail || 'Failed to reorder standards.';
