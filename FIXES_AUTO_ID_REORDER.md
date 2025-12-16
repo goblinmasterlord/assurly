@@ -32,11 +32,13 @@ const generateNextStandardId = (aspectId: string): string => {
         return `${aspectCode}1`;
     }
     
-    // Extract numbers from existing standard codes
+    // Extract numbers from existing standard IDs (not codes)
+    // Standard IDs come from the database's standard_id field
     const numbers = aspectStandards
         .map(s => {
-            // Extract number from codes like "ES1", "EDU2", etc.
-            const match = s.code.match(/\d+$/);
+            // Extract number from IDs like "ES1", "EDU2", "education1", etc.
+            // Use the actual ID from database, not the code field
+            const match = s.id.match(/\d+$/);
             return match ? parseInt(match[0], 10) : 0;
         })
         .filter(n => n > 0);
@@ -50,8 +52,11 @@ const generateNextStandardId = (aspectId: string): string => {
 **How it works:**
 1. Takes aspect code (e.g., "education" → "EDU")
 2. Finds all existing standards for that aspect
-3. Extracts numbers from standard codes (ES1, ES2, ES5 → [1, 2, 5])
-4. Returns next available number (ES6)
+3. Extracts numbers from standard IDs (standard.id contains the DB's standard_id)
+4. Parses existing IDs (EDU1, EDU2, EDU5 → [1, 2, 5])
+5. Returns next available number (EDU6)
+
+**Important:** Uses `standard.id` (which maps to database's `standard_id`), not `standard.code`
 
 #### Added Props for Standards List
 ```typescript

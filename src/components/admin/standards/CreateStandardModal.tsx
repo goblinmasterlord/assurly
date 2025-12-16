@@ -70,11 +70,13 @@ export function CreateStandardModal({ open, onOpenChange, onSave, standard, defa
             return `${aspectCode}1`;
         }
         
-        // Extract numbers from existing standard codes
+        // Extract numbers from existing standard IDs (not codes)
+        // Standard IDs come from the database's standard_id field
         const numbers = aspectStandards
             .map(s => {
-                // Extract number from codes like "ES1", "EDU2", etc.
-                const match = s.code.match(/\d+$/);
+                // Extract number from IDs like "ES1", "EDU2", "education1", etc.
+                // Use the actual ID from database, not the code field
+                const match = s.id.match(/\d+$/);
                 return match ? parseInt(match[0], 10) : 0;
             })
             .filter(n => n > 0);
