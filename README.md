@@ -145,9 +145,13 @@ assurly/
 ├── public/
 │   ├── robots.txt               # SEO protection
 │   └── Springwell_pack.pdf      # Downloadable resources
-└── .cursor/rules/               # Project documentation
-    ├── project-info.md          # This file
-    ├── api-documentation.md     # API reference
+├── docs/                        # Documentation
+│   ├── api/                     # API documentation
+│   │   ├── API_DOCUMENTATION.md      # Comprehensive API reference (22 endpoints)
+│   │   └── API_QUICK_REFERENCE.md    # Quick reference card
+│   └── archive/                 # Historical documentation
+└── .cursor/rules/               # Project rules and guidelines
+    ├── project-info.md          # Product requirements and architecture
     └── components.mdc           # Component reference
 ```
 
@@ -293,10 +297,10 @@ npm run preview
 
 ### Key Development Files
 
-- **API Integration**: See `src/services/enhanced-assessment-service.ts`
+- **API Integration**: See [`docs/api/API_DOCUMENTATION.md`](docs/api/API_DOCUMENTATION.md) (comprehensive) or [`docs/api/API_QUICK_REFERENCE.md`](docs/api/API_QUICK_REFERENCE.md) (quick reference)
 - **Authentication**: See `src/services/auth-service.ts` and `src/contexts/AuthContext.tsx`
 - **Caching**: See `src/lib/request-cache.ts`
-- **API Docs**: See `.cursor/rules/api-documentation.md`
+- **Recent Changes**: See [`docs/archive/PRODUCTION_API_MIGRATION.md`](docs/archive/PRODUCTION_API_MIGRATION.md) for recent API updates
 
 ### Development Patterns
 

@@ -206,4 +206,6 @@ Production API integration with comprehensive caching:
 - **Token Management**: JWT tokens stored in localStorage with automatic refresh
 - **Error Handling**: Comprehensive error boundaries and fallback UI
 - **Authentication**: Magic link flow with session persistence
-- **Endpoints**: See `.cursor/rules/api-documentation.md` for full API reference
+- **Endpoints**: See [`docs/api/API_DOCUMENTATION.md`](../../docs/api/API_DOCUMENTATION.md) for comprehensive API reference (22 endpoints documented)
+- **Quick Reference**: See [`docs/api/API_QUICK_REFERENCE.md`](../../docs/api/API_QUICK_REFERENCE.md) for one-page reference
+- **Migration Notes**: See [`docs/archive/PRODUCTION_API_MIGRATION.md`](../../docs/archive/PRODUCTION_API_MIGRATION.md) for recent API changes
