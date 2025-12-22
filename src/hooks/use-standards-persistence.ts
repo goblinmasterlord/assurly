@@ -1,11 +1,11 @@
 import { useState, useEffect, useCallback } from 'react';
 import { assessmentService } from '@/services/enhanced-assessment-service';
-import type { Aspect, Standard } from '@/types/assessment';
+import type { MatAspect, MatStandard } from '@/types/assessment';
 import { useToast } from '@/hooks/use-toast';
 
 export function useStandardsPersistence() {
-    const [aspects, setAspects] = useState<Aspect[]>([]);
-    const [standards, setStandards] = useState<Standard[]>([]);
+    const [aspects, setAspects] = useState<MatAspect[]>([]);
+    const [standards, setStandards] = useState<MatStandard[]>([]);
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
     const { toast } = useToast();
@@ -43,14 +43,20 @@ export function useStandardsPersistence() {
 
     const addStandard = useCallback(async (standard: any) => {
         try {
-            // Call API to create standard
+            // Call API to create standard (v3.0)
             const newStandard = await assessmentService.createStandard({
-                code: standard.code,
-                title: standard.title,
-                description: standard.description || '',
-                aspectId: standard.aspectId,
-                orderIndex: standard.orderIndex,
-                rating: null,
+                mat_aspect_id: standard.mat_aspect_id,
+                standard_code: standard.standard_code,
+                standard_name: standard.standard_name,
+                standard_description: standard.standard_description || '',
+                sort_order: standard.sort_order ?? 0,
+                source_standard_id: standard.source_standard_id,
+                is_custom: standard.is_custom ?? true,
+                is_modified: standard.is_modified ?? false,
+                aspect_code: standard.aspect_code,
+                aspect_name: standard.aspect_name,
+                is_active: true,
+                change_reason: standard.change_reason || 'Initial version',
             });
             
             // Update local state
@@ -62,7 +68,7 @@ export function useStandardsPersistence() {
             
             toast({
                 title: 'Standard created',
-                description: `Successfully created standard ${newStandard.code}`,
+                description: `Successfully created standard ${newStandard.standard_code}`,
             });
         } catch (err) {
             console.error('Failed to create standard:', err);
@@ -75,19 +81,19 @@ export function useStandardsPersistence() {
         }
     }, [toast]);
 
-    const updateStandard = useCallback(async (standard: Standard) => {
+    const updateStandard = useCallback(async (standard: MatStandard & { change_reason: string }) => {
         try {
-            // Call API to update standard
+            // Call API to update standard (v3.0 - creates new version)
             const updatedStandard = await assessmentService.updateStandardDefinition(standard);
             
             // Update local state
             setStandards(prev => prev.map(s => 
-                s.id === standard.id ? updatedStandard : s
+                s.mat_standard_id === standard.mat_standard_id ? updatedStandard : s
             ));
             
             toast({
                 title: 'Standard updated',
-                description: `Successfully updated standard ${updatedStandard.code}`,
+                description: `Successfully updated standard ${updatedStandard.standard_code} (v${updatedStandard.version_number})`,
             });
         } catch (err) {
             console.error('Failed to update standard:', err);
@@ -106,7 +112,7 @@ export function useStandardsPersistence() {
             await assessmentService.deleteStandard(id);
             
             // Update local state
-            setStandards(prev => prev.filter(s => s.id !== id));
+            setStandards(prev => prev.filter(s => s.mat_standard_id !== id));
             
             // Refresh aspects to update standard counts
             const updatedAspects = await assessmentService.getAspects();
@@ -129,24 +135,28 @@ export function useStandardsPersistence() {
 
     const reorderStandards = useCallback(async (items: any[]) => {
         try {
-            // Prepare reorder data with full standard info
+            // Prepare reorder data with full standard info (v3.0)
             const reorderData = items.map(item => ({
-                id: item.id,
-                orderIndex: item.orderIndex,
-                title: item.title,
-                description: item.description
+                id: item.mat_standard_id || item.id,
+                orderIndex: item.sort_order ?? item.orderIndex,
+                title: item.standard_name || item.title,
+                description: item.standard_description || item.description
             }));
             
             // Optimistic update
             setStandards(prev => {
                 const newStandards = [...prev];
                 items.forEach(item => {
-                    const index = newStandards.findIndex(s => s.id === item.id);
+                    const itemId = item.mat_standard_id || item.id;
+                    const index = newStandards.findIndex(s => s.mat_standard_id === itemId);
                     if (index !== -1) {
-                        newStandards[index] = { ...newStandards[index], ...item };
+                        newStandards[index] = { 
+                            ...newStandards[index], 
+                            sort_order: item.sort_order ?? item.orderIndex 
+                        };
                     }
                 });
-                return newStandards.sort((a, b) => (a.orderIndex || 0) - (b.orderIndex || 0));
+                return newStandards.sort((a, b) => (a.sort_order || 0) - (b.sort_order || 0));
             });
             
             // Call API to persist reorder
@@ -171,12 +181,16 @@ export function useStandardsPersistence() {
 
     const addAspect = useCallback(async (aspect: any) => {
         try {
-            // Call API to create aspect
+            // Call API to create aspect (v3.0)
             const newAspect = await assessmentService.createAspect({
-                code: aspect.code,
-                name: aspect.name,
-                description: aspect.description || '',
-                isCustom: aspect.isCustom !== false, // Default to true for new aspects
+                aspect_code: aspect.aspect_code,
+                aspect_name: aspect.aspect_name,
+                aspect_description: aspect.aspect_description || '',
+                sort_order: aspect.sort_order ?? 0,
+                source_aspect_id: aspect.source_aspect_id,
+                is_custom: aspect.is_custom ?? true,
+                is_modified: aspect.is_modified ?? false,
+                is_active: true,
             });
             
             // Update local state
@@ -184,7 +198,7 @@ export function useStandardsPersistence() {
             
             toast({
                 title: 'Aspect created',
-                description: `Successfully created aspect ${newAspect.name}`,
+                description: `Successfully created aspect ${newAspect.aspect_name}`,
             });
         } catch (err) {
             console.error('Failed to create aspect:', err);
@@ -197,19 +211,19 @@ export function useStandardsPersistence() {
         }
     }, [toast]);
 
-    const updateAspect = useCallback(async (aspect: Aspect) => {
+    const updateAspect = useCallback(async (aspect: MatAspect) => {
         try {
             // Call API to update aspect
             const updatedAspect = await assessmentService.updateAspect(aspect);
             
             // Update local state
             setAspects(prev => prev.map(a => 
-                a.id === aspect.id ? updatedAspect : a
+                a.mat_aspect_id === aspect.mat_aspect_id ? updatedAspect : a
             ));
             
             toast({
                 title: 'Aspect updated',
-                description: `Successfully updated aspect ${updatedAspect.name}`,
+                description: `Successfully updated aspect ${updatedAspect.aspect_name}`,
             });
         } catch (err) {
             console.error('Failed to update aspect:', err);
@@ -228,10 +242,10 @@ export function useStandardsPersistence() {
             await assessmentService.deleteAspect(id);
             
             // Update local state
-            setAspects(prev => prev.filter(a => a.id !== id));
+            setAspects(prev => prev.filter(a => a.mat_aspect_id !== id));
             
             // Also remove standards associated with this aspect
-            setStandards(prev => prev.filter(s => s.aspectId !== id));
+            setStandards(prev => prev.filter(s => s.mat_aspect_id !== id));
             
             toast({
                 title: 'Aspect deleted',

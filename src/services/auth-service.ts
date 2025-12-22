@@ -59,16 +59,20 @@ class AuthService {
         this.setStoredToken(response.data.access_token);
       }
       
-      // Map backend user to our User type
+      // Map backend user to our User type (v3.0)
       let mappedUser: User | null = null;
       if (response.data.user) {
-        const user = response.data.user;
+        const backendUser = response.data.user;
         mappedUser = {
-          id: user.user_id || user.id || 'unknown',
-          email: user.email,
-          name: user.full_name || user.name || null,
-          role: (user.role === 'mat_admin' || user.role === 'mat-admin') ? 'mat-admin' : 'department-head',
-          schools: user.school_id ? [user.school_id] : []
+          user_id: backendUser.user_id,
+          email: backendUser.email,
+          first_name: backendUser.first_name,
+          last_name: backendUser.last_name,
+          role_title: backendUser.role_title,
+          mat_id: backendUser.mat_id,
+          school_id: backendUser.school_id,
+          created_at: backendUser.created_at,
+          updated_at: backendUser.updated_at
         };
       }
       
@@ -103,17 +107,25 @@ class AuthService {
       logger.debug('Fetching current session from /api/auth/me');
       const response = await apiClient.get<any>('/api/auth/me');
       
-      // Map backend user to our User type
+      // Map backend user to our User type (v3.0)
       if (response.data) {
         const backendUser = response.data;
         const user: User = {
-          id: backendUser.user_id,
+          user_id: backendUser.user_id,
           email: backendUser.email,
-          name: backendUser.full_name,
-          role: backendUser.role === 'mat_admin' ? 'mat-admin' : 'department-head',
-          schools: backendUser.school_id ? [backendUser.school_id] : []
+          first_name: backendUser.first_name,
+          last_name: backendUser.last_name,
+          role_title: backendUser.role_title,
+          mat_id: backendUser.mat_id,
+          school_id: backendUser.school_id,
+          created_at: backendUser.created_at,
+          updated_at: backendUser.updated_at
         };
-        logger.debug('Session validated successfully', { userId: user.id, role: user.role });
+        logger.debug('Session validated successfully', { 
+          userId: user.user_id, 
+          role: user.role_title, 
+          matId: user.mat_id 
+        });
         return { user };
       }
       return null;

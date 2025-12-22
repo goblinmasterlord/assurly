@@ -14,8 +14,9 @@ import {
   updateStandardDefinition as apiUpdateStandardDefinition,
   deleteStandard as apiDeleteStandard,
   reorderStandards as apiReorderStandards,
+  getStandardVersions as apiGetStandardVersions,
 } from '@/services/assessment-service';
-import type { Assessment, Rating, AssessmentCategory, AcademicTerm, AcademicYear, School, Standard, Aspect } from '@/types/assessment';
+import type { Assessment, Rating, AssessmentCategory, AcademicTerm, AcademicYear, School, MatStandard, MatAspect, StandardVersion } from '@/types/assessment';
 
 // Enhanced service with caching, optimistic updates, and intelligent data management
 export class EnhancedAssessmentService {
@@ -215,7 +216,7 @@ export class EnhancedAssessmentService {
 
   // ===== ASPECTS OPERATIONS =====
 
-  async getAspects(): Promise<Aspect[]> {
+  async getAspects(): Promise<MatAspect[]> {
     console.log('[EnhancedAssessmentService] Fetching aspects from API...');
     const aspects = await requestCache.get(
       'aspects',
@@ -225,13 +226,13 @@ export class EnhancedAssessmentService {
     return aspects;
   }
 
-  async createAspect(aspect: Omit<Aspect, 'id' | 'standardCount'>): Promise<Aspect> {
+  async createAspect(aspect: Omit<MatAspect, 'mat_aspect_id' | 'mat_id' | 'standards_count' | 'created_at' | 'updated_at'>): Promise<MatAspect> {
     const newAspect = await apiCreateAspect(aspect);
     requestCache.invalidate('aspects');
     return newAspect;
   }
 
-  async updateAspect(aspect: Aspect): Promise<Aspect> {
+  async updateAspect(aspect: MatAspect): Promise<MatAspect> {
     const updated = await apiUpdateAspect(aspect);
     requestCache.invalidate('aspects');
     return updated;
@@ -248,18 +249,18 @@ export class EnhancedAssessmentService {
   /**
    * Get standards with caching by aspect
    */
-  async getStandards(aspectId?: string): Promise<Standard[]> {
+  async getStandards(matAspectId?: string): Promise<MatStandard[]> {
     console.log(`[EnhancedAssessmentService] Fetching standards from API${aspectId ? ` for aspect ${aspectId}` : ''}...`);
     const standards = await requestCache.get(
       'standards',
-      () => apiGetStandards(aspectId),
-      { aspectId: aspectId || 'all' }
+      () => apiGetStandards(matAspectId),
+      { aspectId: matAspectId || 'all' }
     );
     console.log(`[EnhancedAssessmentService] Fetched ${standards.length} standards`);
     return standards;
   }
 
-  async createStandard(standard: Omit<Standard, 'id' | 'lastUpdated' | 'versions'> & { aspectId: string, orderIndex: number }): Promise<Standard> {
+  async createStandard(standard: Omit<MatStandard, 'mat_standard_id' | 'mat_id' | 'version_number' | 'version_id' | 'created_at' | 'updated_at'> & { change_reason: string }): Promise<MatStandard> {
     const newStandard = await apiCreateStandard(standard);
     requestCache.invalidate('standards', { aspectId: standard.aspectId });
     requestCache.invalidate('standards', { aspectId: 'all' });
@@ -267,7 +268,7 @@ export class EnhancedAssessmentService {
     return newStandard;
   }
 
-  async updateStandardDefinition(standard: Standard): Promise<Standard> {
+  async updateStandardDefinition(standard: MatStandard & { change_reason: string }): Promise<MatStandard> {
     const updated = await apiUpdateStandardDefinition(standard);
     // Invalidate all potential standard lists since we don't know the aspect ID easily here without passing it
     // Or we could pass aspectId to this method if needed. For now, invalidate all.
@@ -289,8 +290,19 @@ export class EnhancedAssessmentService {
   /**
    * Subscribe to standards updates
    */
-  subscribeToStandards(callback: (standards: Standard[]) => void, aspectId?: string): () => void {
-    return requestCache.subscribe('standards', callback, { aspectId: aspectId || 'all' });
+  subscribeToStandards(callback: (standards: MatStandard[]) => void, matAspectId?: string): () => void {
+    return requestCache.subscribe('standards', callback, { aspectId: matAspectId || 'all' });
+  }
+
+  /**
+   * Get version history for a standard
+   */
+  async getStandardVersions(matStandardId: string): Promise<StandardVersion[]> {
+    return requestCache.get(
+      'standard_versions',
+      () => apiGetStandardVersions(matStandardId),
+      { id: matStandardId }
+    );
   }
 
   // ===== CACHE MANAGEMENT =====

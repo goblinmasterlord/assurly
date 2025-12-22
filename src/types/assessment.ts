@@ -197,4 +197,71 @@ export interface ApiAssessment {
   standards?: ApiStandard[];
   term?: AcademicTerm;
   academic_year?: AcademicYear;
-} 
+}
+
+// ============================================================================
+// v3.0 Multi-Tenant Types (MAT-scoped)
+// ============================================================================
+
+// MAT-scoped Aspect with copy-on-write tracking
+export interface MatAspect {
+  mat_aspect_id: string;
+  mat_id: string;
+  aspect_code: string;
+  aspect_name: string;
+  aspect_description?: string;
+  sort_order: number;
+  source_aspect_id?: string;  // For copy-on-write tracking
+  is_custom: boolean;         // Created by this MAT
+  is_modified: boolean;       // Modified from source
+  standards_count: number;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+// MAT-scoped Standard with immutable versioning
+export interface MatStandard {
+  mat_standard_id: string;
+  mat_id: string;
+  mat_aspect_id: string;
+  standard_code: string;
+  standard_name: string;
+  standard_description?: string;
+  sort_order: number;
+  source_standard_id?: string;  // For copy-on-write tracking
+  is_custom: boolean;
+  is_modified: boolean;
+  version_number: number;
+  version_id: string;
+  aspect_code?: string;         // For display
+  aspect_name?: string;         // For display
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+  
+  // Assessment-specific fields (when in assessment context)
+  rating?: Rating;
+  evidence_comments?: string;
+  submitted_at?: string;
+  submitted_by?: string;
+}
+
+// Standard Version History
+export interface StandardVersion {
+  version_id: string;
+  mat_standard_id: string;
+  version_number: number;
+  standard_code: string;
+  standard_name: string;
+  standard_description?: string;
+  effective_from: string;
+  effective_to: string | null;  // null = current version
+  created_by_user_id: string;
+  change_reason?: string;
+  created_at: string;
+}
+
+// Type aliases for backward compatibility during migration
+export type { MatAspect as Aspect };
+export type { MatStandard as Standard }; 

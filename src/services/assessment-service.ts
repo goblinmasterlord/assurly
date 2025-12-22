@@ -104,15 +104,38 @@ export const getSchools = async (): Promise<School[]> => {
 /**
  * Fetches all standards from the real API endpoint.
  */
-export const getStandards = async (aspectId?: string): Promise<Standard[]> => {
+export const getStandards = async (matAspectId?: string): Promise<MatStandard[]> => {
   try {
     let url = '/api/standards';
-    if (aspectId) {
-      url += `?aspect_id=${aspectId}`;
+    if (matAspectId) {
+      url += `?mat_aspect_id=${matAspectId}`;  // CHANGED: parameter name
     }
     const response = await apiClient.get(url);
 
-    return response.data.map(transformStandardResponse);
+    return response.data.map((s: any) => ({
+      mat_standard_id: s.mat_standard_id,
+      mat_id: s.mat_id,
+      mat_aspect_id: s.mat_aspect_id,
+      standard_code: s.standard_code,
+      standard_name: s.standard_name,
+      standard_description: s.standard_description,
+      sort_order: s.sort_order ?? 0,
+      source_standard_id: s.source_standard_id,
+      is_custom: s.is_custom,
+      is_modified: s.is_modified,
+      version_number: s.version_number,
+      version_id: s.version_id,
+      aspect_code: s.aspect_code,
+      aspect_name: s.aspect_name,
+      is_active: s.is_active ?? true,
+      created_at: s.created_at,
+      updated_at: s.updated_at,
+      // Assessment-specific fields (if present)
+      rating: s.rating,
+      evidence_comments: s.evidence_comments,
+      submitted_at: s.submitted_at,
+      submitted_by: s.submitted_by
+    }));
   } catch (error) {
     console.error('Failed to fetch standards:', error);
     throw new Error('Failed to load standards. Please try again.');
@@ -224,16 +247,23 @@ export const getTerms = async () => {
 
 // --- Aspects CRUD ---
 
-export const getAspects = async (): Promise<Aspect[]> => {
+export const getAspects = async (): Promise<MatAspect[]> => {
   try {
     const response = await apiClient.get('/api/aspects');
     return response.data.map((a: any) => ({
-      id: a.aspect_id,
-      code: a.aspect_id,
-      name: a.aspect_name,
-      description: a.description,
-      isCustom: a.is_custom !== false, // Assume custom unless explicitly marked otherwise
-      standardCount: a.standards_count || 0
+      mat_aspect_id: a.mat_aspect_id,
+      mat_id: a.mat_id,
+      aspect_code: a.aspect_code,
+      aspect_name: a.aspect_name,
+      aspect_description: a.aspect_description,
+      sort_order: a.sort_order ?? 0,
+      source_aspect_id: a.source_aspect_id,
+      is_custom: a.is_custom,
+      is_modified: a.is_modified,
+      standards_count: a.standards_count || 0,
+      is_active: a.is_active ?? true,
+      created_at: a.created_at,
+      updated_at: a.updated_at
     }));
   } catch (error) {
     console.error('Failed to fetch aspects:', error);
@@ -241,20 +271,33 @@ export const getAspects = async (): Promise<Aspect[]> => {
   }
 };
 
-export const createAspect = async (aspect: Omit<Aspect, 'id' | 'standardCount'>): Promise<Aspect> => {
+export const createAspect = async (
+  aspect: Omit<MatAspect, 'mat_aspect_id' | 'mat_id' | 'standards_count' | 'created_at' | 'updated_at'>
+): Promise<MatAspect> => {
   try {
     const payload = {
-      aspect_id: aspect.code,
-      aspect_name: aspect.name
+      aspect_code: aspect.aspect_code,
+      aspect_name: aspect.aspect_name,
+      aspect_description: aspect.aspect_description,
+      sort_order: aspect.sort_order,
+      source_aspect_id: aspect.source_aspect_id  // For copy-on-write
     };
     const response = await apiClient.post('/api/aspects', payload);
+    
     return {
-      id: response.data.aspect_id,
-      code: response.data.aspect_id,
-      name: response.data.aspect_name,
-      description: response.data.description,
-      isCustom: true, // Custom aspects created by users
-      standardCount: response.data.standards_count || 0
+      mat_aspect_id: response.data.mat_aspect_id,
+      mat_id: response.data.mat_id,
+      aspect_code: response.data.aspect_code,
+      aspect_name: response.data.aspect_name,
+      aspect_description: response.data.aspect_description,
+      sort_order: response.data.sort_order,
+      source_aspect_id: response.data.source_aspect_id,
+      is_custom: response.data.is_custom,
+      is_modified: response.data.is_modified,
+      standards_count: response.data.standards_count || 0,
+      is_active: response.data.is_active ?? true,
+      created_at: response.data.created_at,
+      updated_at: response.data.updated_at
     };
   } catch (error: any) {
     console.error('Failed to create aspect:', error);
@@ -263,17 +306,29 @@ export const createAspect = async (aspect: Omit<Aspect, 'id' | 'standardCount'>)
   }
 };
 
-export const updateAspect = async (aspect: Aspect): Promise<Aspect> => {
+export const updateAspect = async (aspect: MatAspect): Promise<MatAspect> => {
   try {
     const payload = {
-      aspect_name: aspect.name
+      aspect_name: aspect.aspect_name,
+      aspect_description: aspect.aspect_description,
+      sort_order: aspect.sort_order
     };
-    const response = await apiClient.put(`/api/aspects/${aspect.id}`, payload);
+    const response = await apiClient.put(`/api/aspects/${aspect.mat_aspect_id}`, payload);
+    
     return {
-      ...aspect,
-      name: response.data.aspect_name,
-      description: response.data.description,
-      standardCount: response.data.standards_count || aspect.standardCount
+      mat_aspect_id: response.data.mat_aspect_id,
+      mat_id: response.data.mat_id,
+      aspect_code: response.data.aspect_code,
+      aspect_name: response.data.aspect_name,
+      aspect_description: response.data.aspect_description,
+      sort_order: response.data.sort_order,
+      source_aspect_id: response.data.source_aspect_id,
+      is_custom: response.data.is_custom,
+      is_modified: response.data.is_modified,
+      standards_count: response.data.standards_count || 0,
+      is_active: response.data.is_active ?? true,
+      created_at: response.data.created_at,
+      updated_at: response.data.updated_at
     };
   } catch (error: any) {
     console.error('Failed to update aspect:', error);
@@ -293,16 +348,42 @@ export const deleteAspect = async (id: string): Promise<void> => {
 
 // --- Standards CRUD ---
 
-export const createStandard = async (standard: Omit<Standard, 'id' | 'lastUpdated' | 'versions'> & { aspectId: string, orderIndex: number }): Promise<Standard> => {
+export const createStandard = async (
+  standard: Omit<MatStandard, 'mat_standard_id' | 'mat_id' | 'version_number' | 'version_id' | 'created_at' | 'updated_at'> & { 
+    change_reason: string  // REQUIRED for versioning
+  }
+): Promise<MatStandard> => {
   try {
     const payload = {
-      standard_id: standard.code,
-      standard_name: standard.title,
-      aspect_id: standard.aspectId,
-      description: standard.description || ''
+      mat_aspect_id: standard.mat_aspect_id,
+      standard_code: standard.standard_code,
+      standard_name: standard.standard_name,
+      standard_description: standard.standard_description,
+      sort_order: standard.sort_order,
+      source_standard_id: standard.source_standard_id,  // For copy-on-write
+      change_reason: standard.change_reason  // REQUIRED
     };
     const response = await apiClient.post('/api/standards', payload);
-    return transformStandardResponse(response.data);
+    
+    return {
+      mat_standard_id: response.data.mat_standard_id,
+      mat_id: response.data.mat_id,
+      mat_aspect_id: response.data.mat_aspect_id,
+      standard_code: response.data.standard_code,
+      standard_name: response.data.standard_name,
+      standard_description: response.data.standard_description,
+      sort_order: response.data.sort_order,
+      source_standard_id: response.data.source_standard_id,
+      is_custom: response.data.is_custom,
+      is_modified: response.data.is_modified,
+      version_number: response.data.version_number,
+      version_id: response.data.version_id,
+      aspect_code: response.data.aspect_code,
+      aspect_name: response.data.aspect_name,
+      is_active: response.data.is_active ?? true,
+      created_at: response.data.created_at,
+      updated_at: response.data.updated_at
+    };
   } catch (error: any) {
     console.error('Failed to create standard:', error);
     const errorMsg = error.response?.data?.detail || 'Failed to create standard.';
@@ -310,21 +391,37 @@ export const createStandard = async (standard: Omit<Standard, 'id' | 'lastUpdate
   }
 };
 
-export const updateStandardDefinition = async (standard: Standard): Promise<Standard> => {
+export const updateStandardDefinition = async (
+  standard: MatStandard & { change_reason: string }  // REQUIRED for versioning
+): Promise<MatStandard> => {
   try {
-    // Build payload with all fields that can be updated
-    const payload: any = {
-      standard_name: standard.title,
-      description: standard.description || ''
+    const payload = {
+      standard_name: standard.standard_name,
+      standard_description: standard.standard_description,
+      change_reason: standard.change_reason  // REQUIRED - creates new version
     };
     
-    // Only include aspect_id if it's being changed
-    if (standard.aspectId) {
-      payload.aspect_id = standard.aspectId;
-    }
+    const response = await apiClient.put(`/api/standards/${standard.mat_standard_id}`, payload);
     
-    const response = await apiClient.put(`/api/standards/${standard.id}`, payload);
-    return transformStandardResponse(response.data);
+    return {
+      mat_standard_id: response.data.mat_standard_id,
+      mat_id: response.data.mat_id,
+      mat_aspect_id: response.data.mat_aspect_id,
+      standard_code: response.data.standard_code,
+      standard_name: response.data.standard_name,
+      standard_description: response.data.standard_description,
+      sort_order: response.data.sort_order,
+      source_standard_id: response.data.source_standard_id,
+      is_custom: response.data.is_custom,
+      is_modified: response.data.is_modified,
+      version_number: response.data.version_number,  // Incremented
+      version_id: response.data.version_id,          // New version ID
+      aspect_code: response.data.aspect_code,
+      aspect_name: response.data.aspect_name,
+      is_active: response.data.is_active ?? true,
+      created_at: response.data.created_at,
+      updated_at: response.data.updated_at
+    };
   } catch (error: any) {
     console.error('Failed to update standard:', error);
     const errorMsg = error.response?.data?.detail || 'Failed to update standard.';
@@ -334,10 +431,33 @@ export const updateStandardDefinition = async (standard: Standard): Promise<Stan
 
 export const deleteStandard = async (id: string): Promise<void> => {
   try {
-    await apiClient.delete(`/api/standards/${id}`);
+    await apiClient.delete(`/api/standards/${id}`);  // Soft delete on backend
   } catch (error) {
     console.error('Failed to delete standard:', error);
     throw new Error('Failed to delete standard.');
+  }
+};
+
+// NEW FUNCTION - Get version history for a standard
+export const getStandardVersions = async (matStandardId: string): Promise<StandardVersion[]> => {
+  try {
+    const response = await apiClient.get(`/api/standards/${matStandardId}/versions`);
+    return response.data.map((v: any) => ({
+      version_id: v.version_id,
+      mat_standard_id: v.mat_standard_id,
+      version_number: v.version_number,
+      standard_code: v.standard_code,
+      standard_name: v.standard_name,
+      standard_description: v.standard_description,
+      effective_from: v.effective_from,
+      effective_to: v.effective_to,
+      created_by_user_id: v.created_by_user_id,
+      change_reason: v.change_reason,
+      created_at: v.created_at
+    }));
+  } catch (error: any) {
+    console.error('Failed to fetch standard versions:', error);
+    throw new Error('Failed to load version history.');
   }
 };
 
