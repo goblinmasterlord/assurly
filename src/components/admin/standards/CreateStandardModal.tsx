@@ -26,10 +26,11 @@ import { type Standard, type Aspect } from '@/types/assessment';
 import { useEffect, useCallback } from 'react';
 
 const formSchema = z.object({
-    code: z.string().min(2, 'Code must be at least 2 characters').max(10, 'Code must be less than 10 characters'),
-    title: z.string().min(5, 'Title must be at least 5 characters'),
-    description: z.string().min(20, 'Description must be at least 20 characters').max(250, 'Description must be less than 250 characters'),
-    aspectId: z.string().min(1, 'Please select an aspect'),
+    standard_code: z.string().min(2, 'Code must be at least 2 characters').max(10, 'Code must be less than 10 characters'),
+    standard_name: z.string().min(5, 'Title must be at least 5 characters'),
+    standard_description: z.string().min(20, 'Description must be at least 20 characters').max(250, 'Description must be less than 250 characters'),
+    mat_aspect_id: z.string().min(1, 'Please select an aspect'),
+    change_reason: z.string().min(5, 'Please describe the reason for this change').max(200, 'Reason must be less than 200 characters'),
 });
 
 
@@ -48,35 +49,34 @@ export function CreateStandardModal({ open, onOpenChange, onSave, standard, defa
     const form = useForm<z.infer<typeof formSchema>>({
         resolver: zodResolver(formSchema),
         defaultValues: {
-            code: '',
-            title: '',
-            description: '',
-            aspectId: defaultAspectId || '',
+            standard_code: '',
+            standard_name: '',
+            standard_description: '',
+            mat_aspect_id: defaultAspectId || '',
+            change_reason: standard ? 'Updated standard' : 'Initial version',
         },
     });
 
-    // Generate next standard ID for an aspect - memoized to prevent recreation
-    const generateNextStandardId = useCallback((aspectId: string): string => {
-        const aspect = aspects.find(a => a.id === aspectId);
+    // Generate next standard code for an aspect - memoized to prevent recreation
+    const generateNextStandardCode = useCallback((matAspectId: string): string => {
+        const aspect = aspects.find(a => a.mat_aspect_id === matAspectId);
         if (!aspect) return '';
         
         // Get aspect code prefix (first 2-3 letters uppercase)
-        const aspectCode = aspect.code.toUpperCase().slice(0, 3);
+        const aspectCode = aspect.aspect_code.toUpperCase().slice(0, 3);
         
         // Find all standards for this aspect
-        const aspectStandards = allStandards.filter(s => s.aspectId === aspectId);
+        const aspectStandards = allStandards.filter(s => s.mat_aspect_id === matAspectId);
         
         if (aspectStandards.length === 0) {
             return `${aspectCode}1`;
         }
         
-        // Extract numbers from existing standard IDs (not codes)
-        // Standard IDs come from the database's standard_id field
+        // Extract numbers from existing standard codes
         const numbers = aspectStandards
             .map(s => {
-                // Extract number from IDs like "ES1", "EDU2", "education1", etc.
-                // Use the actual ID from database, not the code field
-                const match = s.id.match(/\d+$/);
+                // Extract number from codes like "ES1", "EDU2", "education1", etc.
+                const match = s.standard_code.match(/\d+$/);
                 return match ? parseInt(match[0], 10) : 0;
             })
             .filter(n => n > 0);
@@ -91,48 +91,51 @@ export function CreateStandardModal({ open, onOpenChange, onSave, standard, defa
         
         if (standard) {
             form.reset({
-                code: standard.code,
-                title: standard.title,
-                description: standard.description,
-                aspectId: standard.aspectId || '',
+                standard_code: standard.standard_code,
+                standard_name: standard.standard_name,
+                standard_description: standard.standard_description || '',
+                mat_aspect_id: standard.mat_aspect_id || '',
+                change_reason: `Updating standard (currently v${standard.version_number})`,
             });
         } else {
-            const nextCode = defaultAspectId ? generateNextStandardId(defaultAspectId) : '';
+            const nextCode = defaultAspectId ? generateNextStandardCode(defaultAspectId) : '';
             form.reset({
-                code: nextCode,
-                title: '',
-                description: '',
-                aspectId: defaultAspectId || '',
+                standard_code: nextCode,
+                standard_name: '',
+                standard_description: '',
+                mat_aspect_id: defaultAspectId || '',
+                change_reason: 'Initial version',
             });
         }
-    }, [standard, defaultAspectId, generateNextStandardId, open]);
+    }, [standard, defaultAspectId, generateNextStandardCode, open]);
 
     // Update code when aspect changes (only for new standards)
-    const watchedAspectId = form.watch('aspectId');
+    const watchedAspectId = form.watch('mat_aspect_id');
     useEffect(() => {
         if (!standard && watchedAspectId && open) {
-            const nextCode = generateNextStandardId(watchedAspectId);
-            form.setValue('code', nextCode);
+            const nextCode = generateNextStandardCode(watchedAspectId);
+            form.setValue('standard_code', nextCode);
         }
-    }, [watchedAspectId, standard, open, generateNextStandardId]);
+    }, [watchedAspectId, standard, open, generateNextStandardCode]);
 
     function onSubmit(values: z.infer<typeof formSchema>) {
-        // Create a standard object from the form values
-        const selectedAspect = aspects.find(a => a.id === values.aspectId);
+        // Create a standard object from the form values (v3.0)
+        const selectedAspect = aspects.find(a => a.mat_aspect_id === values.mat_aspect_id);
 
         const standardData = {
-            ...standard, // Keep existing ID and other fields if editing
-            id: standard?.id || `std-${Date.now()}`,
-            code: values.code,
-            title: values.title,
-            description: values.description,
-            aspectId: values.aspectId,
-            category: selectedAspect?.name || 'General', // Fallback for display
-            version: standard?.version || 1,
-            status: standard?.status || 'active',
-            lastModified: new Date().toISOString(),
-            lastModifiedBy: 'Current User', // In a real app, get from auth context
-            versions: standard?.versions || []
+            ...standard, // Keep existing fields if editing
+            mat_standard_id: standard?.mat_standard_id,
+            mat_aspect_id: values.mat_aspect_id,
+            standard_code: values.standard_code,
+            standard_name: values.standard_name,
+            standard_description: values.standard_description,
+            aspect_code: selectedAspect?.aspect_code,
+            aspect_name: selectedAspect?.aspect_name,
+            sort_order: standard?.sort_order ?? 0,
+            is_custom: standard?.is_custom ?? true,
+            is_modified: standard?.is_modified ?? false,
+            is_active: true,
+            change_reason: values.change_reason, // REQUIRED for versioning
         };
 
         onSave(standardData);
@@ -141,7 +144,7 @@ export function CreateStandardModal({ open, onOpenChange, onSave, standard, defa
 
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
-            <DialogContent className="sm:max-w-[600px]" key={standard?.id || 'new'}>
+            <DialogContent className="sm:max-w-[600px]" key={standard?.mat_standard_id || 'new'}>
                 <DialogHeader>
                     <DialogTitle>{standard ? 'Edit Standard' : 'Create New Standard'}</DialogTitle>
                     <DialogDescription>
@@ -156,7 +159,7 @@ export function CreateStandardModal({ open, onOpenChange, onSave, standard, defa
                         <div className="grid grid-cols-2 gap-4">
                             <FormField
                                 control={form.control}
-                                name="aspectId"
+                                name="mat_aspect_id"
                                 render={({ field }) => (
                                     <FormItem>
                                         <FormLabel>Aspect</FormLabel>
@@ -172,8 +175,8 @@ export function CreateStandardModal({ open, onOpenChange, onSave, standard, defa
                                             </FormControl>
                                             <SelectContent>
                                                 {aspects.map((aspect) => (
-                                                    <SelectItem key={aspect.id} value={aspect.id}>
-                                                        {aspect.name}
+                                                    <SelectItem key={aspect.mat_aspect_id} value={aspect.mat_aspect_id}>
+                                                        {aspect.aspect_name}
                                                     </SelectItem>
                                                 ))}
                                             </SelectContent>
@@ -185,7 +188,7 @@ export function CreateStandardModal({ open, onOpenChange, onSave, standard, defa
 
                             <FormField
                                 control={form.control}
-                                name="code"
+                                name="standard_code"
                                 render={({ field }) => (
                                     <FormItem>
                                         <FormLabel>Standard Code</FormLabel>
@@ -207,7 +210,7 @@ export function CreateStandardModal({ open, onOpenChange, onSave, standard, defa
 
                         <FormField
                             control={form.control}
-                            name="title"
+                            name="standard_name"
                             render={({ field }) => (
                                 <FormItem>
                                     <FormLabel>Title</FormLabel>
@@ -221,7 +224,7 @@ export function CreateStandardModal({ open, onOpenChange, onSave, standard, defa
 
                         <FormField
                             control={form.control}
-                            name="description"
+                            name="standard_description"
                             render={({ field }) => (
                                 <FormItem>
                                     <FormLabel>Description</FormLabel>
@@ -245,6 +248,40 @@ export function CreateStandardModal({ open, onOpenChange, onSave, standard, defa
                                             </div>
                                         </div>
                                     </FormControl>
+                                    <FormMessage />
+                                </FormItem>
+                            )}
+                        />
+
+                        <FormField
+                            control={form.control}
+                            name="change_reason"
+                            render={({ field }) => (
+                                <FormItem>
+                                    <FormLabel>Reason for Change {standard && `(creating v${(standard.version_number || 1) + 1})`}</FormLabel>
+                                    <FormControl>
+                                        <div className="relative">
+                                            <Textarea
+                                                placeholder={standard ? "Describe what changed and why..." : "Initial version"}
+                                                className="min-h-[80px] pr-12"
+                                                {...field}
+                                                value={field.value || ''}
+                                                onChange={(e) => {
+                                                    const value = e.target.value;
+                                                    if (value.length <= 200) {
+                                                        field.onChange(e);
+                                                    }
+                                                }}
+                                            />
+                                            <div className={`absolute bottom-2 right-2 text-xs ${(field.value?.length || 0) >= 200 ? 'text-destructive font-medium' : 'text-muted-foreground'
+                                                }`}>
+                                                {field.value?.length || 0}/200
+                                            </div>
+                                        </div>
+                                    </FormControl>
+                                    <FormDescription>
+                                        {standard ? 'Required - changes create a new version' : 'Document why this standard was created'}
+                                    </FormDescription>
                                     <FormMessage />
                                 </FormItem>
                             )}

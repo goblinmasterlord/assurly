@@ -263,5 +263,5 @@ export interface StandardVersion {
 }
 
 // Type aliases for backward compatibility during migration
-export type { MatAspect as Aspect };
-export type { MatStandard as Standard }; 
+export type Aspect = MatAspect;
+export type Standard = MatStandard; 

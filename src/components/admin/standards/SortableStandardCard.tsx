@@ -36,7 +36,7 @@ export function SortableStandardCard({ standard, onEdit, onHistory, onDelete }: 
         transform,
         transition,
         isDragging
-    } = useSortable({ id: standard.id });
+    } = useSortable({ id: standard.mat_standard_id });
 
     const style = {
         transform: CSS.Transform.toString(transform),
@@ -61,29 +61,33 @@ export function SortableStandardCard({ standard, onEdit, onHistory, onDelete }: 
                     <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-3 mb-1">
                             <Badge variant="outline" className="font-mono font-bold">
-                                {standard.code}
+                                {standard.standard_code}
                             </Badge>
-                            <h3 className="font-semibold truncate">{standard.title}</h3>
+                            <h3 className="font-semibold truncate">{standard.standard_name}</h3>
                             <Badge variant="secondary" className="text-xs">
-                                v{standard.version}
+                                v{standard.version_number}
                             </Badge>
-                            {standard.status === 'draft' && (
-                                <Badge variant="outline" className="text-amber-600 border-amber-200 bg-amber-50">
-                                    Draft
+                            {standard.is_custom && (
+                                <Badge variant="outline" className="text-teal-600 border-teal-200 bg-teal-50 text-xs">
+                                    Custom
+                                </Badge>
+                            )}
+                            {standard.is_modified && (
+                                <Badge variant="outline" className="text-amber-600 border-amber-200 bg-amber-50 text-xs">
+                                    Modified
                                 </Badge>
                             )}
                         </div>
 
                         <p className="text-sm text-muted-foreground line-clamp-2 mb-3">
-                            {standard.description}
+                            {standard.standard_description}
                         </p>
 
                         <div className="flex items-center gap-4 text-xs text-muted-foreground">
                             <span className="flex items-center">
                                 <History className="mr-1 h-3 w-3" />
-                                Updated {format(new Date(standard.lastModified || new Date()), 'MMM d, yyyy')}
+                                Updated {format(new Date(standard.updated_at || new Date()), 'MMM d, yyyy')}
                             </span>
-                            <span>by {standard.lastModifiedBy}</span>
                         </div>
                     </div>
 
@@ -113,7 +117,7 @@ export function SortableStandardCard({ standard, onEdit, onHistory, onDelete }: 
                                 </DropdownMenuItem>
                                 <Separator className="my-1" />
                                 <DropdownMenuItem 
-                                    onClick={() => onDelete(standard.id)}
+                                    onClick={() => onDelete(standard.mat_standard_id)}
                                     className="text-destructive focus:text-destructive"
                                 >
                                     <Trash2 className="mr-2 h-4 w-4" />

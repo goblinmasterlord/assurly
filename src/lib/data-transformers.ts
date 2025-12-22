@@ -1,7 +1,7 @@
 import type {
   Assessment,
   School,
-  Standard,
+  MatStandard,
   User,
   AcademicTerm,
   AssessmentCategory,
@@ -29,15 +29,20 @@ interface ApiAssessmentSummary {
 }
 
 interface ApiStandardDetail {
-  standard_id: string;
+  mat_standard_id: string;  // v3.0 field
+  standard_code: string;
   standard_name: string;
-  description: string;
-  area_id: string;
+  standard_description: string;
+  mat_aspect_id: string;  // v3.0 field
+  aspect_name: string;
   rating: number | null;
   evidence_comments: string;
   submitted_at: string | null;
   submitted_by: string;
   has_attachments: number;
+  version_number?: number;
+  version_id?: string;
+  sort_order?: number;
 }
 
 interface ApiAssessmentDetail extends Omit<ApiAssessmentSummary, 'mat_id' | 'completed_standards' | 'total_standards' | 'completion_percentage' | 'overall_score'> {
@@ -54,12 +59,18 @@ interface ApiSchoolResponse {
 }
 
 interface ApiStandardResponse {
-  standard_id: string;
+  mat_standard_id: string;  // v3.0 field
+  mat_aspect_id: string;  // v3.0 field
+  standard_code: string;
   standard_name: string;
-  aspect_id: string;
+  standard_description: string;
+  aspect_code: string;
   aspect_name: string;
-  description: string;
   sort_order: number;
+  version_number: number;
+  version_id: string;
+  is_custom: boolean;
+  is_modified: boolean;
 }
 
 // ------------------------------
@@ -179,38 +190,59 @@ export const transformUser = (userId: string): User => {
 };
 
 /**
- * Transforms API standard detail into frontend Standard format.
+ * Transforms API standard detail into frontend MatStandard format (v3.0).
  */
-export const transformStandard = (apiStandard: ApiStandardDetail): Standard => {
+export const transformStandard = (apiStandard: ApiStandardDetail): MatStandard => {
   return {
-    id: apiStandard.standard_id,
-    code: apiStandard.standard_id, // Using standard_id as code
-    title: apiStandard.standard_name,
-    description: apiStandard.description,
-    rating: apiStandard.rating as any, // Type assertion for rating
-    evidence: apiStandard.evidence_comments,
-    lastUpdated: apiStandard.submitted_at || undefined,
-    attachments: [], // TODO: Handle attachments when backend supports them
+    mat_standard_id: apiStandard.mat_standard_id,
+    mat_id: '', // Not always provided in assessment context
+    mat_aspect_id: apiStandard.mat_aspect_id,
+    standard_code: apiStandard.standard_code,
+    standard_name: apiStandard.standard_name,
+    standard_description: apiStandard.standard_description || '',
+    sort_order: apiStandard.sort_order || 0,
+    source_standard_id: undefined,
+    is_custom: false,
+    is_modified: false,
+    version_number: apiStandard.version_number || 1,
+    version_id: apiStandard.version_id || '',
+    aspect_name: apiStandard.aspect_name,
+    is_active: true,
+    created_at: '',
+    updated_at: apiStandard.submitted_at || '',
+    // Assessment-specific fields
+    rating: apiStandard.rating as any,
+    evidence_comments: apiStandard.evidence_comments,
+    submitted_at: apiStandard.submitted_at || undefined,
+    submitted_by: apiStandard.submitted_by,
   };
 };
 
 /**
- * Transforms API standard response into frontend Standard format.
+ * Transforms API standard response into frontend MatStandard format (v3.0).
  */
-export const transformStandardResponse = (apiStandard: ApiStandardResponse): Standard => {
+export const transformStandardResponse = (apiStandard: ApiStandardResponse): MatStandard => {
   return {
-    id: apiStandard.standard_id,
-    code: apiStandard.standard_id, // Or code if available, but using standard_id as fallback
-    title: apiStandard.standard_name,
-    description: apiStandard.description,
-    rating: null, // Standards from this endpoint don't have ratings yet
-    evidence: '',
-    attachments: [],
-    aspectId: apiStandard.aspect_id,
-    category: apiStandard.aspect_name as any, // Use aspect name as category for display if needed
-    orderIndex: apiStandard.sort_order,
-    version: 1, // Default
-    status: 'active', // Default
+    mat_standard_id: apiStandard.mat_standard_id,
+    mat_id: '', // Not provided in this endpoint
+    mat_aspect_id: apiStandard.mat_aspect_id,
+    standard_code: apiStandard.standard_code,
+    standard_name: apiStandard.standard_name,
+    standard_description: apiStandard.standard_description || '',
+    sort_order: apiStandard.sort_order,
+    source_standard_id: undefined,
+    is_custom: apiStandard.is_custom,
+    is_modified: apiStandard.is_modified,
+    version_number: apiStandard.version_number,
+    version_id: apiStandard.version_id,
+    aspect_code: apiStandard.aspect_code,
+    aspect_name: apiStandard.aspect_name,
+    is_active: true,
+    created_at: '',
+    updated_at: '',
+    // Assessment-specific fields (not present in this context)
+    rating: null,
+    evidence_comments: '',
   };
 };
 

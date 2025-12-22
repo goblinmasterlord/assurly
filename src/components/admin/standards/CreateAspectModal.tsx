@@ -24,9 +24,9 @@ import { Button } from '@/components/ui/button';
 import { type Aspect } from '@/types/assessment';
 
 const formSchema = z.object({
-    name: z.string().min(3, 'Name must be at least 3 characters'),
-    code: z.string().min(2, 'Code must be at least 2 characters').max(10, 'Code must be less than 10 characters'),
-    description: z.string().optional(),
+    aspect_name: z.string().min(3, 'Name must be at least 3 characters'),
+    aspect_code: z.string().min(2, 'Code must be at least 2 characters').max(10, 'Code must be less than 10 characters'),
+    aspect_description: z.string().optional(),
 });
 
 interface CreateAspectModalProps {
@@ -40,9 +40,9 @@ export function CreateAspectModal({ open, onOpenChange, onSave, aspect }: Create
     const form = useForm<z.infer<typeof formSchema>>({
         resolver: zodResolver(formSchema),
         defaultValues: {
-            name: '',
-            code: '',
-            description: '',
+            aspect_name: '',
+            aspect_code: '',
+            aspect_description: '',
         },
     });
 
@@ -51,15 +51,15 @@ export function CreateAspectModal({ open, onOpenChange, onSave, aspect }: Create
         if (open) {
             if (aspect) {
                 form.reset({
-                    name: aspect.name,
-                    code: aspect.code.toUpperCase(),
-                    description: aspect.description,
+                    aspect_name: aspect.aspect_name,
+                    aspect_code: aspect.aspect_code.toUpperCase(),
+                    aspect_description: aspect.aspect_description || '',
                 });
             } else {
                 form.reset({
-                    name: '',
-                    code: '',
-                    description: '',
+                    aspect_name: '',
+                    aspect_code: '',
+                    aspect_description: '',
                 });
             }
         }
@@ -67,12 +67,15 @@ export function CreateAspectModal({ open, onOpenChange, onSave, aspect }: Create
 
     function onSubmit(values: z.infer<typeof formSchema>) {
         const aspectData = {
-            id: aspect?.id || `custom-${values.code.toLowerCase()}`,
-            code: values.code.toLowerCase(),
-            name: values.name,
-            description: values.description || '',
-            isCustom: aspect ? aspect.isCustom : true,
-            standardCount: aspect ? aspect.standardCount : 0
+            mat_aspect_id: aspect?.mat_aspect_id,
+            aspect_code: values.aspect_code.toLowerCase(),
+            aspect_name: values.aspect_name,
+            aspect_description: values.aspect_description || '',
+            sort_order: aspect?.sort_order ?? 0,
+            is_custom: aspect ? aspect.is_custom : true,
+            is_modified: aspect ? aspect.is_modified : false,
+            is_active: true,
+            standards_count: aspect ? aspect.standards_count : 0
         };
 
         onSave(aspectData);
@@ -95,7 +98,7 @@ export function CreateAspectModal({ open, onOpenChange, onSave, aspect }: Create
                     <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
                         <FormField
                             control={form.control}
-                            name="name"
+                            name="aspect_name"
                             render={({ field }) => (
                                 <FormItem>
                                     <FormLabel>Aspect Name</FormLabel>
@@ -109,7 +112,7 @@ export function CreateAspectModal({ open, onOpenChange, onSave, aspect }: Create
 
                         <FormField
                             control={form.control}
-                            name="code"
+                            name="aspect_code"
                             render={({ field }) => (
                                 <FormItem>
                                     <FormLabel>Code</FormLabel>
@@ -123,7 +126,7 @@ export function CreateAspectModal({ open, onOpenChange, onSave, aspect }: Create
 
                         <FormField
                             control={form.control}
-                            name="description"
+                            name="aspect_description"
                             render={({ field }) => (
                                 <FormItem>
                                     <FormLabel>Description (Optional)</FormLabel>

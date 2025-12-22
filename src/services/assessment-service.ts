@@ -1,6 +1,6 @@
 import apiClient from '@/lib/api-client';
-import { transformAssessmentSummary, transformAssessmentDetail, transformSchoolResponse, transformStandardResponse } from '@/lib/data-transformers';
-import type { Assessment, Rating, AssessmentCategory, AcademicTerm, AcademicYear, School, Standard, Aspect } from '@/types/assessment';
+import { transformAssessmentSummary, transformAssessmentDetail, transformSchoolResponse } from '@/lib/data-transformers';
+import type { Assessment, Rating, AssessmentCategory, AcademicTerm, AcademicYear, School, MatStandard, MatAspect, StandardVersion } from '@/types/assessment';
 
 // Add new types for the API responses
 interface ApiSchoolResponse {
@@ -109,8 +109,17 @@ export const getStandards = async (matAspectId?: string): Promise<MatStandard[]>
     let url = '/api/standards';
     if (matAspectId) {
       url += `?mat_aspect_id=${matAspectId}`;  // CHANGED: parameter name
+      console.log(`[getStandards] Fetching standards for aspect: ${matAspectId}`);
+    } else {
+      console.log('[getStandards] Fetching all standards');
     }
     const response = await apiClient.get(url);
+    console.log(`[getStandards] Received ${response.data.length} standards`);
+    
+    // Debug: Check first standard's structure
+    if (response.data.length > 0) {
+      console.log('[getStandards] First standard structure:', response.data[0]);
+    }
 
     return response.data.map((s: any) => ({
       mat_standard_id: s.mat_standard_id,
