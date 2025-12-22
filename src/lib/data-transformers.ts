@@ -7,46 +7,53 @@ import type {
   AssessmentCategory,
 } from '@/types/assessment';
 
-// API response types for the real backend
+// API response types for the actual backend (from ASSESSMENT_API_SPECIFICATION.md)
 interface ApiAssessmentSummary {
-  assessment_id: string;
-  name: string;
-  category: string;
+  assessment_id: string;                        // Composite: {school_id}-{aspect_id}-{term_id}-{academic_year}
   school_id: string;
   school_name: string;
-  mat_id: string;
-  status: string;
-  completed_standards: number;
-  total_standards: number;
-  completion_percentage: number;
-  overall_score: number;
-  due_date: string;
-  assigned_to: string[];
-  last_updated: string;
+  aspect_id: string;                            // Simple string: "edu", "gov", "safe"
+  aspect_code: string;                          // "EDU", "GOV", "SAFE"
+  aspect_name: string;                          // "Education", "Governance"
+  term_id: string;                              // "T1", "T2", "T3"
+  academic_year: string;                        // "2024-2025"
+  due_date: string | null;
+  assigned_to: string | null;                   // Single user UUID (backend returns single, not array)
+  last_updated: string | null;
   updated_by: string | null;
+  status: 'not_started' | 'in_progress' | 'submitted';
+  total_standards: number;
+  completed_standards: number;
+}
+
+interface ApiStandardRating {
+  standard_id: string;                          // UUID
+  standard_name: string;
+  description: string;                          // Currently empty in responses
+  area_id: string;                              // Same as aspect_id
+  rating: number | null;                        // 0-4
+  evidence_comments: string | null;
+  submitted_at: string | null;
+  submitted_by: string | null;
+  has_attachments: 0 | 1;                       // Boolean as int
+}
+
+interface ApiAssessmentDetail {
+  assessment_id: string;
+  name: string;                                 // Auto-generated display name
+  school_id: string;
+  school_name: string;
+  aspect_id: string;                            // Simple string: "edu", "gov"
+  aspect_code: string;                          // "EDU", "GOV"
+  aspect_name: string;                          // "Education", "Governance"
   term_id: string;
   academic_year: string;
-}
-
-interface ApiStandardDetail {
-  mat_standard_id: string;  // v3.0 field
-  standard_code: string;
-  standard_name: string;
-  standard_description: string;
-  mat_aspect_id: string;  // v3.0 field
-  aspect_name: string;
-  rating: number | null;
-  evidence_comments: string;
-  submitted_at: string | null;
-  submitted_by: string;
-  has_attachments: number;
-  version_number?: number;
-  version_id?: string;
-  sort_order?: number;
-}
-
-interface ApiAssessmentDetail extends Omit<ApiAssessmentSummary, 'mat_id' | 'completed_standards' | 'total_standards' | 'completion_percentage' | 'overall_score'> {
-  standards: ApiStandardDetail[];
+  status: 'not_started' | 'in_progress' | 'submitted';
+  due_date: string | null;
+  assigned_to: string[];                        // Array of user UUIDs
+  last_updated: string | null;
+  updated_by: string | null;
+  standards: ApiStandardRating[];
 }
 
 // New API types for schools and standards endpoints
@@ -192,31 +199,33 @@ export const transformUser = (userId: string): User => {
 };
 
 /**
- * Transforms API standard detail into frontend MatStandard format (v3.0).
+ * Transforms API standard rating (from assessment) into frontend MatStandard format.
+ * Note: Assessment API uses simple IDs, not MAT-scoped UUIDs.
  */
-export const transformStandard = (apiStandard: ApiStandardDetail): MatStandard => {
+export const transformStandard = (apiStandard: ApiStandardRating): MatStandard => {
   return {
-    mat_standard_id: apiStandard.mat_standard_id,
-    mat_id: '', // Not always provided in assessment context
-    mat_aspect_id: apiStandard.mat_aspect_id,
-    standard_code: apiStandard.standard_code,
+    mat_standard_id: apiStandard.standard_id,         // Map simple ID to mat_standard_id for frontend compatibility
+    mat_id: '',                                       // Not provided in assessment context
+    mat_aspect_id: apiStandard.area_id,               // Map area_id to mat_aspect_id
+    standard_code: '',                                // Not provided in assessment API
     standard_name: apiStandard.standard_name,
-    standard_description: apiStandard.standard_description || '',
-    sort_order: apiStandard.sort_order || 0,
+    standard_description: apiStandard.description || '',
+    sort_order: 0,                                    // Not provided in assessment API
     source_standard_id: undefined,
     is_custom: false,
     is_modified: false,
-    version_number: apiStandard.version_number || 1,
-    version_id: apiStandard.version_id || '',
-    aspect_name: apiStandard.aspect_name,
+    version_number: 1,
+    version_id: '',
+    aspect_code: '',
+    aspect_name: '',
     is_active: true,
     created_at: '',
     updated_at: apiStandard.submitted_at || '',
     // Assessment-specific fields
     rating: apiStandard.rating as any,
-    evidence_comments: apiStandard.evidence_comments,
+    evidence_comments: apiStandard.evidence_comments || '',
     submitted_at: apiStandard.submitted_at || undefined,
-    submitted_by: apiStandard.submitted_by,
+    submitted_by: apiStandard.submitted_by || '',
   };
 };
 
@@ -250,42 +259,42 @@ export const transformStandardResponse = (apiStandard: ApiStandardResponse): Mat
 
 /**
  * Transforms API assessment summary into frontend Assessment format.
+ * Maps from actual backend schema (simple aspect_id) to frontend format.
  */
 export const transformAssessmentSummary = (apiAssessment: ApiAssessmentSummary): Assessment => {
   return {
     id: apiAssessment.assessment_id,
-    name: apiAssessment.name,
-    category: normaliseCategory(apiAssessment.category) as any,
+    name: `${apiAssessment.aspect_name} - ${apiAssessment.term_id} ${apiAssessment.academic_year}`,
+    category: normaliseCategory(apiAssessment.aspect_id) as any,  // Map aspect_id to category
     school: transformSchool(apiAssessment.school_id, apiAssessment.school_name),
     status: mapStatus(apiAssessment.status) as any,
     completedStandards: apiAssessment.completed_standards,
     totalStandards: apiAssessment.total_standards,
-    lastUpdated: apiAssessment.last_updated,
-    dueDate: apiAssessment.due_date,
-    assignedTo: apiAssessment.assigned_to.map(transformUser),
+    lastUpdated: apiAssessment.last_updated || new Date().toISOString(),
+    dueDate: apiAssessment.due_date || undefined,
+    assignedTo: apiAssessment.assigned_to ? [transformUser(apiAssessment.assigned_to)] : [],
     term: termMap[apiAssessment.term_id] || (apiAssessment.term_id as any),
     academicYear: expandAcademicYear(apiAssessment.academic_year),
-    // Include the overall score from the API response
-    overallScore: apiAssessment.overall_score,
-    // Note: standards will be undefined for summary view
+    overallScore: undefined,  // Calculated from standards if needed
   };
 };
 
 /**
  * Transforms API assessment detail into frontend Assessment format.
+ * Maps from actual backend schema (simple aspect_id) to frontend format.
  */
 export const transformAssessmentDetail = (apiAssessment: ApiAssessmentDetail): Assessment => {
   return {
     id: apiAssessment.assessment_id,
     name: apiAssessment.name,
-    category: normaliseCategory(apiAssessment.category) as any,
+    category: normaliseCategory(apiAssessment.aspect_id) as any,  // Map aspect_id to category
     school: transformSchool(apiAssessment.school_id, apiAssessment.school_name),
     status: mapStatus(apiAssessment.status) as any,
-    completedStandards: apiAssessment.standards.filter(s => s.rating !== null).length,
+    completedStandards: apiAssessment.standards.filter(s => s.rating !== null && s.rating > 0).length,
     totalStandards: apiAssessment.standards.length,
-    lastUpdated: apiAssessment.last_updated,
-    dueDate: apiAssessment.due_date,
-    assignedTo: apiAssessment.assigned_to.map(transformUser),
+    lastUpdated: apiAssessment.last_updated || new Date().toISOString(),
+    dueDate: apiAssessment.due_date || undefined,
+    assignedTo: apiAssessment.assigned_to?.map(transformUser) || [],
     standards: apiAssessment.standards.map(transformStandard),
     term: termMap[apiAssessment.term_id] || (apiAssessment.term_id as any),
     academicYear: expandAcademicYear(apiAssessment.academic_year),
