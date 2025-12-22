@@ -10,14 +10,19 @@ export type AssessmentCategory =
   | "safeguarding"
   | "faith";
 
-export interface Aspect {
+// Legacy Aspect interface (v2.x) - DEPRECATED
+// Use MatAspect (aliased as Aspect below) for v3.0
+// Keeping this commented for reference during migration
+/*
+export interface AspectLegacy {
   id: string;
-  code: string; // This might be different from AssessmentCategory if custom
+  code: string;
   name: string;
   description: string;
   isCustom: boolean;
   standardCount: number;
 }
+*/
 
 // Academic terms
 export type AcademicTerm =
@@ -64,8 +69,11 @@ export interface FileAttachment {
   url?: string; // For actual file URL in production
 }
 
-// Standard item within an assessment
-export interface Standard {
+// Legacy Standard interface (v2.x) - DEPRECATED
+// Use MatStandard (aliased as Standard below) for v3.0
+// Keeping this commented for reference during migration
+/*
+export interface StandardLegacy {
   id: string;
   code: string;
   title: string;
@@ -74,7 +82,6 @@ export interface Standard {
   evidence?: string;
   lastUpdated?: string;
   attachments?: FileAttachment[];
-  // Added for compatibility with StandardsManagement
   aspectId?: string;
   category?: AssessmentCategory;
   version?: number;
@@ -82,8 +89,9 @@ export interface Standard {
   lastModified?: string;
   lastModifiedBy?: string;
   orderIndex?: number;
-  versions?: any[]; // For history
+  versions?: any[];
 }
+*/
 
 // Group of standards for a category
 export interface StandardGroup {

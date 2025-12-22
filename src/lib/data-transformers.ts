@@ -60,17 +60,19 @@ interface ApiSchoolResponse {
 
 interface ApiStandardResponse {
   mat_standard_id: string;  // v3.0 field
+  mat_id?: string;  // May be provided
   mat_aspect_id: string;  // v3.0 field
   standard_code: string;
   standard_name: string;
-  standard_description: string;
-  aspect_code: string;
-  aspect_name: string;
-  sort_order: number;
-  version_number: number;
-  version_id: string;
-  is_custom: boolean;
-  is_modified: boolean;
+  standard_description?: string;
+  aspect_code?: string;
+  aspect_name?: string;
+  sort_order?: number;
+  version_number?: number;
+  version_id?: string;
+  is_custom?: boolean;
+  is_modified?: boolean;
+  source_standard_id?: string;
 }
 
 // ------------------------------
@@ -224,22 +226,22 @@ export const transformStandard = (apiStandard: ApiStandardDetail): MatStandard =
 export const transformStandardResponse = (apiStandard: ApiStandardResponse): MatStandard => {
   return {
     mat_standard_id: apiStandard.mat_standard_id,
-    mat_id: '', // Not provided in this endpoint
+    mat_id: apiStandard.mat_id || '', // May not be provided
     mat_aspect_id: apiStandard.mat_aspect_id,
     standard_code: apiStandard.standard_code,
     standard_name: apiStandard.standard_name,
     standard_description: apiStandard.standard_description || '',
-    sort_order: apiStandard.sort_order,
+    sort_order: apiStandard.sort_order ?? 0,
     source_standard_id: undefined,
-    is_custom: apiStandard.is_custom,
-    is_modified: apiStandard.is_modified,
-    version_number: apiStandard.version_number,
-    version_id: apiStandard.version_id,
-    aspect_code: apiStandard.aspect_code,
-    aspect_name: apiStandard.aspect_name,
+    is_custom: apiStandard.is_custom ?? false,
+    is_modified: apiStandard.is_modified ?? false,
+    version_number: apiStandard.version_number || 1,
+    version_id: apiStandard.version_id || '',
+    aspect_code: apiStandard.aspect_code || '',
+    aspect_name: apiStandard.aspect_name || '',
     is_active: true,
-    created_at: '',
-    updated_at: '',
+    created_at: new Date().toISOString(),
+    updated_at: new Date().toISOString(),
     // Assessment-specific fields (not present in this context)
     rating: null,
     evidence_comments: '',

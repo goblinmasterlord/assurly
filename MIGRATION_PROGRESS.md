@@ -311,8 +311,92 @@ grep -r "updateStandard" src/components/
 
 ---
 
-**Document Version:** 1.0  
-**Last Updated:** December 22, 2025  
+## 🐛 Bug Fixes (Post-Phase 3)
+
+### Issue #1: Standards/Aspects Modals Not Reacting ✅ FIXED
+
+**Problem:**  
+Modals for creating/editing standards and aspects were not responding to user interactions despite successful API fetches. Hierarchy was misaligned with all aspects showing the same 41 standards.
+
+**Root Cause:**  
+`StandardsManagement.tsx` was using v2.x field names while the API returned v3.0 field names, causing:
+- Aspect selection logic to fail (comparing `aspect.id` instead of `aspect.mat_aspect_id`)
+- Standards filtering to fail (filtering by non-existent fields)
+- Display values to be undefined
+
+**Files Fixed:**
+- ✅ `src/pages/admin/StandardsManagement.tsx` - Comprehensive field name updates:
+  - All aspect field references: `id` → `mat_aspect_id`, `name` → `aspect_name`, `code` → `aspect_code`
+  - All standard field references: `id` → `mat_standard_id`, `code` → `standard_code`, `title` → `standard_name`
+  - Drag & drop logic: `orderIndex` → `sort_order`
+  - Filtering and comparison logic now uses correct v3.0 field names
+
+- ✅ `src/services/assessment-service.ts` - Added defaults for optional fields:
+  - Provides fallback values for `created_at`, `updated_at`, `mat_id`, etc.
+  - Added debug logging for troubleshooting
+
+- ✅ `src/lib/data-transformers.ts` - Improved null handling:
+  - Updated `ApiStandardResponse` interface to mark optional fields
+  - Added better default values in `transformStandardResponse()`
+
+- ✅ `src/types/assessment.ts` - Resolved type conflicts:
+  - Removed duplicate `interface Standard` (v2.x) that conflicted with `type Standard = MatStandard` alias
+  - Removed duplicate `interface Aspect` (v2.x) that conflicted with `type Aspect = MatAspect` alias
+  - This fixed TypeScript compilation errors
+
+**Verification:**
+- [x] No linter errors
+- [x] Aspects list displays correctly
+- [x] Standards list displays correctly per aspect
+- [x] Standard counts show correctly
+- [ ] Pending: User testing of CRUD operations
+
+### Issue #2: Assessments Fail to Load ⚠️ BACKEND ISSUE
+
+**Problem:**  
+API returns error: `"Table 'assurly.assessments_summary_view' doesn't exist"`
+
+**Root Cause:**  
+Backend API code still references the old v2.x database view `assessments_summary_view` which was removed in the v3.0 schema redesign.
+
+**Status:**  
+⏳ **Blocked - Requires Backend Fix**
+
+**Required Backend Changes:**
+1. Update `/api/assessments` endpoint to remove `assessments_summary_view` reference
+2. Use direct table queries or create new v3.0-compatible view
+3. Ensure response structure matches `ApiAssessmentSummary` interface
+
+**Frontend Status:**
+- ✅ Frontend transformers are ready (`transformAssessmentSummary`, `transformAssessmentDetail`)
+- ✅ Types are correctly defined
+- ⏳ Waiting for backend fix to test end-to-end
+
+**Documentation:**  
+See `docs/fixes/BUGFIX_V3_MODAL_AND_ASSESSMENT.md` for detailed analysis.
+
+---
+
+## 📊 Current Status Summary
+
+| Phase | Status | Notes |
+|-------|--------|-------|
+| Phase 1: Types | ✅ Complete | All v3.0 types defined |
+| Phase 2: Auth | ✅ Complete | JWT parsing and user mapping working |
+| Phase 3: API Services | ✅ Complete | All CRUD operations mapped to v3.0 |
+| Phase 4: Data Transformers | ✅ Complete | Response transformers updated & tested |
+| **Bug Fix: Standards UI** | ✅ Complete | Field name mismatches resolved |
+| **Bug Fix: Type Conflicts** | ✅ Complete | Duplicate interfaces removed |
+| Phase 5: UI Components | 🔄 In Progress | Standards Management fixed, assessments pending |
+| **Bug: Assessment Backend** | ⏳ Blocked | Requires backend team fix |
+| Phase 6: Testing & QA | ⏳ Pending | Waiting for bug fixes |
+
+**Next Action:** Continue Phase 5 (UI Components) for assessment-related components once backend issue is resolved.
+
+---
+
+**Document Version:** 1.1  
+**Last Updated:** December 22, 2025 (Bug Fixes)  
 **Maintained By:** Frontend Team  
-**Next Update:** After Phase 5 completion
+**Next Update:** After backend assessment fix
 

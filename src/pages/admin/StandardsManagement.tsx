@@ -84,7 +84,7 @@ export default function StandardsManagement() {
     useEffect(() => {
         if (aspects.length > 0 && !selectedAspect) {
             setSelectedAspect(aspects[0]);
-        } else if (selectedAspect && !aspects.find(a => a.id === selectedAspect.id)) {
+        } else if (selectedAspect && !aspects.find(a => a.mat_aspect_id === selectedAspect.mat_aspect_id)) {
             setSelectedAspect(aspects[0]);
         }
     }, [aspects, selectedAspect]);
@@ -99,12 +99,12 @@ export default function StandardsManagement() {
 
     const filteredStandards = currentAspect
         ? standards
-            .filter(s => (s as any).aspectId === currentAspect.id || s.category === currentAspect.code) // Handle both API and legacy mock structure if needed
+            .filter(s => s.mat_aspect_id === currentAspect.mat_aspect_id)
             .filter(s =>
-                s.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                s.code.toLowerCase().includes(searchQuery.toLowerCase())
+                s.standard_name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+                s.standard_code.toLowerCase().includes(searchQuery.toLowerCase())
             )
-            .sort((a, b) => (a.orderIndex || 0) - (b.orderIndex || 0))
+            .sort((a, b) => (a.sort_order || 0) - (b.sort_order || 0))
         : [];
 
 
@@ -113,24 +113,19 @@ export default function StandardsManagement() {
         const { active, over } = event;
 
         if (active.id !== over?.id) {
-            const oldIndex = standards.findIndex((item) => item.id === active.id);
-            const newIndex = standards.findIndex((item) => item.id === over?.id);
+            const oldIndex = standards.findIndex((item) => item.mat_standard_id === active.id);
+            const newIndex = standards.findIndex((item) => item.mat_standard_id === over?.id);
 
-            // We need to reorder the full list, but only the items in the current view are relevant for the visual drag
-            // However, for persistence, we just need to update the orderIndex of the moved item and potentially others
-            // A simpler approach for this mock implementation is to just move them in the array if they are siblings
-            // But since we filter by category, we should be careful.
-
-            // Let's just reorder the filtered list and update the main list based on that
+            // Reorder within the filtered view
             const newFiltered = arrayMove(filteredStandards,
-                filteredStandards.findIndex(s => s.id === active.id),
-                filteredStandards.findIndex(s => s.id === over?.id)
+                filteredStandards.findIndex(s => s.mat_standard_id === active.id),
+                filteredStandards.findIndex(s => s.mat_standard_id === over?.id)
             );
 
-            // Update orderIndex for these items
+            // Update sort_order for these items
             const updatedStandards = newFiltered.map((item, index) => ({
                 ...item,
-                orderIndex: index
+                sort_order: index
             }));
 
             reorderStandards(updatedStandards);
@@ -157,21 +152,20 @@ export default function StandardsManagement() {
             if (editingStandard) {
                 await updateStandard(standard);
             } else {
-                // Get all standards for this aspect to calculate next orderIndex
+                // Get all standards for this aspect to calculate next sort_order
                 const aspectStandards = standards.filter(s => 
-                    (s as any).aspectId === currentAspect.id || s.category === currentAspect.code
+                    s.mat_aspect_id === currentAspect.mat_aspect_id
                 );
                 
-                // Find the highest orderIndex and add 1 to put new standard at bottom
-                const maxOrderIndex = aspectStandards.length > 0 
-                    ? Math.max(...aspectStandards.map(s => s.orderIndex || 0))
+                // Find the highest sort_order and add 1 to put new standard at bottom
+                const maxSortOrder = aspectStandards.length > 0 
+                    ? Math.max(...aspectStandards.map(s => s.sort_order || 0))
                     : -1;
                 
                 const standardWithAspect = {
                     ...standard,
-                    aspectId: (standard as any).aspectId || currentAspect.id,
-                    category: standard.category || currentAspect.code,
-                    orderIndex: maxOrderIndex + 1
+                    mat_aspect_id: standard.mat_aspect_id || currentAspect.mat_aspect_id,
+                    sort_order: maxSortOrder + 1
                 };
                 await addStandard(standardWithAspect);
             }
@@ -211,9 +205,9 @@ export default function StandardsManagement() {
     };
 
     const handleDeleteAspect = (id: string) => {
-        const aspectToDelete = aspects.find(a => a.id === id);
+        const aspectToDelete = aspects.find(a => a.mat_aspect_id === id);
         if (aspectToDelete) {
-            setItemToDelete({ type: 'aspect', id, name: aspectToDelete.name });
+            setItemToDelete({ type: 'aspect', id, name: aspectToDelete.aspect_name });
             setDeleteModalOpen(true);
         }
     };
@@ -224,9 +218,9 @@ export default function StandardsManagement() {
     };
 
     const handleDeleteStandard = (id: string) => {
-        const standardToDelete = standards.find(s => s.id === id);
+        const standardToDelete = standards.find(s => s.mat_standard_id === id);
         if (standardToDelete) {
-            setItemToDelete({ type: 'standard', id, name: standardToDelete.code });
+            setItemToDelete({ type: 'standard', id, name: standardToDelete.standard_code });
             setDeleteModalOpen(true);
         }
     };
@@ -237,7 +231,7 @@ export default function StandardsManagement() {
         try {
             if (itemToDelete.type === 'aspect') {
                 await deleteAspect(itemToDelete.id);
-                if (currentAspect.id === itemToDelete.id) {
+                if (currentAspect.mat_aspect_id === itemToDelete.id) {
                     setSelectedAspect(aspects[0]);
                 }
             } else {
@@ -304,11 +298,11 @@ export default function StandardsManagement() {
                                 <Edit2 className="mr-2 h-3 w-3" />
                                 Edit {currentAspect.name}
                             </DropdownMenuItem>
-                            {currentAspect.isCustom && (
+                            {currentAspect.is_custom && (
                                 <DropdownMenuItem
                                     onClick={(e) => {
                                         e.stopPropagation();
-                                        handleDeleteAspect(currentAspect.id);
+                                        handleDeleteAspect(currentAspect.mat_aspect_id);
                                         setIsEditAspectDropdownOpen(false);
                                     }}
                                     className="text-destructive focus:text-destructive"
@@ -351,25 +345,25 @@ export default function StandardsManagement() {
                     <ScrollArea className="flex-1">
                         <div className="p-2 space-y-1">
                             {aspects.map((aspect) => {
-                                const count = standards.filter(s => (s as any).aspectId === aspect.id).length;
+                                const count = standards.filter(s => s.mat_aspect_id === aspect.mat_aspect_id).length;
                                 return (
                                     <button
-                                        key={aspect.id}
+                                        key={aspect.mat_aspect_id}
                                         onClick={() => setSelectedAspect(aspect)}
                                         className={cn(
                                             "w-full text-left px-3 py-2 rounded-md text-sm font-medium transition-colors flex justify-between items-center group",
-                                            currentAspect.id === aspect.id
+                                            currentAspect.mat_aspect_id === aspect.mat_aspect_id
                                                 ? "bg-primary/10 text-primary"
                                                 : "hover:bg-muted text-muted-foreground hover:text-foreground"
                                         )}
                                     >
                                         <div className="flex flex-col items-start">
-                                            <span>{aspect.name}</span>
+                                            <span>{aspect.aspect_name}</span>
                                             <span className="text-[10px] text-muted-foreground font-normal">
                                                 {count} standard{count !== 1 ? 's' : ''}
                                             </span>
                                         </div>
-                                        {aspect.isCustom ? (
+                                        {aspect.is_custom ? (
                                             <Badge variant="secondary" className="text-[10px] h-4 px-1">Custom</Badge>
                                         ) : (
                                             <Badge variant="outline" className="text-[10px] h-4 px-1 text-muted-foreground">Default</Badge>
@@ -387,7 +381,7 @@ export default function StandardsManagement() {
                         <div className="relative flex-1">
                             <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
                             <Input
-                                placeholder={`Search ${currentAspect.name} standards...`}
+                                placeholder={`Search ${currentAspect.aspect_name} standards...`}
                                 className="pl-9"
                                 value={searchQuery}
                                 onChange={(e) => setSearchQuery(e.target.value)}
@@ -407,7 +401,7 @@ export default function StandardsManagement() {
                                     </div>
                                     <h3 className="text-lg font-medium">No standards found</h3>
                                     <p className="text-muted-foreground max-w-sm mx-auto mt-1">
-                                        No standards match your search in {currentAspect.name}.
+                                        No standards match your search in {currentAspect.aspect_name}.
                                     </p>
                                     <Button variant="outline" className="mt-4" onClick={handleCreate}>
                                         <Plus className="mr-2 h-4 w-4" />
@@ -421,12 +415,12 @@ export default function StandardsManagement() {
                                     onDragEnd={handleDragEnd}
                                 >
                                     <SortableContext
-                                        items={filteredStandards.map(s => s.id)}
+                                        items={filteredStandards.map(s => s.mat_standard_id)}
                                         strategy={verticalListSortingStrategy}
                                     >
                                         {filteredStandards.map((standard) => (
                                             <SortableStandardCard
-                                                key={standard.id}
+                                                key={standard.mat_standard_id}
                                                 standard={standard}
                                                 onEdit={handleEdit}
                                                 onHistory={handleHistory}
@@ -446,13 +440,13 @@ export default function StandardsManagement() {
                 onOpenChange={setIsCreateModalOpen}
                 onSave={handleSaveStandard}
                 standard={editingStandard}
-                defaultAspectId={currentAspect.id}
+                defaultAspectId={currentAspect.mat_aspect_id}
                 aspects={aspects}
                 allStandards={standards}
             />
 
             <CreateAspectModal
-                key={editingAspect?.id || 'new'}
+                key={editingAspect?.mat_aspect_id || 'new'}
                 open={isAspectModalOpen}
                 onOpenChange={handleAspectModalClose}
                 onSave={handleSaveAspect}

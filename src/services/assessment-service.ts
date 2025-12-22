@@ -123,27 +123,27 @@ export const getStandards = async (matAspectId?: string): Promise<MatStandard[]>
 
     return response.data.map((s: any) => ({
       mat_standard_id: s.mat_standard_id,
-      mat_id: s.mat_id,
+      mat_id: s.mat_id || '',
       mat_aspect_id: s.mat_aspect_id,
       standard_code: s.standard_code,
       standard_name: s.standard_name,
-      standard_description: s.standard_description,
+      standard_description: s.standard_description || '',
       sort_order: s.sort_order ?? 0,
-      source_standard_id: s.source_standard_id,
-      is_custom: s.is_custom,
-      is_modified: s.is_modified,
-      version_number: s.version_number,
-      version_id: s.version_id,
-      aspect_code: s.aspect_code,
-      aspect_name: s.aspect_name,
+      source_standard_id: s.source_standard_id || undefined,
+      is_custom: s.is_custom ?? false,
+      is_modified: s.is_modified ?? false,
+      version_number: s.version_number || 1,
+      version_id: s.version_id || '',
+      aspect_code: s.aspect_code || '',
+      aspect_name: s.aspect_name || '',
       is_active: s.is_active ?? true,
-      created_at: s.created_at,
-      updated_at: s.updated_at,
+      created_at: s.created_at || new Date().toISOString(),
+      updated_at: s.updated_at || new Date().toISOString(),
       // Assessment-specific fields (if present)
-      rating: s.rating,
-      evidence_comments: s.evidence_comments,
-      submitted_at: s.submitted_at,
-      submitted_by: s.submitted_by
+      rating: s.rating ?? null,
+      evidence_comments: s.evidence_comments || '',
+      submitted_at: s.submitted_at || undefined,
+      submitted_by: s.submitted_by || undefined
     }));
   } catch (error) {
     console.error('Failed to fetch standards:', error);
@@ -259,20 +259,25 @@ export const getTerms = async () => {
 export const getAspects = async (): Promise<MatAspect[]> => {
   try {
     const response = await apiClient.get('/api/aspects');
+    console.log('[getAspects] Received aspects:', response.data.length, 'aspects');
+    if (response.data.length > 0) {
+      console.log('[getAspects] First aspect structure:', response.data[0]);
+    }
+    
     return response.data.map((a: any) => ({
       mat_aspect_id: a.mat_aspect_id,
-      mat_id: a.mat_id,
+      mat_id: a.mat_id || '',
       aspect_code: a.aspect_code,
       aspect_name: a.aspect_name,
-      aspect_description: a.aspect_description,
+      aspect_description: a.aspect_description || '',
       sort_order: a.sort_order ?? 0,
-      source_aspect_id: a.source_aspect_id,
-      is_custom: a.is_custom,
-      is_modified: a.is_modified,
+      source_aspect_id: a.source_aspect_id || undefined,
+      is_custom: a.is_custom ?? false,
+      is_modified: a.is_modified ?? false,
       standards_count: a.standards_count || 0,
       is_active: a.is_active ?? true,
-      created_at: a.created_at,
-      updated_at: a.updated_at
+      created_at: a.created_at || new Date().toISOString(),
+      updated_at: a.updated_at || new Date().toISOString()
     }));
   } catch (error) {
     console.error('Failed to fetch aspects:', error);

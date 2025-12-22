@@ -28,24 +28,12 @@ interface VersionHistoryModalProps {
 export function VersionHistoryModal({ open, onOpenChange, standard }: VersionHistoryModalProps) {
     if (!standard) return null;
 
-    // Combine current version with history for display
-    const allVersions = [
-        {
-            id: 'current',
-            version: standard.version,
-            text: standard.description,
-            createdAt: standard.lastModified,
-            createdBy: standard.lastModifiedBy,
-            changeType: 'current' as const
-        },
-        ...(standard.versions || [])
-    ];
-
+    // Use v3.0 fields
     const currentVersion = {
         id: 'current',
-        version: standard.version || 1,
-        createdAt: standard.lastModified || new Date().toISOString(),
-        createdBy: standard.lastModifiedBy || 'Unknown',
+        version: standard.version_number || 1,
+        createdAt: standard.updated_at || standard.created_at || new Date().toISOString(),
+        createdBy: 'System', // TODO: Add created_by_user to Standard type when available
         changeType: 'current'
     };
 
@@ -53,9 +41,9 @@ export function VersionHistoryModal({ open, onOpenChange, standard }: VersionHis
         <Dialog open={open} onOpenChange={onOpenChange}>
             <DialogContent className="sm:max-w-[800px]">
                 <DialogHeader>
-                    <DialogTitle>Version History: {standard.code}</DialogTitle>
+                    <DialogTitle>Version History: {standard.standard_code}</DialogTitle>
                     <DialogDescription>
-                        {standard.title}
+                        {standard.standard_name}
                     </DialogDescription>
                 </DialogHeader>
 
@@ -96,33 +84,8 @@ export function VersionHistoryModal({ open, onOpenChange, standard }: VersionHis
                                     )}
                                 </TableCell>
                             </TableRow>
-                            {(standard.versions || []).map((version) => (
-                                <TableRow key={version.id}>
-                                    <TableCell>
-                                        <Badge variant="outline">v{version.version}</Badge>
-                                    </TableCell>
-                                    <TableCell className="text-muted-foreground">
-                                        {new Date(version.createdAt).toLocaleDateString()}
-                                    </TableCell>
-                                    <TableCell>{version.createdBy}</TableCell>
-                                    <TableCell>
-                                        <Badge
-                                            variant={version.changeType === 'created' ? 'secondary' : 'default'}
-                                            className="capitalize"
-                                        >
-                                            {version.changeType}
-                                        </Badge>
-                                    </TableCell>
-                                    <TableCell className="text-right">
-                                        {version.changeType !== 'current' && (
-                                            <Button variant="ghost" size="sm">
-                                                <RotateCcw className="mr-2 h-3 w-3" />
-                                                Restore
-                                            </Button>
-                                        )}
-                                    </TableCell>
-                                </TableRow>
-                            ))}
+                            {/* TODO: Fetch and display version history from API using getStandardVersions() */}
+                            {/* This will require adding a useEffect to fetch versions when modal opens */}
                         </TableBody>
                     </Table>
                 </ScrollArea>
