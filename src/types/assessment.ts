@@ -1,4 +1,17 @@
-// Assessment categories (matching backend API exactly)
+// ============================================================================
+// v4.0 Assessment Types - Human-Readable IDs Throughout
+// ============================================================================
+
+// ============================================================================
+// Core Types
+// ============================================================================
+
+export type AssessmentStatus = 'not_started' | 'in_progress' | 'completed' | 'approved';
+export type Rating = 1 | 2 | 3 | 4 | null;
+export type SchoolType = 'primary' | 'secondary' | 'all_through' | 'special' | 'central';
+export type TrendDirection = 'improving' | 'declining' | 'stable' | 'no_data';
+
+// Legacy assessment category (lowercase, for backward compatibility)
 export type AssessmentCategory =
   | "education"
   | "hr"
@@ -10,20 +23,6 @@ export type AssessmentCategory =
   | "safeguarding"
   | "faith";
 
-// Legacy Aspect interface (v2.x) - DEPRECATED
-// Use MatAspect (aliased as Aspect below) for v3.0
-// Keeping this commented for reference during migration
-/*
-export interface AspectLegacy {
-  id: string;
-  code: string;
-  name: string;
-  description: string;
-  isCustom: boolean;
-  standardCount: number;
-}
-*/
-
 // Academic terms
 export type AcademicTerm =
   | "Autumn"
@@ -31,10 +30,7 @@ export type AcademicTerm =
   | "Summer";
 
 // Academic years
-export type AcademicYear = string; // Format: "2023-2024"
-
-// Rating scale 1-4
-export type Rating = 1 | 2 | 3 | 4 | null;
+export type AcademicYear = string; // Format: "2024-25" (v4 short format)
 
 // Rating labels for display
 export const RatingLabels: Record<NonNullable<Rating>, string> = {
@@ -46,65 +42,308 @@ export const RatingLabels: Record<NonNullable<Rating>, string> = {
 
 // Rating descriptions for each level
 export const RatingDescriptions: Record<NonNullable<Rating>, string> = {
-  1: "Significant weaknesses requiring immediate intervention and urgent improvement",
-  2: "Basic standards met with notable areas for development and improvement",
-  3: "Consistent, effective practice with some areas of strength",
-  4: "Exemplary, sector-leading practice with evidence of sustained impact"
+  1: "Significant concerns requiring immediate action",
+  2: "Areas identified for development",
+  3: "Solid performance meeting expected standards",
+  4: "Exemplary practice exceeding expectations"
 };
 
-// Assessment status
-export type AssessmentStatus =
-  | "Not Started"
-  | "In Progress"
-  | "Completed"
-  | "Overdue";
+// ============================================================================
+// Assessment Group (Summary View)
+// ============================================================================
 
-// File attachment interface
-export interface FileAttachment {
+export interface AssessmentGroup {
+  group_id: string;               // cedar-park-primary-EDU-T1-2024-25
+  school_id: string;              // cedar-park-primary
+  school_name: string;
+  mat_aspect_id: string;          // OLT-EDU
+  aspect_code: string;            // EDU
+  aspect_name: string;
+  term_id: string;                // T1
+  academic_year: string;          // 2024-25
+  status: AssessmentStatus;
+  total_standards: number;
+  completed_standards: number;
+  due_date: string | null;
+  last_updated: string;
+}
+
+// ============================================================================
+// Individual Assessment
+// ============================================================================
+
+export interface Assessment {
+  id: string;                     // UUID (internal DB ID)
+  assessment_id: string;          // cedar-park-primary-ES1-T1-2024-25
+  school_id: string;              // cedar-park-primary
+  school_name: string;
+  mat_standard_id: string;        // OLT-ES1
+  standard_code: string;          // ES1
+  standard_name: string;
+  standard_description: string;
+  mat_aspect_id: string;          // OLT-EDU
+  aspect_code: string;            // EDU
+  aspect_name: string;
+  version_id: string;             // OLT-ES1-v1
+  version_number: number;
+  unique_term_id: string;         // T1-2024-25
+  academic_year: string;          // 2024-25
+  rating: Rating;
+  evidence_comments: string | null;
+  status: AssessmentStatus;
+  due_date: string | null;
+  assigned_to: string | null;     // user_id
+  assigned_to_name: string | null;
+  submitted_at: string | null;
+  submitted_by: string | null;
+  submitted_by_name: string | null;
+  last_updated: string;
+  
+  // Backward compatibility fields
+  category?: AssessmentCategory;
+  school?: School;
+  term?: AcademicTerm;
+  completedStandards?: number;
+  totalStandards?: number;
+}
+
+// ============================================================================
+// Assessment by Aspect (Form View)
+// ============================================================================
+
+export interface AssessmentByAspect {
+  school_id: string;
+  school_name: string;
+  aspect_code: string;
+  aspect_name: string;
+  mat_aspect_id: string;
+  term_id: string;                // T1-2024-25 (unique_term_id)
+  academic_year: string;
+  total_standards: number;
+  completed_standards: number;
+  status: AssessmentStatus;
+  standards: AssessmentStandard[];
+}
+
+export interface AssessmentStandard {
+  assessment_id: string;          // cedar-park-primary-ES1-T1-2024-25
+  mat_standard_id: string;        // OLT-ES1
+  standard_code: string;          // ES1
+  standard_name: string;
+  standard_description: string;
+  sort_order: number;
+  rating: Rating;
+  evidence_comments: string | null;
+  version_id: string;             // OLT-ES1-v1
+  version_number: number;
+  status: AssessmentStatus;
+}
+
+// ============================================================================
+// Standards (Management View)
+// ============================================================================
+
+export interface Standard {
+  mat_standard_id: string;        // OLT-ES1
+  standard_code: string;          // ES1
+  standard_name: string;
+  standard_description: string;
+  sort_order: number;
+  is_custom: boolean;
+  is_modified: boolean;
+  mat_aspect_id: string;          // OLT-EDU
+  aspect_code: string;            // EDU
+  aspect_name: string;
+  current_version_id: string;     // OLT-ES1-v1
+  current_version: number;
+}
+
+export interface StandardDetail extends Standard {
+  created_at: string;
+  updated_at: string;
+  current_version: StandardVersion;
+  version_history: StandardVersion[];
+}
+
+export interface StandardVersion {
+  version_id: string;             // OLT-ES1-v1
+  version_number: number;
+  standard_name: string;
+  standard_description: string;
+  effective_from: string;
+  effective_to: string | null;
+  change_reason: string | null;
+  created_by_name: string | null;
+}
+
+export interface StandardUpdate {
+  standard_name: string;
+  standard_description: string;
+  change_reason?: string;
+}
+
+// ============================================================================
+// Aspects
+// ============================================================================
+
+export interface Aspect {
+  mat_aspect_id: string;          // OLT-EDU
+  aspect_code: string;            // EDU
+  aspect_name: string;
+  aspect_description: string;
+  sort_order: number;
+  is_custom: boolean;
+  standards_count: number;
+}
+
+// ============================================================================
+// Schools
+// ============================================================================
+
+export interface School {
+  school_id: string;              // cedar-park-primary
+  school_name: string;
+  school_type?: SchoolType;
+  is_central_office?: boolean;
+  is_active?: boolean;
+  
+  // Backward compatibility
+  id?: string;
+  name?: string;
+  code?: string;
+}
+
+// ============================================================================
+// Terms
+// ============================================================================
+
+export interface Term {
+  unique_term_id: string;         // T1-2024-25
+  term_id: string;                // T1
+  term_name: string;              // "Autumn Term"
+  start_date: string;
+  end_date: string;
+  academic_year: string;          // 2024-25
+  is_current: boolean;
+}
+
+// ============================================================================
+// Analytics
+// ============================================================================
+
+export interface TrendData {
+  mat_id: string;
+  filters: {
+    school_id: string | null;
+    aspect_code: string | null;
+    from_term: string | null;
+    to_term: string | null;
+  };
+  summary: {
+    total_terms: number;
+    overall_average: number;
+    trend_direction: TrendDirection;
+    improvement: number;
+  };
+  trends: TermTrend[];
+}
+
+export interface TermTrend {
+  unique_term_id: string;
+  term_id: string;
+  academic_year: string;
+  assessments_count: number;
+  rated_count: number;
+  average_rating: number | null;
+  min_rating: number | null;
+  max_rating: number | null;
+  rating_distribution: RatingDistribution;
+}
+
+export interface RatingDistribution {
+  inadequate: number;
+  requires_improvement: number;
+  good: number;
+  outstanding: number;
+}
+
+// ============================================================================
+// Request/Response Types
+// ============================================================================
+
+export interface AssessmentUpdate {
+  rating: Rating;
+  evidence_comments: string;
+}
+
+export interface AssessmentCreate {
+  school_ids: string[];
+  aspect_code: string;
+  term_id: string;                // unique_term_id format: T1-2024-25
+  due_date?: string;
+  assigned_to?: string;
+}
+
+export interface BulkUpdate {
+  assessment_id: string;
+  rating: Rating;
+  evidence_comments: string;
+}
+
+export interface CreateAssessmentResponse {
+  message: string;
+  assessments_created: number;
+  schools: string[];
+  aspect_code: string;
+  term_id: string;
+}
+
+export interface UpdateAssessmentResponse {
+  message: string;
+  assessment_id: string;
+  status: AssessmentStatus;
+}
+
+export interface BulkUpdateResponse {
+  message: string;
+  updated_count: number;
+  failed_count: number;
+}
+
+export interface UpdateStandardResponse {
+  message: string;
+  mat_standard_id: string;
+  new_version_id: string;
+  version_number: number;
+  previous_version_id: string;
+}
+
+// ============================================================================
+// User (simplified for assessment context)
+// ============================================================================
+
+export interface User {
   id: string;
   name: string;
-  size: number;
-  type: string;
-  uploadedAt: string;
-  url?: string; // For actual file URL in production
+  email: string;
+  role: string;
 }
 
-// Legacy Standard interface (v2.x) - DEPRECATED
-// Use MatStandard (aliased as Standard below) for v3.0
-// Keeping this commented for reference during migration
-/*
-export interface StandardLegacy {
-  id: string;
-  code: string;
-  title: string;
-  description: string;
-  rating: Rating;
-  evidence?: string;
-  lastUpdated?: string;
-  attachments?: FileAttachment[];
-  aspectId?: string;
-  category?: AssessmentCategory;
-  version?: number;
-  status?: 'active' | 'archived' | 'draft';
-  lastModified?: string;
-  lastModifiedBy?: string;
-  orderIndex?: number;
-  versions?: any[];
-}
-*/
+// ============================================================================
+// Backward Compatibility Types
+// ============================================================================
 
-// Group of standards for a category
+// Legacy types - kept for backward compatibility during migration
 export interface StandardGroup {
   id: string;
   category: AssessmentCategory;
   standards: Standard[];
 }
 
-// School performance summary for the new school-centric view
 export interface SchoolPerformance {
   school: School;
   overallScore: number;
-  status: AssessmentStatus; // School-level status calculated from individual assessments
+  status: AssessmentStatus;
   assessmentsByCategory: Array<{
     category: AssessmentCategory;
     name: string;
@@ -123,153 +362,24 @@ export interface SchoolPerformance {
   totalAssessments: number;
 }
 
-// Assessment model
-export interface Assessment {
-  id: string;
-  name: string;
-  category: AssessmentCategory;
-  school: School;
-  completedStandards: number;
-  totalStandards: number;
-  lastUpdated: string;
-  status: AssessmentStatus;
-  dueDate?: string;
-  assignedTo?: User[];
-  standards?: Standard[];
-  term?: AcademicTerm;
-  academicYear?: AcademicYear;
-  overallScore?: number; // Overall score for the assessment (available in summary data)
-}
-
-// Historic score data point
 export interface HistoricScore {
   term: string;
   overallScore: number;
 }
 
-// School model
-export interface School {
+export interface FileAttachment {
   id: string;
   name: string;
-  code?: string;
-  historicScores?: HistoricScore[];
-}
-
-// User model
-export interface User {
-  id: string;
-  name: string;
-  email: string;
-  role: string;
-}
-
-// --- API Response Types ---
-// These types represent the raw data structure we expect from the backend API.
-// We will transform this data into the component-friendly types above.
-
-export interface ApiSchool {
-  school_id: string;
-  school_name: string;
-  // 'code' is on the frontend type but not in the DB schema, will handle in transformer
-}
-
-export interface ApiUser {
-  id: string; // Assuming API returns 'id' directly
-  name: string;
-  email: string;
-  role: string;
-}
-
-export interface ApiStandard {
-  standard_id: string;
-  code: string;
-  title: string;
-  description: string;
-  rating: Rating; // Assuming BE sends a number or null
-  evidence_comments?: string;
-  submitted_at?: string; // or last_updated
-}
-
-export interface ApiAssessment {
-  // This mirrors the aggregated data we expect from `GET /api/assessments`
-  id: string;
-  name: string;
-  category: AssessmentCategory;
-  school: ApiSchool;
-  status: AssessmentStatus;
-  completed_standards: number;
-  total_standards: number;
-  last_updated: string;
-  due_date?: string;
-  assigned_to?: ApiUser[];
-  standards?: ApiStandard[];
-  term?: AcademicTerm;
-  academic_year?: AcademicYear;
+  size: number;
+  type: string;
+  uploadedAt: string;
+  url?: string;
 }
 
 // ============================================================================
-// v3.0 Multi-Tenant Types (MAT-scoped)
+// Type Aliases for Migration
 // ============================================================================
 
-// MAT-scoped Aspect with copy-on-write tracking
-export interface MatAspect {
-  mat_aspect_id: string;
-  mat_id: string;
-  aspect_code: string;
-  aspect_name: string;
-  aspect_description?: string;
-  sort_order: number;
-  source_aspect_id?: string;  // For copy-on-write tracking
-  is_custom: boolean;         // Created by this MAT
-  is_modified: boolean;       // Modified from source
-  standards_count: number;
-  is_active: boolean;
-  created_at: string;
-  updated_at: string;
-}
-
-// MAT-scoped Standard with immutable versioning
-export interface MatStandard {
-  mat_standard_id: string;
-  mat_id: string;
-  mat_aspect_id: string;
-  standard_code: string;
-  standard_name: string;
-  standard_description?: string;
-  sort_order: number;
-  source_standard_id?: string;  // For copy-on-write tracking
-  is_custom: boolean;
-  is_modified: boolean;
-  version_number: number;
-  version_id: string;
-  aspect_code?: string;         // For display
-  aspect_name?: string;         // For display
-  is_active: boolean;
-  created_at: string;
-  updated_at: string;
-  
-  // Assessment-specific fields (when in assessment context)
-  rating?: Rating;
-  evidence_comments?: string;
-  submitted_at?: string;
-  submitted_by?: string;
-}
-
-// Standard Version History
-export interface StandardVersion {
-  version_id: string;
-  mat_standard_id: string;
-  version_number: number;
-  standard_code: string;
-  standard_name: string;
-  standard_description?: string;
-  effective_from: string;
-  effective_to: string | null;  // null = current version
-  created_by_user_id: string;
-  change_reason?: string;
-  created_at: string;
-}
-
-// Type aliases for backward compatibility during migration
-export type Aspect = MatAspect;
-export type Standard = MatStandard; 
+// v3 compatibility
+export type MatAspect = Aspect;
+export type MatStandard = Standard;

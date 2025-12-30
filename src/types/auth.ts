@@ -1,18 +1,23 @@
+// ============================================================================
+// v4.0 Authentication & User Types
+// ============================================================================
+
 export interface User {
-  user_id: string;
+  user_id: string;           // "user7"
   email: string;
-  first_name: string;
-  last_name: string;
-  role_title: string;  // e.g., "Teacher", "Administrator", "Head of Department"
-  mat_id: string;      // REQUIRED - tenant isolation
-  school_id: string | null;  // nullable for MAT-wide users
-  created_at?: string;
-  updated_at?: string;
+  full_name: string;         // "Tom Walch"
+  mat_id: string;            // "OLT"
+  mat_name?: string;         // "Opal Learning Trust"
+  school_id: string | null;  // "cedar-park-primary" or null
+  school_name?: string | null;
+  role_title: string | null; // "MAT Administrator"
+  is_active: boolean;
+  last_login: string | null;
 }
 
-// Helper to get full name
+// Helper to get full name (for backward compatibility)
 export function getUserFullName(user: User): string {
-  return `${user.first_name} ${user.last_name}`;
+  return user.full_name;
 }
 
 export interface AuthState {
@@ -32,22 +37,20 @@ export interface VerifyTokenRequest {
 
 export interface AuthResponse {
   access_token: string;
-  user: User | null;
-  expires_at?: string;
+  token_type: 'bearer';
+  user: User;
 }
 
 export interface SessionResponse {
-  user: User | null;
-  expires_at?: string;
+  user: User;
 }
 
-// JWT Token Payload (decoded) - v3.0
+// JWT Token Payload (decoded) - v4.0
 export interface JWTPayload {
-  sub: string;         // user_id
+  user_id: string;       // Changed from 'sub' in v4
   email: string;
   mat_id: string;
   school_id: string | null;
   exp: number;
-  iat: number;
-  type: string;        // "access"
+  iat?: number;
 }

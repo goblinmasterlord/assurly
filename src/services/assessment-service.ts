@@ -1,74 +1,56 @@
+// ============================================================================
+// v4.0 Assessment Service
+// ============================================================================
+
 import apiClient from '@/lib/api-client';
-import { transformAssessmentSummary, transformAssessmentDetail, transformSchoolResponse } from '@/lib/data-transformers';
-import type { Assessment, Rating, AssessmentCategory, AcademicTerm, AcademicYear, School, MatStandard, MatAspect, StandardVersion } from '@/types/assessment';
+import { 
+  transformAssessmentGroup,
+  transformAssessment, 
+  transformSchool,
+  transformStandard,
+  transformAspect
+} from '@/lib/data-transformers';
+import type { 
+  Assessment,
+  AssessmentGroup,
+  AssessmentByAspect,
+  Standard,
+  Aspect,
+  School,
+  Term,
+  AssessmentUpdate,
+  AssessmentCreate,
+  BulkUpdate,
+  StandardUpdate
+} from '@/types/assessment';
 
-// Add new types for the API responses
-interface ApiSchoolResponse {
-  school_id: string;
-  school_name: string;
-  mat_id: string;
-  mat_name: string;
-  school_code: string;
-}
-
-interface ApiStandardResponse {
-  standard_id: string;
-  standard_name: string;
-  aspect_id: string;
-  aspect_name: string;
-  description: string;
-  sort_order: number;
-}
-
-// Import types from data-transformers for consistency
-interface ApiAssessmentSummary {
-  assessment_id: string;
-  name: string;
-  category: string;
-  school_id: string;
-  school_name: string;
-  mat_id: string;
-  status: string;
-  completed_standards: number;
-  total_standards: number;
-  completion_percentage: number;
-  overall_score: number;
-  due_date: string;
-  assigned_to: string[];
-  last_updated: string;
-  updated_by: string | null;
-  term_id: string;
-  academic_year: string;
-}
-
-interface CreateAssessmentRequest {
-  category: AssessmentCategory;
-  schoolIds: string[];
-  dueDate?: string;
-  term: AcademicTerm;
-  academicYear: AcademicYear;
-  assignedTo?: string; // User ID to assign the assessment to
-}
-
-interface SubmitStandardRequest {
-  standard_id: string;
-  rating: number | null;
-  evidence_comments: string;
-  submitted_by: string;
-}
-
-interface SubmitAssessmentRequest {
-  assessment_id: string;
-  standards: SubmitStandardRequest[];
-}
+// ============================================================================
+// Assessment Endpoints
+// ============================================================================
 
 /**
- * Fetches all assessments from the API and transforms them into the frontend format.
+ * GET /api/assessments
+ * List assessments grouped by school, aspect, and term
  */
-export const getAssessments = async (): Promise<Assessment[]> => {
+export const getAssessments = async (filters?: {
+  school_id?: string;
+  aspect_code?: string;
+  term_id?: string;
+  academic_year?: string;
+  status?: string;
+}): Promise<Assessment[]> => {
   try {
-    const response = await apiClient.get('/api/assessments');
-    return response.data.map(transformAssessmentSummary);
+    const params = new URLSearchParams();
+    if (filters?.school_id) params.append('school_id', filters.school_id);
+    if (filters?.aspect_code) params.append('aspect_code', filters.aspect_code);
+    if (filters?.term_id) params.append('term_id', filters.term_id);
+    if (filters?.academic_year) params.append('academic_year', filters.academic_year);
+    if (filters?.status) params.append('status', filters.status);
+
+    const url = `/api/assessments${params.toString() ? `?${params}` : ''}`;
+    const response = await apiClient.get<AssessmentGroup[]>(url);
+    
+    return response.data.map(transformAssessmentGroup);
   } catch (error) {
     console.error('Failed to fetch assessments:', error);
     throw new Error('Failed to load assessments. Please try again.');
@@ -76,12 +58,13 @@ export const getAssessments = async (): Promise<Assessment[]> => {
 };
 
 /**
- * Fetches a single assessment by ID with full details including standards.
+ * GET /api/assessments/{assessment_id}
+ * Get a single assessment detail
  */
 export const getAssessmentById = async (assessmentId: string): Promise<Assessment> => {
   try {
-    const response = await apiClient.get(`/api/assessments/${assessmentId}`);
-    return transformAssessmentDetail(response.data);
+    const response = await apiClient.get<Assessment>(`/api/assessments/${assessmentId}`);
+    return transformAssessment(response.data);
   } catch (error) {
     console.error(`Failed to fetch assessment ${assessmentId}:`, error);
     throw new Error('Failed to load assessment details. Please try again.');
@@ -89,62 +72,103 @@ export const getAssessmentById = async (assessmentId: string): Promise<Assessmen
 };
 
 /**
- * Fetches all schools from the real API endpoint.
+ * GET /api/assessments/by-aspect/{aspect_code}
+ * Get all assessments for an aspect (all standards) for a school and term
  */
-export const getSchools = async (): Promise<School[]> => {
+export const getAssessmentsByAspect = async (
+  aspectCode: string,
+  schoolId: string,
+  termId: string
+): Promise<AssessmentByAspect> => {
   try {
-    const response = await apiClient.get('/api/schools');
-    return response.data.map(transformSchoolResponse);
+    const params = new URLSearchParams();
+    params.append('school_id', schoolId);
+    params.append('term_id', termId);
+
+    const url = `/api/assessments/by-aspect/${aspectCode}?${params}`;
+    const response = await apiClient.get<AssessmentByAspect>(url);
+    
+    return response.data;
   } catch (error) {
-    console.error('Failed to fetch schools:', error);
-    throw new Error('Failed to load schools. Please try again.');
+    console.error(`Failed to fetch assessments for aspect ${aspectCode}:`, error);
+    throw new Error('Failed to load assessment form. Please try again.');
   }
 };
 
 /**
- * Fetches all standards from the real API endpoint.
+ * PUT /api/assessments/{assessment_id}
+ * Update an assessment's rating and evidence
  */
-export const getStandards = async (matAspectId?: string): Promise<MatStandard[]> => {
+export const updateAssessment = async (
+  assessmentId: string,
+  update: AssessmentUpdate
+): Promise<void> => {
   try {
-    let url = '/api/standards';
-    if (matAspectId) {
-      url += `?mat_aspect_id=${matAspectId}`;  // CHANGED: parameter name
-      console.log(`[getStandards] Fetching standards for aspect: ${matAspectId}`);
-    } else {
-      console.log('[getStandards] Fetching all standards');
-    }
-    const response = await apiClient.get(url);
-    console.log(`[getStandards] Received ${response.data.length} standards`);
-    
-    // Debug: Check first standard's structure
-    if (response.data.length > 0) {
-      console.log('[getStandards] First standard structure:', response.data[0]);
-    }
+    await apiClient.put(`/api/assessments/${assessmentId}`, {
+      rating: update.rating,
+      evidence_comments: update.evidence_comments
+    });
+  } catch (error) {
+    console.error(`Failed to update assessment ${assessmentId}:`, error);
+    throw new Error('Failed to save assessment. Please try again.');
+  }
+};
 
-    return response.data.map((s: any) => ({
-      mat_standard_id: s.mat_standard_id,
-      mat_id: s.mat_id || '',
-      mat_aspect_id: s.mat_aspect_id,
-      standard_code: s.standard_code,
-      standard_name: s.standard_name,
-      standard_description: s.standard_description || '',
-      sort_order: s.sort_order ?? 0,
-      source_standard_id: s.source_standard_id || undefined,
-      is_custom: s.is_custom ?? false,
-      is_modified: s.is_modified ?? false,
-      version_number: s.version_number || 1,
-      version_id: s.version_id || '',
-      aspect_code: s.aspect_code || '',
-      aspect_name: s.aspect_name || '',
-      is_active: s.is_active ?? true,
-      created_at: s.created_at || new Date().toISOString(),
-      updated_at: s.updated_at || new Date().toISOString(),
-      // Assessment-specific fields (if present)
-      rating: s.rating ?? null,
-      evidence_comments: s.evidence_comments || '',
-      submitted_at: s.submitted_at || undefined,
-      submitted_by: s.submitted_by || undefined
-    }));
+/**
+ * POST /api/assessments
+ * Create assessments for schools/aspect/term combination
+ */
+export const createAssessments = async (request: AssessmentCreate): Promise<void> => {
+  try {
+    await apiClient.post('/api/assessments', {
+      school_ids: request.school_ids,
+      aspect_code: request.aspect_code,
+      term_id: request.term_id,
+      due_date: request.due_date,
+      assigned_to: request.assigned_to
+    });
+  } catch (error) {
+    console.error('Failed to create assessments:', error);
+    throw new Error('Failed to create assessments. Please try again.');
+  }
+};
+
+/**
+ * POST /api/assessments/bulk-update
+ * Update multiple assessments in a single request
+ */
+export const bulkUpdateAssessments = async (updates: BulkUpdate[]): Promise<void> => {
+  try {
+    await apiClient.post('/api/assessments/bulk-update', {
+      updates: updates.map(u => ({
+        assessment_id: u.assessment_id,
+        rating: u.rating,
+        evidence_comments: u.evidence_comments
+      }))
+    });
+  } catch (error) {
+    console.error('Failed to bulk update assessments:', error);
+    throw new Error('Failed to save assessments. Please try again.');
+  }
+};
+
+// ============================================================================
+// Standards Endpoints
+// ============================================================================
+
+/**
+ * GET /api/standards
+ * List all standards for the MAT
+ */
+export const getStandards = async (aspectCode?: string): Promise<Standard[]> => {
+  try {
+    const params = new URLSearchParams();
+    if (aspectCode) params.append('aspect_code', aspectCode);
+
+    const url = `/api/standards${params.toString() ? `?${params}` : ''}`;
+    const response = await apiClient.get<Standard[]>(url);
+    
+    return response.data.map(transformStandard);
   } catch (error) {
     console.error('Failed to fetch standards:', error);
     throw new Error('Failed to load standards. Please try again.');
@@ -152,365 +176,289 @@ export const getStandards = async (matAspectId?: string): Promise<MatStandard[]>
 };
 
 /**
- * Submits assessment standards data to the real backend API.
+ * GET /api/standards/{mat_standard_id}
+ * Get a single standard with version history
  */
-export const submitAssessment = async (assessmentId: string, standards: { standardId: string; rating: Rating; evidence: string }[], submittedBy: string = 'user1'): Promise<void> => {
+export const getStandardById = async (matStandardId: string): Promise<Standard> => {
   try {
-    const payload: SubmitAssessmentRequest = {
-      assessment_id: assessmentId,
-      standards: standards.map(s => ({
-        standard_id: s.standardId,
-        rating: s.rating,
-        evidence_comments: s.evidence,
-        submitted_by: submittedBy,
-      })),
-    };
-
-    const response = await apiClient.post(`/api/assessments/${assessmentId}/submit`, payload);
-
-    if (response.data.status !== 'success') {
-      throw new Error('Submission failed');
-    }
-
-    console.log('Assessment submitted successfully:', response.data.message);
+    const response = await apiClient.get<Standard>(`/api/standards/${matStandardId}`);
+    return transformStandard(response.data);
   } catch (error) {
-    console.error('Failed to submit assessment:', error);
-    throw new Error('Failed to submit assessment. Please try again.');
+    console.error(`Failed to fetch standard ${matStandardId}:`, error);
+    throw new Error('Failed to load standard details. Please try again.');
   }
 };
 
 /**
- * Creates new assessments for the specified schools and category.
- * This endpoint is not yet implemented in the backend.
- */
-export const createAssessments = async (request: CreateAssessmentRequest): Promise<string[]> => {
-  try {
-    // Map frontend categories to backend categories
-    const categoryMap: Record<string, string> = {
-      'Education': 'education',
-      'Finance & Procurement': 'finance',
-      'Human Resources': 'hr',
-      'Estates': 'estates',
-      'Governance': 'governance',
-      'IT & Information Services': 'it',
-      'IT (Digital Aspects)': 'it', // Maps to same backend category as IT & Information Services
-      // Note: Backend only has 6 categories (education, finance, hr, estates, governance, it, is)
-      // 'is' appears to be an alias for information services
-    };
-
-    const backendCategory = categoryMap[request.category] || request.category.toLowerCase();
-
-    const payload = {
-      category: backendCategory,
-      school_ids: request.schoolIds,
-      due_date: request.dueDate,
-      term_id: request.term === 'Autumn' ? 'T1' : request.term === 'Spring' ? 'T2' : 'T3',
-      academic_year: request.academicYear.replace(/^(\d{4})-(\d{4})$/, '$1-$2').replace(/^(\d{4})-(\d{2})$/, '$1-$2'), // Keep backend format: 2024-25
-      assigned_to: request.assignedTo ? [request.assignedTo] : []
-    };
-
-    const response = await apiClient.post('/api/assessments', payload);
-
-    // The backend returns assessment_ids array (filtering out null values)
-    const assessmentIds = response.data?.assessment_ids?.filter(Boolean) || [];
-
-    return assessmentIds;
-  } catch (error: any) {
-    console.error('Failed to create assessments:', error.response?.data || error.message);
-    throw new Error(error.response?.data?.detail || 'Failed to create assessments. Please try again.');
-  }
-};
-
-/**
- * Updates a single assessment standard with new rating and evidence.
- * This is useful for auto-save functionality.
+ * PUT /api/standards/{mat_standard_id}
+ * Update a standard (creates a new version)
  */
 export const updateStandard = async (
-  assessmentId: string,
-  standardId: string,
-  rating: Rating,
-  evidence: string,
-  submittedBy: string = 'user1'
+  matStandardId: string,
+  update: StandardUpdate
 ): Promise<void> => {
   try {
-    await submitAssessment(assessmentId, [{ standardId, rating, evidence }], submittedBy);
+    await apiClient.put(`/api/standards/${matStandardId}`, {
+      standard_name: update.standard_name,
+      standard_description: update.standard_description,
+      change_reason: update.change_reason
+    });
   } catch (error) {
-    console.error('Failed to update standard:', error);
-    throw new Error('Failed to save changes. Please try again.');
+    console.error(`Failed to update standard ${matStandardId}:`, error);
+    throw new Error('Failed to update standard. Please try again.');
   }
 };
 
-// Legacy functions for backward compatibility and future use
-export const getUsers = async () => {
-  // TODO: Implement when backend provides /api/users endpoint
-  return [];
-};
-
-export const getTerms = async () => {
-  // TODO: Implement when backend provides /api/terms endpoint
-  return [];
-};
-
-
-
-
-// --- Aspects CRUD ---
-
-export const getAspects = async (): Promise<MatAspect[]> => {
+/**
+ * POST /api/standards
+ * Create a new custom standard
+ */
+export const createStandard = async (data: {
+  mat_aspect_id: string;
+  standard_code: string;
+  standard_name: string;
+  standard_description: string;
+  sort_order: number;
+}): Promise<Standard> => {
   try {
-    const response = await apiClient.get('/api/aspects');
-    console.log('[getAspects] Received aspects:', response.data.length, 'aspects');
-    if (response.data.length > 0) {
-      console.log('[getAspects] First aspect structure:', response.data[0]);
-    }
-    
-    return response.data.map((a: any) => ({
-      mat_aspect_id: a.mat_aspect_id,
-      mat_id: a.mat_id || '',
-      aspect_code: a.aspect_code,
-      aspect_name: a.aspect_name,
-      aspect_description: a.aspect_description || '',
-      sort_order: a.sort_order ?? 0,
-      source_aspect_id: a.source_aspect_id || undefined,
-      is_custom: a.is_custom ?? false,
-      is_modified: a.is_modified ?? false,
-      standards_count: a.standards_count || 0,
-      is_active: a.is_active ?? true,
-      created_at: a.created_at || new Date().toISOString(),
-      updated_at: a.updated_at || new Date().toISOString()
-    }));
+    const response = await apiClient.post<Standard>('/api/standards', data);
+    return transformStandard(response.data);
+  } catch (error) {
+    console.error('Failed to create standard:', error);
+    throw new Error('Failed to create standard. Please try again.');
+  }
+};
+
+/**
+ * DELETE /api/standards/{mat_standard_id}
+ * Delete a standard (soft delete)
+ */
+export const deleteStandard = async (matStandardId: string): Promise<void> => {
+  try {
+    await apiClient.delete(`/api/standards/${matStandardId}`);
+  } catch (error) {
+    console.error(`Failed to delete standard ${matStandardId}:`, error);
+    throw new Error('Failed to delete standard. Please try again.');
+  }
+};
+
+/**
+ * POST /api/standards/reorder
+ * Reorder standards within an aspect
+ */
+export const reorderStandards = async (updates: Array<{
+  mat_standard_id: string;
+  sort_order: number;
+}>): Promise<void> => {
+  try {
+    await apiClient.post('/api/standards/reorder', { standards: updates });
+  } catch (error) {
+    console.error('Failed to reorder standards:', error);
+    throw new Error('Failed to reorder standards. Please try again.');
+  }
+};
+
+// ============================================================================
+// Aspects Endpoints
+// ============================================================================
+
+/**
+ * GET /api/aspects
+ * List all aspects for the MAT
+ */
+export const getAspects = async (): Promise<Aspect[]> => {
+  try {
+    const response = await apiClient.get<Aspect[]>('/api/aspects');
+    return response.data.map(transformAspect);
   } catch (error) {
     console.error('Failed to fetch aspects:', error);
-    throw new Error('Failed to load aspects.');
+    throw new Error('Failed to load aspects. Please try again.');
   }
 };
 
-export const createAspect = async (
-  aspect: Omit<MatAspect, 'mat_aspect_id' | 'mat_id' | 'standards_count' | 'created_at' | 'updated_at'>
-): Promise<MatAspect> => {
+/**
+ * GET /api/aspects/{mat_aspect_id}
+ * Get a single aspect
+ */
+export const getAspectById = async (matAspectId: string): Promise<Aspect> => {
   try {
-    const payload = {
-      aspect_code: aspect.aspect_code,
-      aspect_name: aspect.aspect_name,
-      aspect_description: aspect.aspect_description,
-      sort_order: aspect.sort_order,
-      source_aspect_id: aspect.source_aspect_id  // For copy-on-write
-    };
-    const response = await apiClient.post('/api/aspects', payload);
-    
-    return {
-      mat_aspect_id: response.data.mat_aspect_id,
-      mat_id: response.data.mat_id,
-      aspect_code: response.data.aspect_code,
-      aspect_name: response.data.aspect_name,
-      aspect_description: response.data.aspect_description,
-      sort_order: response.data.sort_order,
-      source_aspect_id: response.data.source_aspect_id,
-      is_custom: response.data.is_custom,
-      is_modified: response.data.is_modified,
-      standards_count: response.data.standards_count || 0,
-      is_active: response.data.is_active ?? true,
-      created_at: response.data.created_at,
-      updated_at: response.data.updated_at
-    };
-  } catch (error: any) {
+    const response = await apiClient.get<Aspect>(`/api/aspects/${matAspectId}`);
+    return transformAspect(response.data);
+  } catch (error) {
+    console.error(`Failed to fetch aspect ${matAspectId}:`, error);
+    throw new Error('Failed to load aspect details. Please try again.');
+  }
+};
+
+/**
+ * POST /api/aspects
+ * Create a new custom aspect
+ */
+export const createAspect = async (data: {
+  aspect_code: string;
+  aspect_name: string;
+  aspect_description: string;
+  sort_order: number;
+}): Promise<Aspect> => {
+  try {
+    const response = await apiClient.post<Aspect>('/api/aspects', data);
+    return transformAspect(response.data);
+  } catch (error) {
     console.error('Failed to create aspect:', error);
-    const errorMsg = error.response?.data?.detail || 'Failed to create aspect.';
-    throw new Error(errorMsg);
+    throw new Error('Failed to create aspect. Please try again.');
   }
 };
 
-export const updateAspect = async (aspect: MatAspect): Promise<MatAspect> => {
-  try {
-    const payload = {
-      aspect_name: aspect.aspect_name,
-      aspect_description: aspect.aspect_description,
-      sort_order: aspect.sort_order
-    };
-    const response = await apiClient.put(`/api/aspects/${aspect.mat_aspect_id}`, payload);
-    
-    return {
-      mat_aspect_id: response.data.mat_aspect_id,
-      mat_id: response.data.mat_id,
-      aspect_code: response.data.aspect_code,
-      aspect_name: response.data.aspect_name,
-      aspect_description: response.data.aspect_description,
-      sort_order: response.data.sort_order,
-      source_aspect_id: response.data.source_aspect_id,
-      is_custom: response.data.is_custom,
-      is_modified: response.data.is_modified,
-      standards_count: response.data.standards_count || 0,
-      is_active: response.data.is_active ?? true,
-      created_at: response.data.created_at,
-      updated_at: response.data.updated_at
-    };
-  } catch (error: any) {
-    console.error('Failed to update aspect:', error);
-    const errorMsg = error.response?.data?.detail || 'Failed to update aspect.';
-    throw new Error(errorMsg);
+/**
+ * PUT /api/aspects/{mat_aspect_id}
+ * Update an aspect
+ */
+export const updateAspect = async (
+  matAspectId: string,
+  data: {
+    aspect_name: string;
+    aspect_description: string;
+    sort_order: number;
   }
-};
-
-export const deleteAspect = async (id: string): Promise<void> => {
+): Promise<void> => {
   try {
-    await apiClient.delete(`/api/aspects/${id}`);
+    await apiClient.put(`/api/aspects/${matAspectId}`, data);
   } catch (error) {
-    console.error('Failed to delete aspect:', error);
-    throw new Error('Failed to delete aspect.');
+    console.error(`Failed to update aspect ${matAspectId}:`, error);
+    throw new Error('Failed to update aspect. Please try again.');
   }
 };
 
-// --- Standards CRUD ---
-
-export const createStandard = async (
-  standard: Omit<MatStandard, 'mat_standard_id' | 'mat_id' | 'version_number' | 'version_id' | 'created_at' | 'updated_at'> & { 
-    change_reason: string  // REQUIRED for versioning
-  }
-): Promise<MatStandard> => {
+/**
+ * DELETE /api/aspects/{mat_aspect_id}
+ * Delete an aspect (soft delete)
+ */
+export const deleteAspect = async (matAspectId: string): Promise<void> => {
   try {
-    const payload = {
-      mat_aspect_id: standard.mat_aspect_id,
-      standard_code: standard.standard_code,
-      standard_name: standard.standard_name,
-      standard_description: standard.standard_description,
-      sort_order: standard.sort_order,
-      source_standard_id: standard.source_standard_id,  // For copy-on-write
-      change_reason: standard.change_reason  // REQUIRED
-    };
-    const response = await apiClient.post('/api/standards', payload);
-    
-    return {
-      mat_standard_id: response.data.mat_standard_id,
-      mat_id: response.data.mat_id,
-      mat_aspect_id: response.data.mat_aspect_id,
-      standard_code: response.data.standard_code,
-      standard_name: response.data.standard_name,
-      standard_description: response.data.standard_description,
-      sort_order: response.data.sort_order,
-      source_standard_id: response.data.source_standard_id,
-      is_custom: response.data.is_custom,
-      is_modified: response.data.is_modified,
-      version_number: response.data.version_number,
-      version_id: response.data.version_id,
-      aspect_code: response.data.aspect_code,
-      aspect_name: response.data.aspect_name,
-      is_active: response.data.is_active ?? true,
-      created_at: response.data.created_at,
-      updated_at: response.data.updated_at
-    };
-  } catch (error: any) {
-    console.error('Failed to create standard:', error);
-    const errorMsg = error.response?.data?.detail || 'Failed to create standard.';
-    throw new Error(errorMsg);
-  }
-};
-
-export const updateStandardDefinition = async (
-  standard: MatStandard & { change_reason: string }  // REQUIRED for versioning
-): Promise<MatStandard> => {
-  try {
-    const payload = {
-      standard_name: standard.standard_name,
-      standard_description: standard.standard_description,
-      change_reason: standard.change_reason  // REQUIRED - creates new version
-    };
-    
-    const response = await apiClient.put(`/api/standards/${standard.mat_standard_id}`, payload);
-    
-    return {
-      mat_standard_id: response.data.mat_standard_id,
-      mat_id: response.data.mat_id,
-      mat_aspect_id: response.data.mat_aspect_id,
-      standard_code: response.data.standard_code,
-      standard_name: response.data.standard_name,
-      standard_description: response.data.standard_description,
-      sort_order: response.data.sort_order,
-      source_standard_id: response.data.source_standard_id,
-      is_custom: response.data.is_custom,
-      is_modified: response.data.is_modified,
-      version_number: response.data.version_number,  // Incremented
-      version_id: response.data.version_id,          // New version ID
-      aspect_code: response.data.aspect_code,
-      aspect_name: response.data.aspect_name,
-      is_active: response.data.is_active ?? true,
-      created_at: response.data.created_at,
-      updated_at: response.data.updated_at
-    };
-  } catch (error: any) {
-    console.error('Failed to update standard:', error);
-    const errorMsg = error.response?.data?.detail || 'Failed to update standard.';
-    throw new Error(errorMsg);
-  }
-};
-
-export const deleteStandard = async (id: string): Promise<void> => {
-  try {
-    await apiClient.delete(`/api/standards/${id}`);  // Soft delete on backend
+    await apiClient.delete(`/api/aspects/${matAspectId}`);
   } catch (error) {
-    console.error('Failed to delete standard:', error);
-    throw new Error('Failed to delete standard.');
+    console.error(`Failed to delete aspect ${matAspectId}:`, error);
+    throw new Error('Failed to delete aspect. Please try again.');
   }
 };
 
-// NEW FUNCTION - Get version history for a standard
-export const getStandardVersions = async (matStandardId: string): Promise<StandardVersion[]> => {
+// ============================================================================
+// Schools Endpoints
+// ============================================================================
+
+/**
+ * GET /api/schools
+ * List all schools in the MAT
+ */
+export const getSchools = async (includeCentral: boolean = false): Promise<School[]> => {
   try {
-    const response = await apiClient.get(`/api/standards/${matStandardId}/versions`);
-    return response.data.map((v: any) => ({
-      version_id: v.version_id,
-      mat_standard_id: v.mat_standard_id,
-      version_number: v.version_number,
-      standard_code: v.standard_code,
-      standard_name: v.standard_name,
-      standard_description: v.standard_description,
-      effective_from: v.effective_from,
-      effective_to: v.effective_to,
-      created_by_user_id: v.created_by_user_id,
-      change_reason: v.change_reason,
-      created_at: v.created_at
-    }));
-  } catch (error: any) {
-    console.error('Failed to fetch standard versions:', error);
-    throw new Error('Failed to load version history.');
+    const params = new URLSearchParams();
+    if (includeCentral) params.append('include_central', 'true');
+
+    const url = `/api/schools${params.toString() ? `?${params}` : ''}`;
+    const response = await apiClient.get<School[]>(url);
+    
+    return response.data.map(transformSchool);
+  } catch (error) {
+    console.error('Failed to fetch schools:', error);
+    throw new Error('Failed to load schools. Please try again.');
   }
 };
 
-export const reorderStandards = async (standards: { id: string; orderIndex: number; title?: string; description?: string }[]): Promise<void> => {
+// ============================================================================
+// Terms Endpoints
+// ============================================================================
+
+/**
+ * GET /api/terms
+ * List available academic terms
+ */
+export const getTerms = async (academicYear?: string): Promise<Term[]> => {
   try {
-    console.log(`Reordering ${standards.length} standards...`, standards);
+    const params = new URLSearchParams();
+    if (academicYear) params.append('academic_year', academicYear);
+
+    const url = `/api/terms${params.toString() ? `?${params}` : ''}`;
+    const response = await apiClient.get<Term[]>(url);
     
-    // The backend doesn't have a bulk reorder endpoint yet
-    // So we need to update each standard individually
-    // We'll do this in parallel for better performance
-    const updatePromises = standards.map(async (s) => {
-      try {
-        // Include all required fields for update
-        const payload: any = {
-          sort_order: s.orderIndex
-        };
-        
-        // If we have the standard's current data, include it to avoid validation errors
-        if (s.title) {
-          payload.standard_name = s.title;
-        }
-        if (s.description !== undefined) {
-          payload.description = s.description;
-        }
-        
-        console.log(`Updating standard ${s.id} with sort_order ${s.orderIndex}`);
-        const response = await apiClient.put(`/api/standards/${s.id}`, payload);
-        return response.data;
-      } catch (error: any) {
-        console.error(`Failed to update standard ${s.id}:`, error.response?.data || error.message);
-        throw error;
-      }
-    });
-    
-    await Promise.all(updatePromises);
-    console.log(`✅ Successfully reordered ${standards.length} standards`);
-  } catch (error: any) {
-    console.error('Failed to reorder standards:', error);
-    const errorMsg = error.response?.data?.detail || 'Failed to reorder standards.';
-    throw new Error(errorMsg);
+    return response.data;
+  } catch (error) {
+    console.error('Failed to fetch terms:', error);
+    throw new Error('Failed to load terms. Please try again.');
   }
-}; 
+};
+
+// ============================================================================
+// Analytics Endpoints
+// ============================================================================
+
+/**
+ * GET /api/analytics/trends
+ * Get rating trends over time
+ */
+export const getAnalyticsTrends = async (filters?: {
+  school_id?: string;
+  aspect_code?: string;
+  from_term?: string;
+  to_term?: string;
+}): Promise<any> => {
+  try {
+    const params = new URLSearchParams();
+    if (filters?.school_id) params.append('school_id', filters.school_id);
+    if (filters?.aspect_code) params.append('aspect_code', filters.aspect_code);
+    if (filters?.from_term) params.append('from_term', filters.from_term);
+    if (filters?.to_term) params.append('to_term', filters.to_term);
+
+    const url = `/api/analytics/trends${params.toString() ? `?${params}` : ''}`;
+    const response = await apiClient.get(url);
+    
+    return response.data;
+  } catch (error) {
+    console.error('Failed to fetch analytics trends:', error);
+    throw new Error('Failed to load analytics. Please try again.');
+  }
+};
+
+// ============================================================================
+// Backward Compatibility Aliases
+// ============================================================================
+
+// Keep legacy function names for backward compatibility
+export const submitAssessment = bulkUpdateAssessments;
+export const updateStandardDefinition = updateStandard;
+export const getStandardVersions = getStandardById;
+
+// Export all
+export default {
+  // Assessments
+  getAssessments,
+  getAssessmentById,
+  getAssessmentsByAspect,
+  updateAssessment,
+  createAssessments,
+  bulkUpdateAssessments,
+  
+  // Standards
+  getStandards,
+  getStandardById,
+  updateStandard,
+  createStandard,
+  deleteStandard,
+  reorderStandards,
+  
+  // Aspects
+  getAspects,
+  getAspectById,
+  createAspect,
+  updateAspect,
+  deleteAspect,
+  
+  // Schools
+  getSchools,
+  
+  // Terms
+  getTerms,
+  
+  // Analytics
+  getAnalyticsTrends,
+};

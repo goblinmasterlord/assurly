@@ -1,22 +1,39 @@
+// ============================================================================
+// v4.0 Enhanced Assessment Service
+// ============================================================================
+// Adds caching, optimistic updates, and subscription management on top of base API
+
 import { requestCache } from '@/lib/request-cache';
 import {
   getAssessments as apiGetAssessments,
   getAssessmentById as apiGetAssessmentById,
+  getAssessmentsByAspect as apiGetAssessmentsByAspect,
+  updateAssessment as apiUpdateAssessment,
+  bulkUpdateAssessments as apiBulkUpdateAssessments,
+  createAssessments as apiCreateAssessments,
   getSchools as apiGetSchools,
   getStandards as apiGetStandards,
-  submitAssessment as apiSubmitAssessment,
-  createAssessments as apiCreateAssessments,
+  getStandardById as apiGetStandardById,
+  createStandard as apiCreateStandard,
+  updateStandard as apiUpdateStandard,
+  deleteStandard as apiDeleteStandard,
+  reorderStandards as apiReorderStandards,
   getAspects as apiGetAspects,
+  getAspectById as apiGetAspectById,
   createAspect as apiCreateAspect,
   updateAspect as apiUpdateAspect,
   deleteAspect as apiDeleteAspect,
-  createStandard as apiCreateStandard,
-  updateStandardDefinition as apiUpdateStandardDefinition,
-  deleteStandard as apiDeleteStandard,
-  reorderStandards as apiReorderStandards,
-  getStandardVersions as apiGetStandardVersions,
+  getTerms as apiGetTerms,
 } from '@/services/assessment-service';
-import type { Assessment, Rating, AssessmentCategory, AcademicTerm, AcademicYear, School, MatStandard, MatAspect, StandardVersion } from '@/types/assessment';
+import type { 
+  Assessment,
+  AssessmentByAspect,
+  Standard,
+  Aspect,
+  School,
+  Term,
+  Rating
+} from '@/types/assessment';
 
 // Enhanced service with caching, optimistic updates, and intelligent data management
 export class EnhancedAssessmentService {
@@ -25,18 +42,26 @@ export class EnhancedAssessmentService {
 
   /**
    * Get all assessments with intelligent caching
-   * Uses stale-while-revalidate for optimal UX
    */
-  async getAssessments(): Promise<Assessment[]> {
+  async getAssessments(filters?: {
+    school_id?: string;
+    aspect_code?: string;
+    term_id?: string;
+    academic_year?: string;
+    status?: string;
+  }): Promise<Assessment[]> {
+    const cacheKey = filters 
+      ? `assessments_${JSON.stringify(filters)}`
+      : 'assessments';
+    
     return requestCache.get(
-      'assessments',
-      () => apiGetAssessments(),
+      cacheKey as any,
+      () => apiGetAssessments(filters)
     );
   }
 
   /**
    * Get assessment by ID with caching
-   * More frequent cache invalidation due to editing
    */
   async getAssessmentById(assessmentId: string): Promise<Assessment> {
     return requestCache.get(
@@ -47,8 +72,106 @@ export class EnhancedAssessmentService {
   }
 
   /**
+   * Get assessments by aspect (for assessment form view)
+   */
+  async getAssessmentsByAspect(
+    aspectCode: string,
+    schoolId: string,
+    termId: string
+  ): Promise<AssessmentByAspect> {
+    const cacheKey = `aspect_${aspectCode}_${schoolId}_${termId}`;
+    return requestCache.get(
+      cacheKey as any,
+      () => apiGetAssessmentsByAspect(aspectCode, schoolId, termId)
+    );
+  }
+
+  /**
+   * Update single assessment with optimistic updates
+   */
+  async updateAssessment(
+    assessmentId: string,
+    rating: Rating,
+    evidenceComments: string
+  ): Promise<void> {
+    // Optimistic update - immediately update the cached assessment
+    requestCache.updateOptimistically<Assessment>(
+      'assessment_detail',
+      (current) => ({
+        ...current,
+        rating,
+        evidence_comments: evidenceComments,
+        status: rating ? 'completed' : 'in_progress',
+        last_updated: new Date().toISOString(),
+      }),
+      { id: assessmentId }
+    );
+
+    try {
+      await apiUpdateAssessment(assessmentId, { rating, evidence_comments: evidenceComments });
+      
+      // Invalidate cache to ensure fresh data
+      requestCache.invalidate('assessment_detail', { id: assessmentId });
+      requestCache.invalidate('assessments');
+      
+      console.log('✅ Assessment updated successfully');
+    } catch (error) {
+      // Revert optimistic updates on failure
+      requestCache.invalidate('assessment_detail', { id: assessmentId });
+      console.error('❌ Assessment update failed, reverted optimistic updates');
+      throw error;
+    }
+  }
+
+  /**
+   * Bulk update multiple assessments
+   */
+  async bulkUpdateAssessments(updates: Array<{
+    assessment_id: string;
+    rating: Rating;
+    evidence_comments: string;
+  }>): Promise<void> {
+    try {
+      await apiBulkUpdateAssessments(updates);
+      
+      // Invalidate all affected caches
+      updates.forEach(u => {
+        requestCache.invalidate('assessment_detail', { id: u.assessment_id });
+      });
+      requestCache.invalidate('assessments');
+      
+      console.log(`✅ ${updates.length} assessments updated successfully`);
+    } catch (error) {
+      console.error('❌ Bulk update failed');
+      throw error;
+    }
+  }
+
+  /**
+   * Create new assessments with cache invalidation
+   */
+  async createAssessments(request: {
+    school_ids: string[];
+    aspect_code: string;
+    term_id: string;
+    due_date?: string;
+    assigned_to?: string;
+  }): Promise<void> {
+    try {
+      await apiCreateAssessments(request);
+      
+      // Invalidate assessments cache to refresh the list
+      requestCache.invalidate('assessments');
+      
+      console.log('✅ Assessments created successfully');
+    } catch (error) {
+      console.error('❌ Failed to create assessments');
+      throw error;
+    }
+  }
+
+  /**
    * Subscribe to assessment updates
-   * Returns unsubscribe function
    */
   subscribeToAssessments(callback: (assessments: Assessment[]) => void): () => void {
     return requestCache.subscribe('assessments', callback);
@@ -61,149 +184,192 @@ export class EnhancedAssessmentService {
     return requestCache.subscribe('assessment_detail', callback, { id: assessmentId });
   }
 
+  // ===== STANDARDS OPERATIONS =====
+
   /**
-   * Submit assessment with optimistic updates
-   * Immediately updates UI, then syncs with server
+   * Get standards with caching
    */
-  async submitAssessment(
-    assessmentId: string,
-    standards: { standardId: string; rating: Rating; evidence: string }[],
-    submittedBy: string = 'user1'
-  ): Promise<void> {
-    // Optimistic update - immediately update the cached assessment
-    requestCache.updateOptimistically<Assessment>(
-      'assessment_detail',
-      (currentAssessment) => {
-        if (!currentAssessment.standards) return currentAssessment;
-
-        // Update standards with new ratings and evidence
-        const updatedStandards = currentAssessment.standards.map(standard => {
-          const submittedStandard = standards.find(s => s.standardId === standard.id);
-          if (submittedStandard) {
-            return {
-              ...standard,
-              rating: submittedStandard.rating,
-              evidence: submittedStandard.evidence,
-              lastUpdated: new Date().toISOString(),
-            };
-          }
-          return standard;
-        });
-
-        // Calculate new completion stats
-        const completedStandards = updatedStandards.filter(s => s.rating !== null).length;
-        const totalStandards = updatedStandards.length;
-
-        // Calculate overall score (average of ratings)
-        const ratedStandards = updatedStandards.filter(s => s.rating !== null);
-        const overallScore = ratedStandards.length > 0
-          ? ratedStandards.reduce((sum, s) => sum + (s.rating || 0), 0) / ratedStandards.length
-          : 0;
-
-        // Determine new status
-        const newStatus = completedStandards === totalStandards ? 'Completed' :
-          completedStandards > 0 ? 'In Progress' : 'Not Started';
-
-        return {
-          ...currentAssessment,
-          standards: updatedStandards,
-          completedStandards,
-          totalStandards,
-          overallScore,
-          status: newStatus as any,
-          lastUpdated: new Date().toISOString(),
-        };
-      },
-      { id: assessmentId }
+  async getStandards(aspectCode?: string): Promise<Standard[]> {
+    const cacheKey = aspectCode ? `standards_${aspectCode}` : 'standards';
+    
+    console.log(`[EnhancedService] Fetching standards${aspectCode ? ` for ${aspectCode}` : ''}...`);
+    const standards = await requestCache.get(
+      cacheKey as any,
+      () => apiGetStandards(aspectCode)
     );
-
-    // Also optimistically update the assessments list
-    requestCache.updateOptimistically<Assessment[]>(
-      'assessments',
-      (currentAssessments) => {
-        return currentAssessments.map(assessment => {
-          if (assessment.id === assessmentId) {
-            const completedStandards = standards.length;
-            const totalStandards = assessment.totalStandards;
-            const ratedStandards = standards.filter(s => s.rating !== null);
-            const overallScore = ratedStandards.length > 0
-              ? ratedStandards.reduce((sum, s) => sum + (s.rating || 0), 0) / ratedStandards.length
-              : assessment.overallScore || 0;
-
-            const newStatus = completedStandards === totalStandards ? 'Completed' :
-              completedStandards > 0 ? 'In Progress' : 'Not Started';
-
-            return {
-              ...assessment,
-              completedStandards,
-              overallScore,
-              status: newStatus as any,
-              lastUpdated: new Date().toISOString(),
-            };
-          }
-          return assessment;
-        });
-      }
-    );
-
-    try {
-      // Perform actual API call
-      await apiSubmitAssessment(assessmentId, standards, submittedBy);
-
-      // Invalidate cache to ensure we get fresh data on next request
-      // This will trigger a background refresh for subscribers
-      requestCache.invalidate('assessment_detail', { id: assessmentId });
-      requestCache.invalidate('assessments');
-
-      console.log('✅ Assessment submitted successfully with optimistic updates');
-    } catch (error) {
-      // Revert optimistic updates on failure
-      requestCache.invalidate('assessment_detail', { id: assessmentId });
-      requestCache.invalidate('assessments');
-
-      console.error('❌ Assessment submission failed, reverted optimistic updates');
-      throw error;
-    }
+    console.log(`[EnhancedService] Fetched ${standards.length} standards`);
+    return standards;
   }
 
   /**
-   * Create new assessments with cache invalidation
+   * Get standard by ID with version history
    */
-  async createAssessments(request: {
-    category: AssessmentCategory;
-    schoolIds: string[];
-    dueDate?: string;
-    term: AcademicTerm;
-    academicYear: AcademicYear;
-    assignedTo?: string;
-  }): Promise<string[]> {
-    try {
-      const assessmentIds = await apiCreateAssessments(request);
+  async getStandardById(matStandardId: string): Promise<Standard> {
+    return requestCache.get(
+      'standard_detail',
+      () => apiGetStandardById(matStandardId),
+      { id: matStandardId }
+    );
+  }
 
-      // Invalidate assessments cache to refresh the list
-      requestCache.invalidate('assessments');
+  /**
+   * Create new custom standard
+   */
+  async createStandard(data: {
+    mat_aspect_id: string;
+    standard_code: string;
+    standard_name: string;
+    standard_description: string;
+    sort_order: number;
+  }): Promise<Standard> {
+    const newStandard = await apiCreateStandard(data);
+    
+    // Invalidate relevant caches
+    requestCache.invalidate('standards');
+    requestCache.invalidate('aspects'); // Count might change
+    
+    return newStandard;
+  }
 
-      // Preload the new assessments for better UX
-      assessmentIds.forEach(id => {
-        requestCache.preload('assessment_detail', () => apiGetAssessmentById(id), { id });
-      });
-
-      return assessmentIds;
-    } catch (error) {
-      console.error('Failed to create assessments:', error);
-      throw error;
+  /**
+   * Update standard (creates new version)
+   */
+  async updateStandard(
+    matStandardId: string,
+    data: {
+      standard_name: string;
+      standard_description: string;
+      change_reason?: string;
     }
+  ): Promise<void> {
+    await apiUpdateStandard(matStandardId, data);
+    
+    // Invalidate caches
+    requestCache.invalidate('standards');
+    requestCache.invalidate('standard_detail', { id: matStandardId });
+  }
+
+  /**
+   * Delete standard
+   */
+  async deleteStandard(matStandardId: string): Promise<void> {
+    await apiDeleteStandard(matStandardId);
+    
+    // Invalidate caches
+    requestCache.invalidate('standards');
+    requestCache.invalidate('aspects'); // Count might change
+  }
+
+  /**
+   * Reorder standards
+   */
+  async reorderStandards(updates: Array<{
+    mat_standard_id: string;
+    sort_order: number;
+  }>): Promise<void> {
+    await apiReorderStandards(updates);
+    
+    // Invalidate standards cache
+    requestCache.invalidate('standards');
+  }
+
+  /**
+   * Subscribe to standards updates
+   */
+  subscribeToStandards(callback: (standards: Standard[]) => void, aspectCode?: string): () => void {
+    const cacheKey = aspectCode ? `standards_${aspectCode}` : 'standards';
+    return requestCache.subscribe(cacheKey as any, callback);
+  }
+
+  // ===== ASPECTS OPERATIONS =====
+
+  /**
+   * Get aspects with caching
+   */
+  async getAspects(): Promise<Aspect[]> {
+    console.log('[EnhancedService] Fetching aspects...');
+    const aspects = await requestCache.get(
+      'aspects',
+      () => apiGetAspects()
+    );
+    console.log(`[EnhancedService] Fetched ${aspects.length} aspects`);
+    return aspects;
+  }
+
+  /**
+   * Get aspect by ID
+   */
+  async getAspectById(matAspectId: string): Promise<Aspect> {
+    return requestCache.get(
+      'aspect_detail',
+      () => apiGetAspectById(matAspectId),
+      { id: matAspectId }
+    );
+  }
+
+  /**
+   * Create new custom aspect
+   */
+  async createAspect(data: {
+    aspect_code: string;
+    aspect_name: string;
+    aspect_description: string;
+    sort_order: number;
+  }): Promise<Aspect> {
+    const newAspect = await apiCreateAspect(data);
+    
+    // Invalidate aspects cache
+    requestCache.invalidate('aspects');
+    
+    return newAspect;
+  }
+
+  /**
+   * Update aspect
+   */
+  async updateAspect(
+    matAspectId: string,
+    data: {
+      aspect_name: string;
+      aspect_description: string;
+      sort_order: number;
+    }
+  ): Promise<void> {
+    await apiUpdateAspect(matAspectId, data);
+    
+    // Invalidate caches
+    requestCache.invalidate('aspects');
+    requestCache.invalidate('aspect_detail', { id: matAspectId });
+  }
+
+  /**
+   * Delete aspect
+   */
+  async deleteAspect(matAspectId: string): Promise<void> {
+    await apiDeleteAspect(matAspectId);
+    
+    // Invalidate caches
+    requestCache.invalidate('aspects');
+    requestCache.invalidate('standards'); // Deleting aspect affects standards
+  }
+
+  /**
+   * Subscribe to aspects updates
+   */
+  subscribeToAspects(callback: (aspects: Aspect[]) => void): () => void {
+    return requestCache.subscribe('aspects', callback);
   }
 
   // ===== SCHOOLS OPERATIONS =====
 
   /**
-   * Get schools with long-term caching (schools rarely change)
+   * Get schools with long-term caching
    */
-  async getSchools(): Promise<School[]> {
+  async getSchools(includeCentral: boolean = false): Promise<School[]> {
+    const cacheKey = includeCentral ? 'schools_with_central' : 'schools';
     return requestCache.get(
-      'schools',
-      () => apiGetSchools(),
+      cacheKey as any,
+      () => apiGetSchools(includeCentral)
     );
   }
 
@@ -214,112 +380,40 @@ export class EnhancedAssessmentService {
     return requestCache.subscribe('schools', callback);
   }
 
-  // ===== ASPECTS OPERATIONS =====
-
-  async getAspects(): Promise<MatAspect[]> {
-    console.log('[EnhancedAssessmentService] Fetching aspects from API...');
-    const aspects = await requestCache.get(
-      'aspects',
-      () => apiGetAspects()
-    );
-    console.log(`[EnhancedAssessmentService] Fetched ${aspects.length} aspects`);
-    return aspects;
-  }
-
-  async createAspect(aspect: Omit<MatAspect, 'mat_aspect_id' | 'mat_id' | 'standards_count' | 'created_at' | 'updated_at'>): Promise<MatAspect> {
-    const newAspect = await apiCreateAspect(aspect);
-    requestCache.invalidate('aspects');
-    return newAspect;
-  }
-
-  async updateAspect(aspect: MatAspect): Promise<MatAspect> {
-    const updated = await apiUpdateAspect(aspect);
-    requestCache.invalidate('aspects');
-    return updated;
-  }
-
-  async deleteAspect(id: string): Promise<void> {
-    await apiDeleteAspect(id);
-    requestCache.invalidate('aspects');
-    requestCache.invalidate('standards'); // Deleting aspect might affect standards
-  }
-
-  // ===== STANDARDS OPERATIONS =====
+  // ===== TERMS OPERATIONS =====
 
   /**
-   * Get standards with caching by aspect
+   * Get terms with caching
    */
-  async getStandards(matAspectId?: string): Promise<MatStandard[]> {
-    console.log(`[EnhancedAssessmentService] Fetching standards from API${aspectId ? ` for aspect ${aspectId}` : ''}...`);
-    const standards = await requestCache.get(
-      'standards',
-      () => apiGetStandards(matAspectId),
-      { aspectId: matAspectId || 'all' }
-    );
-    console.log(`[EnhancedAssessmentService] Fetched ${standards.length} standards`);
-    return standards;
-  }
-
-  async createStandard(standard: Omit<MatStandard, 'mat_standard_id' | 'mat_id' | 'version_number' | 'version_id' | 'created_at' | 'updated_at'> & { change_reason: string }): Promise<MatStandard> {
-    const newStandard = await apiCreateStandard(standard);
-    requestCache.invalidate('standards', { aspectId: standard.aspectId });
-    requestCache.invalidate('standards', { aspectId: 'all' });
-    requestCache.invalidate('aspects'); // Count might change
-    return newStandard;
-  }
-
-  async updateStandardDefinition(standard: MatStandard & { change_reason: string }): Promise<MatStandard> {
-    const updated = await apiUpdateStandardDefinition(standard);
-    // Invalidate all potential standard lists since we don't know the aspect ID easily here without passing it
-    // Or we could pass aspectId to this method if needed. For now, invalidate all.
-    requestCache.invalidate('standards');
-    return updated;
-  }
-
-  async deleteStandard(id: string): Promise<void> {
-    await apiDeleteStandard(id);
-    requestCache.invalidate('standards');
-    requestCache.invalidate('aspects'); // Count might change
-  }
-
-  async reorderStandards(standards: { id: string; orderIndex: number }[]): Promise<void> {
-    await apiReorderStandards(standards);
-    requestCache.invalidate('standards');
-  }
-
-  /**
-   * Subscribe to standards updates
-   */
-  subscribeToStandards(callback: (standards: MatStandard[]) => void, matAspectId?: string): () => void {
-    return requestCache.subscribe('standards', callback, { aspectId: matAspectId || 'all' });
-  }
-
-  /**
-   * Get version history for a standard
-   */
-  async getStandardVersions(matStandardId: string): Promise<StandardVersion[]> {
+  async getTerms(academicYear?: string): Promise<Term[]> {
+    const cacheKey = academicYear ? `terms_${academicYear}` : 'terms';
     return requestCache.get(
-      'standard_versions',
-      () => apiGetStandardVersions(matStandardId),
-      { id: matStandardId }
+      cacheKey as any,
+      () => apiGetTerms(academicYear)
     );
+  }
+
+  /**
+   * Subscribe to terms updates
+   */
+  subscribeToTerms(callback: (terms: Term[]) => void): () => void {
+    return requestCache.subscribe('terms', callback);
   }
 
   // ===== CACHE MANAGEMENT =====
 
   /**
    * Preload critical data for better UX
-   * Call this during app initialization or route changes
    */
   async preloadCriticalData(): Promise<void> {
     console.log('🚀 Preloading critical data...');
 
     try {
-      // Preload in parallel for best performance
       await Promise.allSettled([
         requestCache.preload('assessments', () => apiGetAssessments()),
         requestCache.preload('schools', () => apiGetSchools()),
-        requestCache.preload('standards', () => apiGetStandards(), { aspectId: 'all' }),
+        requestCache.preload('aspects', () => apiGetAspects()),
+        requestCache.preload('terms', () => apiGetTerms()),
       ]);
 
       console.log('✅ Critical data preloaded successfully');
@@ -330,7 +424,6 @@ export class EnhancedAssessmentService {
 
   /**
    * Refresh all cached data
-   * Useful for pull-to-refresh or manual refresh
    */
   async refreshAllData(): Promise<void> {
     console.log('🔄 Refreshing all cached data...');
@@ -340,6 +433,8 @@ export class EnhancedAssessmentService {
     requestCache.invalidate('assessment_detail');
     requestCache.invalidate('schools');
     requestCache.invalidate('standards');
+    requestCache.invalidate('aspects');
+    requestCache.invalidate('terms');
 
     // Preload fresh data
     await this.preloadCriticalData();
@@ -347,21 +442,18 @@ export class EnhancedAssessmentService {
 
   /**
    * Invalidate specific assessment cache
-   * Call after external updates (e.g., from another tab)
    */
   invalidateAssessment(assessmentId: string): void {
     requestCache.invalidate('assessment_detail', { id: assessmentId });
-    requestCache.invalidate('assessments'); // Also refresh list
+    requestCache.invalidate('assessments');
   }
 
   /**
-   * Get cache statistics for debugging
+   * Get cache statistics
    */
   getCacheStats() {
     return requestCache.getStats();
   }
-
-  // ===== OFFLINE SUPPORT =====
 
   /**
    * Check if we have cached data for offline use
@@ -370,22 +462,7 @@ export class EnhancedAssessmentService {
     const stats = requestCache.getStats();
     return stats.size > 0;
   }
-
-  /**
-   * Get cached assessments for offline use
-   * Returns null if no cached data available
-   */
-  getCachedAssessments(): Assessment[] | null {
-    // This is a simplified implementation
-    // In a real app, you'd want to access the cache more directly
-    try {
-      // For now, we'll just indicate if offline data is available
-      return this.hasOfflineData() ? [] : null; // TODO: Implement proper offline data access
-    } catch {
-      return null;
-    }
-  }
 }
 
 // Export singleton instance
-export const assessmentService = new EnhancedAssessmentService(); 
+export const assessmentService = new EnhancedAssessmentService();

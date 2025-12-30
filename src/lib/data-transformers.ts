@@ -1,305 +1,446 @@
+// ============================================================================
+// v4.0 Data Transformers
+// ============================================================================
+// v4 API responses are mostly frontend-ready. Transformers now mainly:
+// 1. Add backward compatibility fields
+// 2. Normalize data structures
+// 3. Map aspect codes to legacy category format
+
 import type {
   Assessment,
+  AssessmentGroup,
+  AssessmentByAspect,
+  AssessmentStandard,
+  Standard,
+  Aspect,
   School,
-  MatStandard,
+  Term,
   User,
-  AcademicTerm,
   AssessmentCategory,
+  AssessmentStatus,
+  AcademicTerm,
 } from '@/types/assessment';
 
-// API response types for the actual backend (from ASSESSMENT_API_SPECIFICATION.md)
-interface ApiAssessmentSummary {
-  assessment_id: string;                        // Composite: {school_id}-{aspect_id}-{term_id}-{academic_year}
-  school_id: string;
-  school_name: string;
-  aspect_id: string;                            // Simple string: "edu", "gov", "safe"
-  aspect_code: string;                          // "EDU", "GOV", "SAFE"
-  aspect_name: string;                          // "Education", "Governance"
-  term_id: string;                              // "T1", "T2", "T3"
-  academic_year: string;                        // "2024-2025"
-  due_date: string | null;
-  assigned_to: string | null;                   // Single user UUID (backend returns single, not array)
-  last_updated: string | null;
-  updated_by: string | null;
-  status: 'not_started' | 'in_progress' | 'submitted';
-  total_standards: number;
-  completed_standards: number;
-}
-
-interface ApiStandardRating {
-  standard_id: string;                          // UUID
-  standard_name: string;
-  description: string;                          // Currently empty in responses
-  area_id: string;                              // Same as aspect_id
-  rating: number | null;                        // 0-4
-  evidence_comments: string | null;
-  submitted_at: string | null;
-  submitted_by: string | null;
-  has_attachments: 0 | 1;                       // Boolean as int
-}
-
-interface ApiAssessmentDetail {
-  assessment_id: string;
-  name: string;                                 // Auto-generated display name
-  school_id: string;
-  school_name: string;
-  aspect_id: string;                            // Simple string: "edu", "gov"
-  aspect_code: string;                          // "EDU", "GOV"
-  aspect_name: string;                          // "Education", "Governance"
-  term_id: string;
-  academic_year: string;
-  status: 'not_started' | 'in_progress' | 'submitted';
-  due_date: string | null;
-  assigned_to: string[];                        // Array of user UUIDs
-  last_updated: string | null;
-  updated_by: string | null;
-  standards: ApiStandardRating[];
-}
-
-// New API types for schools and standards endpoints
-interface ApiSchoolResponse {
-  school_id: string;
-  school_name: string;
-  mat_id: string;
-  mat_name: string;
-  school_code: string;
-}
-
-interface ApiStandardResponse {
-  mat_standard_id: string;  // v3.0 field
-  mat_id?: string;  // May be provided
-  mat_aspect_id: string;  // v3.0 field
-  standard_code: string;
-  standard_name: string;
-  standard_description?: string;
-  aspect_code?: string;
-  aspect_name?: string;
-  sort_order?: number;
-  version_number?: number;
-  version_id?: string;
-  is_custom?: boolean;
-  is_modified?: boolean;
-  source_standard_id?: string;
-}
-
-// ------------------------------
+// ============================================================================
 // Mapping Utilities
-// ------------------------------
-
-const termMap: Record<string, AcademicTerm> = {
-  T1: 'Autumn',
-  T2: 'Spring',
-  T3: 'Summer',
-};
-
-// Status mapping moved to mapStatus function below
+// ============================================================================
 
 /**
- * Normalises category strings to match our `AssessmentCategory` union type.
- * Keeps categories in lowercase to match backend format
- * Example: "education" → "education"
+ * Maps aspect code to legacy category format
+ * EDU -> education, HR -> hr, etc.
  */
-const normaliseCategory = (category: string): AssessmentCategory => {
-  // Keep lowercase to match backend format
-  return category.toLowerCase() as AssessmentCategory;
-};
-
-/**
- * Converts academic year from short format ("2024-25") to long format ("2024-2025").
- */
-const expandAcademicYear = (year: string): string => {
-  if (/^\d{4}-\d{2}$/.test(year)) {
-    const [start, end] = year.split('-');
-    // If end has 2 digits, prepend the first two digits of the start year
-    const endFull = start.slice(0, 2) + end;
-    return `${start}-${endFull}`;
-  }
-  return year;
+const aspectCodeToCategory = (aspectCode: string): AssessmentCategory => {
+  const map: Record<string, AssessmentCategory> = {
+    'EDU': 'education',
+    'HR': 'hr',
+    'FIN': 'finance',
+    'EST': 'estates',
+    'GOV': 'governance',
+    'IT': 'it',
+    'IS': 'is',
+  };
+  return (map[aspectCode] || aspectCode.toLowerCase()) as AssessmentCategory;
 };
 
 /**
- * Maps backend term IDs to frontend term names
+ * Maps API status to legacy display status
  */
-const mapTermIdToTerm = (termId: string): string => {
-  const termMap: Record<string, string> = {
+const mapStatus = (status: AssessmentStatus): string => {
+  const map: Record<AssessmentStatus, string> = {
+    'not_started': 'Not Started',
+    'in_progress': 'In Progress',
+    'completed': 'Completed',
+    'approved': 'Completed',
+  };
+  return map[status] || status;
+};
+
+/**
+ * Maps term ID to legacy term name
+ */
+const mapTermId = (termId: string): AcademicTerm => {
+  const map: Record<string, AcademicTerm> = {
     'T1': 'Autumn',
     'T2': 'Spring',
     'T3': 'Summer',
   };
-  return termMap[termId] || termId; // Fallback to original if not found
+  return map[termId] || 'Autumn';
 };
 
 /**
- * Maps backend academic year format to frontend format
+ * Expands short academic year to long format
+ * 2024-25 -> 2024-2025
  */
-const mapAcademicYear = (academicYear: string): string => {
-  // Convert "2024-25" to "2024-2025"
-  if (academicYear.includes('-') && academicYear.length === 7) {
-    const [startYear, endYearShort] = academicYear.split('-');
-    const endYear = `20${endYearShort}`;
-    return `${startYear}-${endYear}`;
+const expandAcademicYear = (year: string): string => {
+  if (/^\d{4}-\d{2}$/.test(year)) {
+    const [start, end] = year.split('-');
+    return `${start}-20${end}`;
   }
-  return academicYear; // Return as-is if format is unexpected
+  return year;
 };
 
+// ============================================================================
+// Assessment Group Transformers
+// ============================================================================
 
 /**
- * Maps backend status to frontend status format
+ * Transforms v4 AssessmentGroup response (already frontend-ready)
+ * Adds backward compatibility fields for legacy components
  */
-const mapStatus = (status: string): string => {
-  const statusMap: Record<string, string> = {
-    'completed': 'Completed',
-    'in_progress': 'In Progress',
-    'not_started': 'Not Started',
-    'overdue': 'Overdue',
-  };
-  return statusMap[status.toLowerCase()] || status;
-};
-
-/**
- * Transforms API school data into frontend School format.
- */
-export const transformSchool = (schoolId: string, schoolName: string): School => {
-  // Generate a simple code from the name
-  const code = schoolName
-    .split(' ')
-    .map(word => word[0])
-    .join('')
-    .toUpperCase();
-
+export const transformAssessmentGroup = (group: AssessmentGroup): Assessment => {
   return {
+    // v4 fields (pass through)
+    id: group.group_id,
+    assessment_id: group.group_id,
+    school_id: group.school_id,
+    school_name: group.school_name,
+    mat_aspect_id: group.mat_aspect_id,
+    aspect_code: group.aspect_code,
+    aspect_name: group.aspect_name,
+    unique_term_id: `${group.term_id}-${group.academic_year}`,
+    academic_year: group.academic_year,
+    rating: null, // Groups don't have individual ratings
+    evidence_comments: null,
+    status: group.status,
+    due_date: group.due_date,
+    assigned_to: null,
+    assigned_to_name: null,
+    submitted_at: null,
+    submitted_by: null,
+    submitted_by_name: null,
+    last_updated: group.last_updated,
+    mat_standard_id: '',
+    standard_code: '',
+    standard_name: group.aspect_name,
+    standard_description: '',
+    version_id: '',
+    version_number: 1,
+    
+    // Backward compatibility fields
+    name: `${group.aspect_name} - ${group.school_name}`,
+    category: aspectCodeToCategory(group.aspect_code),
+    school: {
+      school_id: group.school_id,
+      school_name: group.school_name,
+      id: group.school_id,
+      name: group.school_name,
+    },
+    completedStandards: group.completed_standards,
+    totalStandards: group.total_standards,
+    lastUpdated: group.last_updated,
+    dueDate: group.due_date || undefined,
+    assignedTo: [],
+    term: mapTermId(group.term_id),
+    academicYear: expandAcademicYear(group.academic_year),
+  };
+};
+
+// ============================================================================
+// Assessment Transformers
+// ============================================================================
+
+/**
+ * Transforms v4 Assessment response (already frontend-ready)
+ * Adds backward compatibility fields
+ */
+export const transformAssessment = (assessment: Assessment): Assessment => {
+  return {
+    ...assessment,
+    // Add backward compatibility fields
+    name: `${assessment.standard_name} - ${assessment.school_name}`,
+    category: aspectCodeToCategory(assessment.aspect_code),
+    school: {
+      school_id: assessment.school_id,
+      school_name: assessment.school_name,
+      id: assessment.school_id,
+      name: assessment.school_name,
+    },
+    completedStandards: assessment.rating ? 1 : 0,
+    totalStandards: 1,
+    lastUpdated: assessment.last_updated,
+    dueDate: assessment.due_date || undefined,
+    assignedTo: assessment.assigned_to_name ? [{
+      id: assessment.assigned_to || '',
+      name: assessment.assigned_to_name,
+      email: '',
+      role: '',
+    }] : [],
+    term: mapTermId(assessment.unique_term_id.split('-')[0]),
+    academicYear: expandAcademicYear(assessment.academic_year),
+  };
+};
+
+/**
+ * Transforms v4 AssessmentByAspect response (already frontend-ready)
+ */
+export const transformAssessmentByAspect = (data: AssessmentByAspect): AssessmentByAspect => {
+  // v4 response is already perfect for frontend - pass through
+  return data;
+};
+
+/**
+ * Transforms v4 AssessmentStandard (already frontend-ready)
+ */
+export const transformAssessmentStandard = (standard: AssessmentStandard): AssessmentStandard => {
+  // v4 response is already perfect - pass through
+  return standard;
+};
+
+// ============================================================================
+// Standard Transformers
+// ============================================================================
+
+/**
+ * Transforms v4 Standard response (already frontend-ready)
+ */
+export const transformStandard = (standard: Standard): Standard => {
+  // v4 response is already perfect - pass through
+  return standard;
+};
+
+/**
+ * Transforms v4 standard response to include backward compat fields
+ */
+export const transformStandardResponse = (apiStandard: Standard): Standard => {
+  return {
+    ...apiStandard,
+    // v4 already has all required fields
+  };
+};
+
+// ============================================================================
+// Aspect Transformers
+// ============================================================================
+
+/**
+ * Transforms v4 Aspect response (already frontend-ready)
+ */
+export const transformAspect = (aspect: Aspect): Aspect => {
+  // v4 response is already perfect - pass through
+  return aspect;
+};
+
+/**
+ * Transforms v4 aspect response
+ */
+export const transformAspectResponse = (apiAspect: Aspect): Aspect => {
+  return {
+    ...apiAspect,
+    // v4 already has all required fields
+  };
+};
+
+// ============================================================================
+// School Transformers
+// ============================================================================
+
+/**
+ * Transforms v4 School response
+ * Adds backward compatibility fields
+ */
+export const transformSchool = (school: School): School => {
+  return {
+    ...school,
+    id: school.school_id,
+    name: school.school_name,
+    code: school.school_id, // Use ID as code for backward compat
+  };
+};
+
+/**
+ * Simple school transformer for ID + name only
+ */
+export const transformSchoolBasic = (schoolId: string, schoolName: string): School => {
+  return {
+    school_id: schoolId,
+    school_name: schoolName,
     id: schoolId,
     name: schoolName,
-    code: code,
+    code: schoolId,
   };
 };
 
-/**
- * Transforms API school response into frontend School format.
- */
-export const transformSchoolResponse = (apiSchool: ApiSchoolResponse): School => {
-  return {
-    id: apiSchool.school_id,
-    name: apiSchool.school_name,
-    code: apiSchool.school_code,
-  };
-};
+// ============================================================================
+// Term Transformers
+// ============================================================================
 
 /**
- * Transforms API user string to frontend User format.
- * For now, we'll create basic user objects from the user IDs.
+ * Transforms v4 Term response (already frontend-ready)
  */
-export const transformUser = (userId: string): User => {
+export const transformTerm = (term: Term): Term => {
+  // v4 response is already perfect - pass through
+  return term;
+};
+
+// ============================================================================
+// User Transformers
+// ============================================================================
+
+/**
+ * Transforms user ID to basic User object
+ * For when we only have the ID
+ */
+export const transformUserId = (userId: string, userName?: string): User => {
   return {
     id: userId,
-    name: `User ${userId}`, // Placeholder until we have user details
+    name: userName || `User ${userId}`,
     email: `${userId}@example.com`, // Placeholder
-    role: 'Department Head', // Placeholder
+    role: 'User',
   };
 };
 
 /**
- * Transforms API standard rating (from assessment) into frontend MatStandard format.
- * Note: Assessment API uses simple IDs, not MAT-scoped UUIDs.
+ * Transforms v4 user response from auth
  */
-export const transformStandard = (apiStandard: ApiStandardRating): MatStandard => {
+export const transformUser = (user: import('@/types/auth').User): User => {
   return {
-    mat_standard_id: apiStandard.standard_id,         // Map simple ID to mat_standard_id for frontend compatibility
-    mat_id: '',                                       // Not provided in assessment context
-    mat_aspect_id: apiStandard.area_id,               // Map area_id to mat_aspect_id
-    standard_code: '',                                // Not provided in assessment API
-    standard_name: apiStandard.standard_name,
-    standard_description: apiStandard.description || '',
-    sort_order: 0,                                    // Not provided in assessment API
-    source_standard_id: undefined,
-    is_custom: false,
-    is_modified: false,
-    version_number: 1,
-    version_id: '',
-    aspect_code: '',
-    aspect_name: '',
-    is_active: true,
-    created_at: '',
-    updated_at: apiStandard.submitted_at || '',
-    // Assessment-specific fields
-    rating: apiStandard.rating as any,
-    evidence_comments: apiStandard.evidence_comments || '',
-    submitted_at: apiStandard.submitted_at || undefined,
-    submitted_by: apiStandard.submitted_by || '',
+    id: user.user_id,
+    name: user.full_name,
+    email: user.email,
+    role: user.role_title || 'User',
+  };
+};
+
+// ============================================================================
+// Assessment Summary Transformer (for list views)
+// ============================================================================
+
+/**
+ * Transforms assessment group to legacy Assessment format for list views
+ * Used by components that expect the old Assessment interface
+ */
+export const transformAssessmentSummary = transformAssessmentGroup;
+
+/**
+ * Transforms assessment detail to legacy Assessment format
+ * Used by components that expect the old Assessment interface with standards
+ */
+export const transformAssessmentDetail = transformAssessment;
+
+// ============================================================================
+// Batch Transformers
+// ============================================================================
+
+/**
+ * Transforms array of assessment groups
+ */
+export const transformAssessmentGroups = (groups: AssessmentGroup[]): Assessment[] => {
+  return groups.map(transformAssessmentGroup);
+};
+
+/**
+ * Transforms array of standards
+ */
+export const transformStandards = (standards: Standard[]): Standard[] => {
+  return standards.map(transformStandard);
+};
+
+/**
+ * Transforms array of aspects
+ */
+export const transformAspects = (aspects: Aspect[]): Aspect[] => {
+  return aspects.map(transformAspect);
+};
+
+/**
+ * Transforms array of schools
+ */
+export const transformSchools = (schools: School[]): School[] => {
+  return schools.map(transformSchool);
+};
+
+// ============================================================================
+// Utility Functions
+// ============================================================================
+
+/**
+ * Parses unique_term_id into components
+ * T1-2024-25 -> { termId: "T1", academicYear: "2024-25" }
+ */
+export const parseUniqueTerm = (uniqueTermId: string): { termId: string; academicYear: string } => {
+  const match = uniqueTermId.match(/^(T\d+)-(.+)$/);
+  if (!match) {
+    throw new Error(`Invalid unique_term_id format: ${uniqueTermId}`);
+  }
+  return {
+    termId: match[1],
+    academicYear: match[2],
   };
 };
 
 /**
- * Transforms API standard response into frontend MatStandard format (v3.0).
+ * Parses assessment_id into components
+ * cedar-park-primary-ES1-T1-2024-25 -> components
  */
-export const transformStandardResponse = (apiStandard: ApiStandardResponse): MatStandard => {
+export const parseAssessmentId = (assessmentId: string): {
+  schoolId: string;
+  standardCode: string;
+  termId: string;
+  academicYear: string;
+} => {
+  // Format: {school-id}-{standard-code}-{term}-{year}
+  // Split from the end to handle school IDs with hyphens
+  const parts = assessmentId.split('-');
+  
+  if (parts.length < 5) {
+    throw new Error(`Invalid assessment_id format: ${assessmentId}`);
+  }
+  
+  // Last 3 parts are: T{N}, YYYY, YY
+  const academicYear = `${parts[parts.length - 2]}-${parts[parts.length - 1]}`;
+  const termId = parts[parts.length - 3];
+  const standardCode = parts[parts.length - 4];
+  const schoolId = parts.slice(0, -4).join('-');
+  
   return {
-    mat_standard_id: apiStandard.mat_standard_id,
-    mat_id: apiStandard.mat_id || '', // May not be provided
-    mat_aspect_id: apiStandard.mat_aspect_id,
-    standard_code: apiStandard.standard_code,
-    standard_name: apiStandard.standard_name,
-    standard_description: apiStandard.standard_description || '',
-    sort_order: apiStandard.sort_order ?? 0,
-    source_standard_id: undefined,
-    is_custom: apiStandard.is_custom ?? false,
-    is_modified: apiStandard.is_modified ?? false,
-    version_number: apiStandard.version_number || 1,
-    version_id: apiStandard.version_id || '',
-    aspect_code: apiStandard.aspect_code || '',
-    aspect_name: apiStandard.aspect_name || '',
-    is_active: true,
-    created_at: new Date().toISOString(),
-    updated_at: new Date().toISOString(),
-    // Assessment-specific fields (not present in this context)
-    rating: null,
-    evidence_comments: '',
+    schoolId,
+    standardCode,
+    termId,
+    academicYear,
   };
 };
 
 /**
- * Transforms API assessment summary into frontend Assessment format.
- * Maps from actual backend schema (simple aspect_id) to frontend format.
+ * Parses group_id into components
+ * cedar-park-primary-EDU-T1-2024-25 -> components
  */
-export const transformAssessmentSummary = (apiAssessment: ApiAssessmentSummary): Assessment => {
+export const parseGroupId = (groupId: string): {
+  schoolId: string;
+  aspectCode: string;
+  termId: string;
+  academicYear: string;
+} => {
+  // Format: {school-id}-{aspect-code}-{term}-{year}
+  // Split from the end to handle school IDs with hyphens
+  const parts = groupId.split('-');
+  
+  if (parts.length < 5) {
+    throw new Error(`Invalid group_id format: ${groupId}`);
+  }
+  
+  // Last 3 parts are: T{N}, YYYY, YY
+  const academicYear = `${parts[parts.length - 2]}-${parts[parts.length - 1]}`;
+  const termId = parts[parts.length - 3];
+  const aspectCode = parts[parts.length - 4];
+  const schoolId = parts.slice(0, -4).join('-');
+  
   return {
-    id: apiAssessment.assessment_id,
-    name: `${apiAssessment.aspect_name} - ${apiAssessment.term_id} ${apiAssessment.academic_year}`,
-    category: normaliseCategory(apiAssessment.aspect_id) as any,  // Map aspect_id to category
-    school: transformSchool(apiAssessment.school_id, apiAssessment.school_name),
-    status: mapStatus(apiAssessment.status) as any,
-    completedStandards: apiAssessment.completed_standards,
-    totalStandards: apiAssessment.total_standards,
-    lastUpdated: apiAssessment.last_updated || new Date().toISOString(),
-    dueDate: apiAssessment.due_date || undefined,
-    assignedTo: apiAssessment.assigned_to ? [transformUser(apiAssessment.assigned_to)] : [],
-    term: termMap[apiAssessment.term_id] || (apiAssessment.term_id as any),
-    academicYear: expandAcademicYear(apiAssessment.academic_year),
-    overallScore: undefined,  // Calculated from standards if needed
+    schoolId,
+    aspectCode,
+    termId,
+    academicYear,
   };
 };
 
-/**
- * Transforms API assessment detail into frontend Assessment format.
- * Maps from actual backend schema (simple aspect_id) to frontend format.
- */
-export const transformAssessmentDetail = (apiAssessment: ApiAssessmentDetail): Assessment => {
-  return {
-    id: apiAssessment.assessment_id,
-    name: apiAssessment.name,
-    category: normaliseCategory(apiAssessment.aspect_id) as any,  // Map aspect_id to category
-    school: transformSchool(apiAssessment.school_id, apiAssessment.school_name),
-    status: mapStatus(apiAssessment.status) as any,
-    completedStandards: apiAssessment.standards.filter(s => s.rating !== null && s.rating > 0).length,
-    totalStandards: apiAssessment.standards.length,
-    lastUpdated: apiAssessment.last_updated || new Date().toISOString(),
-    dueDate: apiAssessment.due_date || undefined,
-    assignedTo: apiAssessment.assigned_to?.map(transformUser) || [],
-    standards: apiAssessment.standards.map(transformStandard),
-    term: termMap[apiAssessment.term_id] || (apiAssessment.term_id as any),
-    academicYear: expandAcademicYear(apiAssessment.academic_year),
-  };
+// ============================================================================
+// Export all transformers
+// ============================================================================
+
+export {
+  aspectCodeToCategory,
+  mapStatus,
+  mapTermId,
+  expandAcademicYear,
 };
 
-// Legacy export for backward compatibility
 export const transformAssessment = transformAssessmentDetail; 

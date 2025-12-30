@@ -24,13 +24,12 @@ class AuthService {
 
   async requestMagicLink(request: LoginRequest): Promise<void> {
     try {
-      const response = await apiClient.post('/api/auth/request-magic-link', {
-        email: request.email,
-        redirect_url: window.location.origin + '/auth/verify'
+      const response = await apiClient.post('/api/auth/login', {
+        email: request.email
       });
       
       // Log success for debugging (only in dev)
-      logger.debug('Magic link request successful:', response.data?.status);
+      logger.debug('Magic link request successful:', response.data?.message);
     } catch (error: any) {
       logger.error('Failed to request magic link');
       
@@ -50,7 +49,7 @@ class AuthService {
       logger.debug('Verifying token');
       
       const response = await apiClient.get<any>(
-        `/api/auth/verify/${request.token}`
+        `/api/auth/verify?token=${request.token}`
       );
       
       logger.debug('Verification successful');
@@ -59,27 +58,28 @@ class AuthService {
         this.setStoredToken(response.data.access_token);
       }
       
-      // Map backend user to our User type (v3.0)
+      // Map backend user to our User type (v4.0)
       let mappedUser: User | null = null;
       if (response.data.user) {
         const backendUser = response.data.user;
         mappedUser = {
           user_id: backendUser.user_id,
           email: backendUser.email,
-          first_name: backendUser.first_name,
-          last_name: backendUser.last_name,
-          role_title: backendUser.role_title,
+          full_name: backendUser.full_name,
           mat_id: backendUser.mat_id,
+          mat_name: backendUser.mat_name,
           school_id: backendUser.school_id,
-          created_at: backendUser.created_at,
-          updated_at: backendUser.updated_at
+          school_name: backendUser.school_name,
+          role_title: backendUser.role_title,
+          is_active: backendUser.is_active !== false,
+          last_login: backendUser.last_login
         };
       }
       
       return {
         access_token: response.data.access_token,
-        user: mappedUser,
-        expires_at: response.data.expires_at
+        token_type: 'bearer',
+        user: mappedUser || {} as User
       };
     } catch (error: any) {
       logger.error('Failed to verify token');
@@ -107,19 +107,20 @@ class AuthService {
       logger.debug('Fetching current session from /api/auth/me');
       const response = await apiClient.get<any>('/api/auth/me');
       
-      // Map backend user to our User type (v3.0)
+      // Map backend user to our User type (v4.0)
       if (response.data) {
         const backendUser = response.data;
         const user: User = {
           user_id: backendUser.user_id,
           email: backendUser.email,
-          first_name: backendUser.first_name,
-          last_name: backendUser.last_name,
-          role_title: backendUser.role_title,
+          full_name: backendUser.full_name,
           mat_id: backendUser.mat_id,
+          mat_name: backendUser.mat_name,
           school_id: backendUser.school_id,
-          created_at: backendUser.created_at,
-          updated_at: backendUser.updated_at
+          school_name: backendUser.school_name,
+          role_title: backendUser.role_title,
+          is_active: backendUser.is_active !== false,
+          last_login: backendUser.last_login
         };
         logger.debug('Session validated successfully', { 
           userId: user.user_id, 

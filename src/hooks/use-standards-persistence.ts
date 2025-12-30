@@ -1,11 +1,15 @@
+// ============================================================================
+// v4.0 Standards Persistence Hook
+// ============================================================================
+
 import { useState, useEffect, useCallback } from 'react';
 import { assessmentService } from '@/services/enhanced-assessment-service';
-import type { MatAspect, MatStandard } from '@/types/assessment';
+import type { Aspect, Standard } from '@/types/assessment';
 import { useToast } from '@/hooks/use-toast';
 
 export function useStandardsPersistence() {
-    const [aspects, setAspects] = useState<MatAspect[]>([]);
-    const [standards, setStandards] = useState<MatStandard[]>([]);
+    const [aspects, setAspects] = useState<Aspect[]>([]);
+    const [standards, setStandards] = useState<Standard[]>([]);
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
     const { toast } = useToast();
@@ -13,19 +17,19 @@ export function useStandardsPersistence() {
     const loadData = useCallback(async () => {
         try {
             setIsLoading(true);
-            console.log('Fetching aspects and standards from API...');
+            console.log('[useStandardsPersistence] Fetching aspects and standards...');
             
             const [fetchedAspects, fetchedStandards] = await Promise.all([
                 assessmentService.getAspects(),
                 assessmentService.getStandards()
             ]);
             
-            console.log(`Loaded ${fetchedAspects.length} aspects and ${fetchedStandards.length} standards from API`);
+            console.log(`[useStandardsPersistence] Loaded ${fetchedAspects.length} aspects, ${fetchedStandards.length} standards`);
             setAspects(fetchedAspects);
             setStandards(fetchedStandards);
             setError(null);
         } catch (err) {
-            console.error('Failed to load standards data:', err);
+            console.error('[useStandardsPersistence] Failed to load data:', err);
             setError('Failed to load data from API');
             toast({
                 variant: 'destructive',
@@ -41,22 +45,22 @@ export function useStandardsPersistence() {
         loadData();
     }, [loadData]);
 
-    const addStandard = useCallback(async (standard: any) => {
+    const addStandard = useCallback(async (standard: {
+        mat_aspect_id: string;
+        standard_code: string;
+        standard_name: string;
+        standard_description: string;
+        sort_order: number;
+    }) => {
         try {
-            // Call API to create standard (v3.0)
+            console.log('[useStandardsPersistence] Creating standard:', standard);
+            
             const newStandard = await assessmentService.createStandard({
                 mat_aspect_id: standard.mat_aspect_id,
                 standard_code: standard.standard_code,
                 standard_name: standard.standard_name,
                 standard_description: standard.standard_description || '',
                 sort_order: standard.sort_order ?? 0,
-                source_standard_id: standard.source_standard_id,
-                is_custom: standard.is_custom ?? true,
-                is_modified: standard.is_modified ?? false,
-                aspect_code: standard.aspect_code,
-                aspect_name: standard.aspect_name,
-                is_active: true,
-                change_reason: standard.change_reason || 'Initial version',
             });
             
             // Update local state
@@ -70,8 +74,10 @@ export function useStandardsPersistence() {
                 title: 'Standard created',
                 description: `Successfully created standard ${newStandard.standard_code}`,
             });
+            
+            return newStandard;
         } catch (err) {
-            console.error('Failed to create standard:', err);
+            console.error('[useStandardsPersistence] Failed to create standard:', err);
             toast({
                 variant: 'destructive',
                 title: 'Error creating standard',
@@ -81,22 +87,34 @@ export function useStandardsPersistence() {
         }
     }, [toast]);
 
-    const updateStandard = useCallback(async (standard: MatStandard & { change_reason: string }) => {
+    const updateStandard = useCallback(async (standard: {
+        mat_standard_id: string;
+        standard_name: string;
+        standard_description: string;
+        change_reason?: string;
+    }) => {
         try {
-            // Call API to update standard (v3.0 - creates new version)
-            const updatedStandard = await assessmentService.updateStandardDefinition(standard);
+            console.log('[useStandardsPersistence] Updating standard:', standard);
             
-            // Update local state
-            setStandards(prev => prev.map(s => 
-                s.mat_standard_id === standard.mat_standard_id ? updatedStandard : s
-            ));
+            await assessmentService.updateStandard(
+                standard.mat_standard_id,
+                {
+                    standard_name: standard.standard_name,
+                    standard_description: standard.standard_description,
+                    change_reason: standard.change_reason || 'Updated standard',
+                }
+            );
+            
+            // Reload standards to get updated version info
+            const updatedStandards = await assessmentService.getStandards();
+            setStandards(updatedStandards);
             
             toast({
                 title: 'Standard updated',
-                description: `Successfully updated standard ${updatedStandard.standard_code} (v${updatedStandard.version_number})`,
+                description: `Successfully updated standard ${standard.mat_standard_id}`,
             });
         } catch (err) {
-            console.error('Failed to update standard:', err);
+            console.error('[useStandardsPersistence] Failed to update standard:', err);
             toast({
                 variant: 'destructive',
                 title: 'Error updating standard',
@@ -106,13 +124,14 @@ export function useStandardsPersistence() {
         }
     }, [toast]);
 
-    const deleteStandard = useCallback(async (id: string) => {
+    const deleteStandard = useCallback(async (matStandardId: string) => {
         try {
-            // Call API to delete standard
-            await assessmentService.deleteStandard(id);
+            console.log('[useStandardsPersistence] Deleting standard:', matStandardId);
+            
+            await assessmentService.deleteStandard(matStandardId);
             
             // Update local state
-            setStandards(prev => prev.filter(s => s.mat_standard_id !== id));
+            setStandards(prev => prev.filter(s => s.mat_standard_id !== matStandardId));
             
             // Refresh aspects to update standard counts
             const updatedAspects = await assessmentService.getAspects();
@@ -123,7 +142,7 @@ export function useStandardsPersistence() {
                 description: 'Successfully deleted standard',
             });
         } catch (err) {
-            console.error('Failed to delete standard:', err);
+            console.error('[useStandardsPersistence] Failed to delete standard:', err);
             toast({
                 variant: 'destructive',
                 title: 'Error deleting standard',
@@ -133,26 +152,22 @@ export function useStandardsPersistence() {
         }
     }, [toast]);
 
-    const reorderStandards = useCallback(async (items: any[]) => {
+    const reorderStandards = useCallback(async (items: Array<{
+        mat_standard_id: string;
+        sort_order: number;
+    }>) => {
         try {
-            // Prepare reorder data with full standard info (v3.0)
-            const reorderData = items.map(item => ({
-                id: item.mat_standard_id || item.id,
-                orderIndex: item.sort_order ?? item.orderIndex,
-                title: item.standard_name || item.title,
-                description: item.standard_description || item.description
-            }));
+            console.log('[useStandardsPersistence] Reordering standards:', items);
             
             // Optimistic update
             setStandards(prev => {
                 const newStandards = [...prev];
                 items.forEach(item => {
-                    const itemId = item.mat_standard_id || item.id;
-                    const index = newStandards.findIndex(s => s.mat_standard_id === itemId);
+                    const index = newStandards.findIndex(s => s.mat_standard_id === item.mat_standard_id);
                     if (index !== -1) {
                         newStandards[index] = { 
                             ...newStandards[index], 
-                            sort_order: item.sort_order ?? item.orderIndex 
+                            sort_order: item.sort_order
                         };
                     }
                 });
@@ -160,14 +175,14 @@ export function useStandardsPersistence() {
             });
             
             // Call API to persist reorder
-            await assessmentService.reorderStandards(reorderData);
+            await assessmentService.reorderStandards(items);
             
             toast({
                 title: 'Standards reordered',
                 description: `Successfully reordered ${items.length} standard${items.length > 1 ? 's' : ''}`,
             });
         } catch (err) {
-            console.error('Failed to reorder standards:', err);
+            console.error('[useStandardsPersistence] Failed to reorder standards:', err);
             // Reload data on failure to revert optimistic update
             await loadData();
             toast({
@@ -179,18 +194,20 @@ export function useStandardsPersistence() {
         }
     }, [loadData, toast]);
 
-    const addAspect = useCallback(async (aspect: any) => {
+    const addAspect = useCallback(async (aspect: {
+        aspect_code: string;
+        aspect_name: string;
+        aspect_description: string;
+        sort_order: number;
+    }) => {
         try {
-            // Call API to create aspect (v3.0)
+            console.log('[useStandardsPersistence] Creating aspect:', aspect);
+            
             const newAspect = await assessmentService.createAspect({
                 aspect_code: aspect.aspect_code,
                 aspect_name: aspect.aspect_name,
                 aspect_description: aspect.aspect_description || '',
                 sort_order: aspect.sort_order ?? 0,
-                source_aspect_id: aspect.source_aspect_id,
-                is_custom: aspect.is_custom ?? true,
-                is_modified: aspect.is_modified ?? false,
-                is_active: true,
             });
             
             // Update local state
@@ -200,8 +217,10 @@ export function useStandardsPersistence() {
                 title: 'Aspect created',
                 description: `Successfully created aspect ${newAspect.aspect_name}`,
             });
+            
+            return newAspect;
         } catch (err) {
-            console.error('Failed to create aspect:', err);
+            console.error('[useStandardsPersistence] Failed to create aspect:', err);
             toast({
                 variant: 'destructive',
                 title: 'Error creating aspect',
@@ -211,22 +230,34 @@ export function useStandardsPersistence() {
         }
     }, [toast]);
 
-    const updateAspect = useCallback(async (aspect: MatAspect) => {
+    const updateAspect = useCallback(async (aspect: {
+        mat_aspect_id: string;
+        aspect_name: string;
+        aspect_description: string;
+        sort_order: number;
+    }) => {
         try {
-            // Call API to update aspect
-            const updatedAspect = await assessmentService.updateAspect(aspect);
+            console.log('[useStandardsPersistence] Updating aspect:', aspect);
             
-            // Update local state
-            setAspects(prev => prev.map(a => 
-                a.mat_aspect_id === aspect.mat_aspect_id ? updatedAspect : a
-            ));
+            await assessmentService.updateAspect(
+                aspect.mat_aspect_id,
+                {
+                    aspect_name: aspect.aspect_name,
+                    aspect_description: aspect.aspect_description,
+                    sort_order: aspect.sort_order,
+                }
+            );
+            
+            // Reload aspects
+            const updatedAspects = await assessmentService.getAspects();
+            setAspects(updatedAspects);
             
             toast({
                 title: 'Aspect updated',
-                description: `Successfully updated aspect ${updatedAspect.aspect_name}`,
+                description: `Successfully updated aspect ${aspect.aspect_name}`,
             });
         } catch (err) {
-            console.error('Failed to update aspect:', err);
+            console.error('[useStandardsPersistence] Failed to update aspect:', err);
             toast({
                 variant: 'destructive',
                 title: 'Error updating aspect',
@@ -236,23 +267,24 @@ export function useStandardsPersistence() {
         }
     }, [toast]);
 
-    const deleteAspect = useCallback(async (id: string) => {
+    const deleteAspect = useCallback(async (matAspectId: string) => {
         try {
-            // Call API to delete aspect
-            await assessmentService.deleteAspect(id);
+            console.log('[useStandardsPersistence] Deleting aspect:', matAspectId);
+            
+            await assessmentService.deleteAspect(matAspectId);
             
             // Update local state
-            setAspects(prev => prev.filter(a => a.mat_aspect_id !== id));
+            setAspects(prev => prev.filter(a => a.mat_aspect_id !== matAspectId));
             
             // Also remove standards associated with this aspect
-            setStandards(prev => prev.filter(s => s.mat_aspect_id !== id));
+            setStandards(prev => prev.filter(s => s.mat_aspect_id !== matAspectId));
             
             toast({
                 title: 'Aspect deleted',
                 description: 'Successfully deleted aspect',
             });
         } catch (err) {
-            console.error('Failed to delete aspect:', err);
+            console.error('[useStandardsPersistence] Failed to delete aspect:', err);
             toast({
                 variant: 'destructive',
                 title: 'Error deleting aspect',
@@ -263,7 +295,6 @@ export function useStandardsPersistence() {
     }, [toast]);
 
     const resetToDefaults = useCallback(async () => {
-        // Reload data from API
         await loadData();
         toast({
             title: 'Data refreshed',
