@@ -1,0 +1,13 @@
+fastapi==0.110.1
+uvicorn==0.29.0
+gunicorn==21.2.0
+pymysql==1.1.0
+python-dotenv
+pydantic
+python-jose[cryptography]==3.3.0
+passlib[bcrypt]==1.7.4
+aiosmtplib==3.0.1
+email-validator==2.1.0
+jinja2==3.1.2
+python-multipart==0.0.6
+python-decouple==3.8
