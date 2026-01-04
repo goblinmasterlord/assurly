@@ -1,348 +1,538 @@
 # Assurly - School Maturity Assessment Platform
 
-Assurly is a production-ready web-based platform for Multi-Academy Trusts (MATs) to conduct and manage maturity assessments across their schools. The platform combines secure authentication, real-time data synchronization, and powerful analytics to streamline assessment orchestration and drive strategic improvement.
+Assurly is a production-ready, full-stack web platform for Multi-Academy Trusts (MATs) to conduct and manage maturity assessments across their schools. The platform combines secure authentication, real-time data synchronization, and powerful analytics to streamline assessment orchestration and drive strategic improvement.
 
 **Live Platform**: [https://www.assurly.co.uk](https://www.assurly.co.uk)
 
-## Features
-
-### 🔐 **Authentication & Security**
-- Magic link authentication (passwordless login via email)
-- JWT-based session management with automatic refresh
-- Role-based access control with route protection
-- Private routes for authenticated users only
-- SEO protection (noindex, nofollow, robots.txt)
-
-### 👥 **Dual User Roles**
-- **MAT Administrators**: 
-  - Trust-wide assessment orchestration and monitoring
-  - Analytics dashboard with performance insights
-  - Standards management and configuration
-  - Data export and reporting capabilities
-  - School performance rankings and intervention tracking
-  
-- **Department Heads**: 
-  - Complete assessments for assigned schools
-  - Cross-school assessment management
-  - View assessment history and trends
-  - Filter persistence for efficient workflow
-
-### 📊 **Assessment Management**
-- Advanced filtering (school, category, status, term, search)
-- Term-based navigation (Autumn → Spring → Summer cycle)
-- Real-time progress tracking and completion indicators
-- Intervention flagging for low-performing areas (score ≤ 1.5)
-- Historical performance trends (previous 3 terms visualization)
-- Optimistic UI updates for instant feedback
-- Auto-save functionality with session recovery
-
-### ✍️ **Enhanced Assessment Completion**
-- Standard-by-standard workflow with clear guidance
-- 4-point rating scale (Inadequate → Outstanding)
-- Evidence collection with rich text support
-- **Actions pane**: Add actionable items with checkboxes per standard
-- Keyboard shortcuts for power users:
-  - `Cmd/Ctrl + J/K`: Navigate between standards
-  - `1-4`: Quick rating selection
-  - `Cmd/Ctrl + S`: Save progress
-- Visual progress bar and completion tracking
-- School switching for cross-school comparisons
-
-### 📈 **Analytics & Insights** (MAT Admin Only)
-- Trust-wide performance dashboard
-- Term-over-term trend analysis with line charts
-- School performance rankings with sortable metrics
-- Category performance breakdown with visual zones
-- Assessment completion tracking
-- Intervention required indicators
-- Chronologically accurate term ordering
-
-### 🛠️ **Standards Management** (MAT Admin Only)
-- Create, edit, and delete assessment aspects
-- Drag-and-drop standard reordering
-- Full CRUD operations for standards
-- Search and filter within aspects
-- Session storage persistence for changes
-- Version control ready (preparing for API)
-
-### 📤 **Data Export** (MAT Admin Only)
-- CSV export of filtered assessment data
-- Downloadable PDF assessment packs
-- School-specific or trust-wide reports
-- Excel-compatible format
-
-### 🎨 **User Experience**
-- Modern, responsive design (mobile-first)
-- Teal and amber branding throughout
-- Role-specific views and navigation
-- Filter persistence across sessions
-- Toast notifications for all actions
-- Comprehensive loading states and skeleton loaders
-- Smooth animations and transitions
-- Context-aware help and tooltips
-
-## Tech Stack
-
-### Frontend
-- **Framework**: Vite + React 18 + TypeScript
-- **Styling**: Tailwind CSS v3 (teal/amber brand colors)
-- **UI Components**: shadcn/ui (Radix UI primitives)
-- **Routing**: React Router v6 (public and protected routes)
-- **Icons**: Lucide React
-- **State Management**: React Context API (UserContext, AuthContext)
-- **Charts**: Recharts for analytics visualization
-- **Drag & Drop**: @dnd-kit for standards reordering
-- **Notifications**: Sonner toast system
-
-### Backend Integration
-- **API**: Google Cloud Run (Python/FastAPI)
-- **Base URL**: `https://assurly-frontend-400616570417.europe-west2.run.app/api`
-- **Authentication**: JWT tokens with magic link flow
-- **Caching**: Custom request cache with stale-while-revalidate
-- **Storage**: 
-  - `localStorage`: Auth tokens and filter persistence
-  - `sessionStorage`: Temporary mock data (standards/aspects)
-- **Optimistic Updates**: Immediate UI feedback with background sync
-
 ## Project Structure
 
+This is a monorepo containing both the frontend and backend applications:
+
 ```
-assurly/
-├── src/
-│   ├── components/
-│   │   ├── ui/                 # shadcn/ui base components
-│   │   ├── admin/              # Admin-only components (standards management)
-│   │   └── *.tsx               # Feature components (SchoolPerformanceView, etc.)
-│   ├── contexts/
-│   │   ├── AuthContext.tsx     # Authentication state management
-│   │   └── UserContext.tsx     # Role switching (development)
-│   ├── hooks/
-│   │   ├── use-assessments.ts           # Assessment data with caching
-│   │   ├── use-standards-persistence.ts # Standards/aspects management
-│   │   └── use-optimistic-filter.ts     # Optimistic UI updates
-│   ├── layouts/
-│   │   └── RootLayout.tsx      # Main layout with header/footer
-│   ├── lib/
-│   │   ├── api-client.ts       # Core API client with token handling
-│   │   ├── request-cache.ts    # Request caching layer
-│   │   ├── assessment-utils.tsx # Utility functions
-│   │   └── mock-data.ts        # Mock data (legacy/fallback)
-│   ├── pages/
-│   │   ├── Assessments.tsx     # Main assessments dashboard
-│   │   ├── AssessmentDetail.tsx # Assessment completion interface
-│   │   ├── Analytics.tsx        # Analytics dashboard (admin)
-│   │   ├── Export.tsx           # Data export (admin)
-│   │   ├── StandardsManagement.tsx # Standards config (admin)
-│   │   ├── Main.tsx             # Public landing page
-│   │   └── [marketing pages]    # About, Pricing, T&Cs, etc.
-│   ├── services/
-│   │   ├── enhanced-assessment-service.ts # Assessment API integration
-│   │   ├── auth-service.ts                # Authentication API
-│   │   └── secure-storage.ts              # Token storage utilities
-│   ├── types/
-│   │   └── assessment.ts        # TypeScript type definitions
-│   └── App.tsx                  # Root component with routing
-├── public/
-│   ├── robots.txt               # SEO protection
-│   └── Springwell_pack.pdf      # Downloadable resources
-├── docs/                        # Documentation
-│   ├── api/                     # API documentation
-│   │   ├── API_DOCUMENTATION.md      # Comprehensive API reference (22 endpoints)
-│   │   └── API_QUICK_REFERENCE.md    # Quick reference card
-│   └── archive/                 # Historical documentation
-└── .cursor/rules/               # Project rules and guidelines
-    ├── project-info.md          # Product requirements and architecture
-    └── components.mdc           # Component reference
+Assurly/
+├── assurly-frontend/          # React + TypeScript web application
+│   ├── src/                   # Frontend source code
+│   ├── public/                # Static assets
+│   ├── dist/                  # Production build output
+│   ├── package.json           # Frontend dependencies
+│   ├── vite.config.ts         # Vite configuration
+│   └── README.md             # Frontend documentation
+│
+├── assurly-backend/           # Python FastAPI backend service
+│   ├── main.py               # FastAPI application
+│   ├── auth_*.py             # Authentication modules
+│   ├── email_service.py      # Email service
+│   ├── requirements.txt      # Python dependencies
+│   ├── Dockerfile            # Container configuration
+│   └── README.md             # Backend documentation
+│
+├── docs/                      # Shared documentation
+│   ├── api/                  # API specifications
+│   │   ├── FRONTEND_API_SPECIFICATION_v4.md
+│   │   └── ASSESSMENT_API_SPECIFICATION.md
+│   ├── archive/              # Historical documentation
+│   ├── design/               # Design and branding docs
+│   └── fixes/                # Bug fix documentation
+│
+├── db.json                    # Mock database for development
+├── BUGFIX_SUMMARY.md         # Bug fixes summary
+├── V4_MIGRATION_SUMMARY.md   # Migration notes
+├── TESTING_CHECKLIST.md      # Testing procedures
+└── README.md                 # This file
 ```
 
-## Getting Started
+## Quick Start
 
-### Prerequisites
-
-- Node.js (v16 or higher)
-- npm or yarn
-
-### Installation
-
-1. Clone the repository:
-   ```
-   git clone https://github.com/yourusername/assurly.git
-   cd assurly
-   ```
-
-2. Install dependencies:
-   ```
-   npm install
-   ```
-
-3. Start the development server:
-   ```
-   npm run dev
-   ```
-
-4. Open your browser and navigate to `http://localhost:5173`
-
-## Usage
-
-### Authentication
-
-1. Navigate to [https://www.assurly.co.uk](https://www.assurly.co.uk)
-2. Enter your email address to receive a magic link
-3. Click the link in your email to securely log in
-4. Your session persists across browser closes and page refreshes
-
-### For MAT Administrators
-
-**Dashboard & Assessments:**
-1. Navigate to "Assessments" to see trust-wide view
-2. Use filters to narrow by school, category, status, or term
-3. View performance trends in the "Previous 3 Terms" column
-4. Check "Intervention Required" flags for schools needing attention
-5. Expand schools to see category-level details
-6. Click "View" to review completed assessments
-
-**Analytics:**
-1. Navigate to "Analytics" for trust-wide insights
-2. Use term selector to view different academic periods
-3. Review term-over-term performance trends
-4. Check school performance rankings with current scores
-5. Analyze category performance breakdown
-6. Monitor assessment completion rates
-
-**Standards Management:**
-1. Navigate to "Standards Management"
-2. Select an aspect from the sidebar
-3. Drag and drop to reorder standards
-4. Use the cog icon to edit/delete aspects
-5. Click "Add Standard" to create new criteria
-6. Search standards within an aspect
-
-**Data Export:**
-1. Navigate to "Export"
-2. Select schools and filters for your export
-3. Click "Generate CSV" to download assessment data
-4. Download assessment pack PDFs as needed
-
-**Quick Role Switching:**
-- Use the role switcher button in the header (between username and sign out)
-- Switch to "Department Head" view to test that perspective
-
-### For Department Heads
-
-**Viewing Assessments:**
-1. Navigate to "Assessments" to see your assigned schools
-2. Filters persist across sessions - set them once and forget
-3. Use the term selector to switch between assessment periods
-4. Click "Continue" to complete in-progress assessments
-5. Click "View" to review completed assessments
-
-**Completing Assessments:**
-1. Select a standard from the left panel
-2. Choose a rating (1-4) using the card interface or keyboard (1-4)
-3. **Comments Tab**: Add evidence and supporting documentation
-4. **Actions Tab**: Create actionable items with checkboxes for tracking
-5. Navigate between standards:
-   - Click "Previous"/"Next" buttons
-   - Use arrow keys (← / →)
-   - Use `Cmd/Ctrl + J` (next) or `Cmd/Ctrl + K` (previous)
-6. Save progress:
-   - Click "Save Progress"
-   - Use `Cmd/Ctrl + S`
-   - Auto-saves on navigation
-7. Submit when all standards are complete
-
-**Keyboard Shortcuts:**
-- `→` or `Cmd/Ctrl + J`: Next standard
-- `←` or `Cmd/Ctrl + K`: Previous standard
-- `1-4`: Set rating (when not typing)
-- `Cmd/Ctrl + S`: Save progress
-
-**School Switching:**
-- Use the school selector at the top to switch between your assigned schools
-- View the same assessment category across different schools
-
-## Development
-
-### Environment Setup
+### Frontend Development
 
 ```bash
+cd assurly-frontend
+npm install
+npm run dev
+# Open http://localhost:5173
+```
+
+See [assurly-frontend/README.md](assurly-frontend/README.md) for detailed frontend documentation.
+
+### Backend Development
+
+```bash
+cd assurly-backend
+pip install -r requirements.txt
+uvicorn main:app --reload
+# API available at http://localhost:8000
+```
+
+See [assurly-backend/README.md](assurly-backend/README.md) for detailed backend documentation.
+
+## System Architecture
+
+### Frontend (React + TypeScript)
+- **Framework**: Vite + React 18 + TypeScript
+- **UI Library**: shadcn/ui (Radix UI + Tailwind CSS)
+- **State Management**: React Context API + TanStack Query
+- **Routing**: React Router v6
+- **Deployment**: Vercel (https://www.assurly.co.uk)
+
+### Backend (Python FastAPI)
+- **Framework**: FastAPI + Uvicorn (ASGI)
+- **Database**: MySQL (Google Cloud SQL)
+- **Authentication**: JWT + Magic Link (passwordless)
+- **Email**: SMTP (Gmail)
+- **Deployment**: Google Cloud Run
+
+### Data Flow
+
+```
+User Browser
+    ↓
+[Frontend - React App]
+    ↓ (HTTPS REST API)
+[Backend - FastAPI]
+    ↓
+[MySQL Database - Cloud SQL]
+```
+
+## Key Features
+
+### 🔐 Authentication & Security
+- Magic link authentication (passwordless)
+- JWT session management with auto-refresh
+- Role-based access control (MAT Admin / Department Head)
+- Protected routes and API endpoints
+
+### 👥 User Roles
+
+**MAT Administrators**:
+- Trust-wide assessment monitoring
+- Analytics and performance insights
+- Standards/aspects management
+- Data export and reporting
+- School performance rankings
+
+**Department Heads**:
+- Complete assessments for assigned schools
+- Cross-school assessment management
+- View history and trends
+- Filter persistence
+
+### 📊 Assessment Management
+- Advanced filtering (school, category, status, term)
+- Term-based navigation (academic year cycle)
+- Real-time progress tracking
+- Intervention flagging (score ≤ 1.5)
+- Historical trends (3 terms)
+- Auto-save with session recovery
+
+### 📈 Analytics & Reporting
+- Trust-wide performance dashboard
+- Term-over-term trend analysis
+- School performance rankings
+- Category performance breakdown
+- CSV export
+- PDF assessment packs
+
+### 🛠️ Standards Management
+- Full CRUD for aspects and standards
+- Drag-and-drop reordering
+- Search and filtering
+- Version control ready
+
+## Technology Stack
+
+### Frontend Technologies
+| Category | Technology |
+|----------|-----------|
+| **Framework** | Vite, React 18, TypeScript |
+| **Styling** | Tailwind CSS, shadcn/ui |
+| **State** | React Context, TanStack Query |
+| **Routing** | React Router v6 |
+| **Forms** | React Hook Form, Zod |
+| **Charts** | Recharts |
+| **DnD** | @dnd-kit |
+| **Icons** | Lucide React |
+
+### Backend Technologies
+| Category | Technology |
+|----------|-----------|
+| **Framework** | FastAPI 0.110.1 |
+| **Server** | Uvicorn (ASGI) |
+| **Database** | MySQL via PyMySQL |
+| **Auth** | JWT (python-jose), bcrypt |
+| **Email** | aiosmtplib, Jinja2 |
+| **Validation** | Pydantic |
+
+### Infrastructure
+| Service | Technology |
+|---------|-----------|
+| **Frontend Hosting** | Vercel |
+| **Backend Hosting** | Google Cloud Run |
+| **Database** | Google Cloud SQL (MySQL) |
+| **Email** | SMTP (Gmail) |
+| **DNS/CDN** | Vercel |
+
+## Development Workflow
+
+### 1. Frontend Development
+
+```bash
+# Navigate to frontend
+cd assurly-frontend
+
 # Install dependencies
 npm install
 
-# Start development server
+# Start dev server
 npm run dev
 
-# Open browser to http://localhost:5173
-```
-
-### Adding New UI Components
-
-```bash
-# Add shadcn/ui components
-npx shadcn@latest add [component-name]
-
-# Example: add a new dialog
-npx shadcn@latest add dialog
-```
-
-### Building for Production
-
-```bash
-# Type check and build
+# Build for production
 npm run build
 
-# Preview production build locally
+# Preview production build
 npm run preview
 ```
 
-### Key Development Files
+### 2. Backend Development
 
-- **API Integration**: See [`docs/api/API_DOCUMENTATION.md`](docs/api/API_DOCUMENTATION.md) (comprehensive) or [`docs/api/API_QUICK_REFERENCE.md`](docs/api/API_QUICK_REFERENCE.md) (quick reference)
-- **Authentication**: See `src/services/auth-service.ts` and `src/contexts/AuthContext.tsx`
-- **Caching**: See `src/lib/request-cache.ts`
-- **Recent Changes**: See [`docs/archive/PRODUCTION_API_MIGRATION.md`](docs/archive/PRODUCTION_API_MIGRATION.md) for recent API updates
+```bash
+# Navigate to backend
+cd assurly-backend
 
-### Development Patterns
+# Create virtual environment (recommended)
+python -m venv venv
+source venv/bin/activate  # On Windows: venv\Scripts\activate
 
-**Fetching Assessments:**
-```typescript
-import { useAssessments } from '@/hooks/use-assessments';
+# Install dependencies
+pip install -r requirements.txt
 
-const { assessments, isLoading, refreshAssessments } = useAssessments();
+# Set up environment variables
+cp .env.example .env
+# Edit .env with your configuration
+
+# Run development server
+uvicorn main:app --reload --host 0.0.0.0 --port 8000
+
+# Access API docs
+# Swagger: http://localhost:8000/docs
+# ReDoc: http://localhost:8000/redoc
 ```
 
-**Optimistic UI Updates:**
-```typescript
-import { useOptimisticFilter } from '@/hooks/use-optimistic-filter';
+### 3. Full Stack Development
 
-const { filteredData, updateFilter, isPending } = useOptimisticFilter(
-  data,
-  filterFn,
-  300 // debounce ms
-);
+Run both frontend and backend simultaneously:
+
+```bash
+# Terminal 1 - Backend
+cd assurly-backend
+uvicorn main:app --reload
+
+# Terminal 2 - Frontend
+cd assurly-frontend
+npm run dev
 ```
 
-**API Calls with Caching:**
-```typescript
-import { enhancedAssessmentService } from '@/services/enhanced-assessment-service';
+The frontend dev server is configured to proxy API requests to the backend.
 
-// Cached with stale-while-revalidate
-const assessments = await enhancedAssessmentService.getAssessments();
+## API Documentation
 
-// Submit with optimistic update
-await enhancedAssessmentService.submitAssessment(assessmentId, standards);
+### Complete API Reference
+
+- **Frontend API Specification**: [docs/api/FRONTEND_API_SPECIFICATION_v4.md](docs/api/FRONTEND_API_SPECIFICATION_v4.md)
+- **Assessment API Specification**: [docs/api/ASSESSMENT_API_SPECIFICATION.md](docs/api/ASSESSMENT_API_SPECIFICATION.md)
+- **Backend API Documentation**: [assurly-backend/API_DOCUMENTATION.md](assurly-backend/API_DOCUMENTATION.md)
+
+### Key Endpoints
+
+**Authentication**
+- `POST /api/auth/request-magic-link` - Request passwordless login
+- `GET /api/auth/verify/{token}` - Verify magic link, get JWT
+- `GET /api/auth/me` - Get current user
+- `POST /api/auth/logout` - Logout
+
+**Assessments**
+- `GET /api/assessments` - List assessments (filterable)
+- `GET /api/assessments/{id}` - Get assessment details
+- `POST /api/assessments` - Create assessments
+- `POST /api/assessments/{id}/submit` - Submit ratings
+
+**Aspects & Standards**
+- `GET /api/aspects` - List all aspects
+- `POST /api/aspects` - Create aspect (auth required)
+- `GET /api/standards` - List standards
+- `POST /api/standards` - Create standard (auth required)
+
+**Other**
+- `GET /api/schools` - List schools
+- `GET /api/terms` - List academic terms
+- `GET /api/users` - List users
+
+## Environment Configuration
+
+### Frontend (.env in assurly-frontend/)
+
+```env
+VITE_API_BASE_URL=https://assurly-frontend-400616570417.europe-west2.run.app
+VITE_FRONTEND_URL=https://www.assurly.co.uk
+VITE_ENABLE_MOCK_API=false
 ```
 
-### Deployment
+### Backend (.env in assurly-backend/)
 
-The application is deployed to [https://www.assurly.co.uk](https://www.assurly.co.uk) via Vercel with automatic deployments from the `main` branch.
+```env
+# Database
+DB_HOST=/cloudsql/project:region:instance
+DB_USER=your-db-user
+DB_PASSWORD=your-db-password
+DB_NAME=assurly_db
+
+# JWT
+JWT_SECRET_KEY=your-super-secret-key
+JWT_ALGORITHM=HS256
+JWT_EXPIRATION_MINUTES=60
+
+# Magic Link
+MAGIC_LINK_TOKEN_EXPIRY_MINUTES=15
+FRONTEND_URL=https://www.assurly.co.uk
+
+# Email
+SMTP_HOST=smtp.gmail.com
+SMTP_PORT=587
+SMTP_USERNAME=your-email@gmail.com
+SMTP_PASSWORD=your-app-password
+EMAIL_FROM=noreply@assurly.com
+EMAIL_FROM_NAME=Assurly Platform
+```
+
+## Deployment
+
+### Frontend (Vercel)
+
+```bash
+# Automatic deployment from main branch
+git push origin main
+
+# Manual deployment
+cd assurly-frontend
+npm run build
+vercel --prod
+```
+
+### Backend (Google Cloud Run)
+
+```bash
+cd assurly-backend
+
+# Build and push
+gcloud builds submit --tag gcr.io/PROJECT_ID/assurly-api
+
+# Deploy
+gcloud run deploy assurly-api \
+  --image gcr.io/PROJECT_ID/assurly-api \
+  --platform managed \
+  --region europe-west2 \
+  --allow-unauthenticated
+```
+
+## Testing
+
+### Frontend Testing
+```bash
+cd assurly-frontend
+
+# Run linter
+npm run lint
+
+# Test authentication flow
+node test-auth-flow.js
+
+# Test token verification
+node test-verify.js
+```
+
+### Backend Testing
+```bash
+cd assurly-backend
+
+# Manual API testing
+curl http://localhost:8000/api/aspects
+
+# Test authentication
+python test_phase2_auth.py
+
+# Test Gmail credentials
+python gmail_creds_test.py
+```
+
+### Complete Testing Checklist
+
+See [TESTING_CHECKLIST.md](TESTING_CHECKLIST.md) for comprehensive testing procedures.
+
+## Documentation
+
+### Getting Started
+- **Frontend README**: [assurly-frontend/README.md](assurly-frontend/README.md)
+- **Backend README**: [assurly-backend/README.md](assurly-backend/README.md)
+- **Quick Start**: [docs/MIGRATION_QUICK_START.md](docs/MIGRATION_QUICK_START.md)
+- **V4 Quick Start**: [docs/V4_QUICK_START.md](docs/V4_QUICK_START.md)
+
+### API Documentation
+- **Frontend API v4**: [docs/api/FRONTEND_API_SPECIFICATION_v4.md](docs/api/FRONTEND_API_SPECIFICATION_v4.md)
+- **Assessment API**: [docs/api/ASSESSMENT_API_SPECIFICATION.md](docs/api/ASSESSMENT_API_SPECIFICATION.md)
+- **Backend API**: [assurly-backend/API_DOCUMENTATION.md](assurly-backend/API_DOCUMENTATION.md)
+
+### Architecture & Design
+- **Migration Analysis**: [docs/MIGRATION_ANALYSIS.md](docs/MIGRATION_ANALYSIS.md)
+- **Schema Analysis**: [docs/SCHEMA_ANALYSIS.md](docs/SCHEMA_ANALYSIS.md)
+- **Field Mapping**: [docs/FIELD_MAPPING_REFERENCE.md](docs/FIELD_MAPPING_REFERENCE.md)
+- **Branding Updates**: [docs/design/BRANDING_UPDATES.md](docs/design/BRANDING_UPDATES.md)
+- **UX Recommendations**: [docs/design/ux-recommendations.md](docs/design/ux-recommendations.md)
+
+### Bug Fixes & Changes
+- **Bug Fix Summary**: [BUGFIX_SUMMARY.md](BUGFIX_SUMMARY.md)
+- **V4 Migration**: [V4_MIGRATION_SUMMARY.md](V4_MIGRATION_SUMMARY.md)
+- **Change Notes**: [docs/changenotes.md](docs/changenotes.md)
+
+### Historical Documentation
+- **Migration Guides**: [docs/archive/](docs/archive/)
+- **Previous Versions**: [docs/archive/API_DOCUMENTATION_v1.md](docs/archive/API_DOCUMENTATION_v1.md)
+
+## Troubleshooting
+
+### Common Issues
+
+**Frontend won't start:**
+```bash
+cd assurly-frontend
+rm -rf node_modules package-lock.json
+npm install
+npm run dev
+```
+
+**Backend database connection errors:**
+- Verify DB_HOST unix socket path
+- Check database credentials
+- Ensure Cloud SQL instance is running
+
+**CORS errors:**
+- Check backend CORS settings in `main.py`
+- Verify frontend proxy in `vite.config.ts`
+- Ensure origins are correctly configured
+
+**Authentication not working:**
+- Clear browser localStorage/sessionStorage
+- Check JWT_SECRET_KEY matches between sessions
+- Verify magic link token hasn't expired
+
+**Email not sending:**
+- Use Gmail app password, not account password
+- Verify SMTP credentials in backend .env
+- Check SMTP port (587 for TLS)
+
+## Contributing
+
+### Code Style
+
+**Frontend:**
+- Use TypeScript with proper types (avoid `any`)
+- Follow existing component patterns
+- Use functional components with hooks
+- Implement proper error boundaries
+- Use Tailwind CSS for styling
+
+**Backend:**
+- Follow PEP 8 guidelines
+- Use type hints
+- Add docstrings to endpoints
+- Implement proper error handling
+- Use Pydantic for validation
+
+### Commit Guidelines
+- Use descriptive commit messages
+- Reference issues/tickets when applicable
+- Keep commits focused and atomic
+- Test before committing
+
+### Branch Strategy
+- `main` - Production branch (auto-deploys)
+- `develop` - Development branch
+- Feature branches: `feature/feature-name`
+- Bug fix branches: `fix/bug-name`
+
+## Security
+
+### Production Checklist
+
+**Backend:**
+- [ ] Change JWT_SECRET_KEY to strong random value
+- [ ] Use environment variables for all secrets
+- [ ] Enable HTTPS only
+- [ ] Restrict CORS to specific origins
+- [ ] Use Gmail app passwords
+- [ ] Implement rate limiting
+- [ ] Set up database backups
+- [ ] Enable Cloud SQL high availability
+- [ ] Use Secret Manager for sensitive data
+- [ ] Configure IAM roles properly
+
+**Frontend:**
+- [ ] No sensitive data in client code
+- [ ] Secure token storage
+- [ ] HTTPS only
+- [ ] CSP headers configured
+- [ ] robots.txt for SEO protection
+- [ ] Rate limiting on auth endpoints
+
+### Current Security Features
+
+✅ JWT token-based authentication  
+✅ Magic link tokens expire after 15 minutes  
+✅ Passwords hashed with bcrypt  
+✅ SQL injection prevention (parameterized queries)  
+✅ Input validation using Pydantic/Zod  
+✅ CORS middleware configured  
+✅ Automatic expired token cleanup  
+✅ Role-based access control  
+✅ Protected routes and endpoints  
+
+## Performance
+
+### Frontend Optimizations
+- Route-based code splitting
+- Lazy loading of components
+- Image optimization
+- Request caching (stale-while-revalidate)
+- Optimistic UI updates
+- Virtual scrolling for long lists
+
+### Backend Optimizations
+- Database connection pooling
+- Async operations
+- Query optimization
+- Response caching
+- Pagination support
+
+## Browser Support
+
+- Chrome (latest)
+- Firefox (latest)
+- Safari (latest)
+- Edge (latest)
+- Mobile: iOS Safari, Chrome for Android
 
 ## License
 
-This project is licensed under the MIT License - see the LICENSE file for details.
+Proprietary - Harbour Learning Trust
 
-## Acknowledgments
+## Support
 
-- [shadcn/ui](https://ui.shadcn.com/) for the beautiful, accessible components
-- [Tailwind CSS](https://tailwindcss.com/) for the utility-first CSS framework
-- [Lucide Icons](https://lucide.dev/) for the icon set
+For questions or issues:
+- Check documentation in `/docs`
+- Review troubleshooting section above
+- Contact the Assurly development team
+
+---
+
+**Current Version**: 2.0.0  
+**Last Updated**: January 2026  
+**Live Platform**: [https://www.assurly.co.uk](https://www.assurly.co.uk)  
+**Maintained by**: Assurly Development Team
