@@ -157,6 +157,7 @@ class AuthService {
     if (session?.user) {
       return {
         access_token: this.getToken() || '',
+        token_type: 'bearer',
         user: session.user
       };
     }

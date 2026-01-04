@@ -46,11 +46,15 @@ const aspectCodeToCategory = (aspectCode: string): AssessmentCategory => {
  * Maps API status to legacy display status
  */
 const mapStatus = (status: AssessmentStatus): string => {
-  const map: Record<AssessmentStatus, string> = {
+  const map: Partial<Record<AssessmentStatus, string>> = {
     'not_started': 'Not Started',
     'in_progress': 'In Progress',
     'completed': 'Completed',
     'approved': 'Completed',
+    'Not Started': 'Not Started',
+    'In Progress': 'In Progress',
+    'Completed': 'Completed',
+    'Overdue': 'Overdue',
   };
   return map[status] || status;
 };
@@ -443,4 +447,4 @@ export {
   expandAcademicYear,
 };
 
-export const transformAssessment = transformAssessmentDetail; 
+// Removed duplicate export - transformAssessment is defined earlier in the file 

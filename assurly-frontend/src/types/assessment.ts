@@ -6,7 +6,7 @@
 // Core Types
 // ============================================================================
 
-export type AssessmentStatus = 'not_started' | 'in_progress' | 'completed' | 'approved';
+export type AssessmentStatus = 'not_started' | 'in_progress' | 'completed' | 'approved' | 'Not Started' | 'In Progress' | 'Completed' | 'Overdue';
 export type Rating = 1 | 2 | 3 | 4 | null;
 export type SchoolType = 'primary' | 'secondary' | 'all_through' | 'special' | 'central';
 export type TrendDirection = 'improving' | 'declining' | 'stable' | 'no_data';
@@ -99,12 +99,19 @@ export interface Assessment {
   submitted_by_name: string | null;
   last_updated: string;
   
-  // Backward compatibility fields
-  category?: AssessmentCategory;
+  // Backward compatibility fields (v3 format - used by frontend)
+  name?: string;                   // Maps to standard_name
+  category?: AssessmentCategory | string;
   school?: School;
-  term?: AcademicTerm;
+  term?: AcademicTerm | string;
   completedStandards?: number;
   totalStandards?: number;
+  standards?: Standard[];
+  dueDate?: string | null;         // Maps to due_date
+  assignedTo?: Array<{id: string; name: string}> | null;
+  lastUpdated?: string;            // Maps to last_updated
+  academicYear?: string;           // Maps to academic_year
+  overallScore?: number;           // Average rating
 }
 
 // ============================================================================
@@ -156,12 +163,24 @@ export interface Standard {
   aspect_name: string;
   current_version_id: string;     // OLT-ES1-v1
   current_version: number;
+  
+  // Backward compatibility fields (v3 format - used by frontend)
+  id?: string;                     // Maps to mat_standard_id
+  code?: string;                   // Maps to standard_code
+  title?: string;                  // Maps to standard_name
+  description?: string;            // Maps to standard_description
+  rating?: Rating;
+  evidence?: string | null;
+  version_number?: number;         // Maps to current_version
+  updated_at?: string;
+  created_at?: string;
 }
 
-export interface StandardDetail extends Standard {
+export interface StandardDetail extends Omit<Standard, 'current_version'> {
   created_at: string;
   updated_at: string;
-  current_version: StandardVersion;
+  current_version: number;
+  current_version_details: StandardVersion;
   version_history: StandardVersion[];
 }
 
@@ -193,6 +212,7 @@ export interface Aspect {
   aspect_description: string;
   sort_order: number;
   is_custom: boolean;
+  is_modified?: boolean;          // Backward compatibility
   standards_count: number;
 }
 
@@ -323,10 +343,10 @@ export interface UpdateStandardResponse {
 // ============================================================================
 
 export interface User {
-  id: string;
+  id?: string;
   name: string;
-  email: string;
-  role: string;
+  email?: string;
+  role?: string;
 }
 
 // ============================================================================
