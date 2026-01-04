@@ -140,8 +140,10 @@ export function AssessmentDetailPage() {
   // Helper function to get sorted standards
   const getSortedStandards = (standards: Standard[]) => {
     return standards.slice().sort((a, b) => {
-      const aMatch = a.code.match(/([A-Z]+)(\d+)/);
-      const bMatch = b.code.match(/([A-Z]+)(\d+)/);
+      const aCode = a.code || '';
+      const bCode = b.code || '';
+      const aMatch = aCode.match(/([A-Z]+)(\d+)/);
+      const bMatch = bCode.match(/([A-Z]+)(\d+)/);
       
       if (aMatch && bMatch) {
         const aPrefix = aMatch[1];
@@ -156,7 +158,7 @@ export function AssessmentDetailPage() {
         return aNum - bNum;
       }
       
-      return a.code.localeCompare(b.code);
+      return aCode.localeCompare(bCode);
     });
   };
   
@@ -181,22 +183,22 @@ export function AssessmentDetailPage() {
   useEffect(() => {
     if (assessment?.standards) {
       setRatings(assessment.standards.reduce((acc, standard) => {
-        acc[standard.id] = standard.rating;
+        if (standard.id) acc[standard.id] = standard.rating;
         return acc;
       }, {} as Record<string, Rating>));
 
       setEvidence(assessment.standards.reduce((acc, standard) => {
-        acc[standard.id] = standard.evidence || "";
+        if (standard.id) acc[standard.id] = standard.evidence || "";
         return acc;
       }, {} as Record<string, string>));
 
       setAttachments(assessment.standards.reduce((acc, standard) => {
-        acc[standard.id] = standard.attachments || [];
+        if (standard.id) acc[standard.id] = [];
         return acc;
       }, {} as Record<string, FileAttachment[]>));
       
       setActions(assessment.standards.reduce((acc, standard) => {
-        acc[standard.id] = []; // Initialize with empty actions
+        if (standard.id) acc[standard.id] = []; // Initialize with empty actions
         return acc;
       }, {} as Record<string, Action[]>));
     }
@@ -490,7 +492,7 @@ export function AssessmentDetailPage() {
   const handleSubmit = async () => {
     if (!assessment || !id) return;
     
-    const standardIds = assessment.standards?.map(s => s.id) || [];
+    const standardIds = assessment.standards?.map(s => s.id).filter((id): id is string => !!id) || [];
     const unratedStandards = standardIds.filter(id => ratings[id] === null || ratings[id] === undefined);
     
     if (unratedStandards.length > 0) {
@@ -510,7 +512,7 @@ export function AssessmentDetailPage() {
         evidence: evidence[standardId] || '',
       }));
 
-      await submitAssessment(id, standards);
+      await submitAssessment(id!, standards);
       
       // Force refresh of assessments cache to ensure immediate updates
       await assessmentService.refreshAllData();
@@ -529,6 +531,7 @@ export function AssessmentDetailPage() {
   };
 
   const getStandardStatus = (standard: Standard) => {
+    if (!standard.id) return "incomplete";
     const rating = ratings[standard.id];
     
     if (rating !== null) {
@@ -758,8 +761,10 @@ export function AssessmentDetailPage() {
                   .slice()
                   .sort((a, b) => {
                     // Extract the numeric part from the standard code (e.g., ED1 -> 1, ED10 -> 10)
-                    const aMatch = a.code.match(/([A-Z]+)(\d+)/);
-                    const bMatch = b.code.match(/([A-Z]+)(\d+)/);
+                    const aCode = a.code || '';
+                    const bCode = b.code || '';
+                    const aMatch = aCode.match(/([A-Z]+)(\d+)/);
+                    const bMatch = bCode.match(/([A-Z]+)(\d+)/);
                     
                     if (aMatch && bMatch) {
                       const aPrefix = aMatch[1];
@@ -777,7 +782,7 @@ export function AssessmentDetailPage() {
                     }
                     
                     // Fallback to string comparison if pattern doesn't match
-                    return a.code.localeCompare(b.code);
+                    return aCode.localeCompare(bCode);
                   })
                   .map((standard, index) => {
                   const status = getStatusStatus(standard);
@@ -817,7 +822,7 @@ export function AssessmentDetailPage() {
             
           {/* Standard Detail - Main Content */}
           <div className="md:col-span-8 lg:col-span-9">
-            {activeStandard && (
+            {activeStandard && activeStandard.id && (
               <Card className="h-full">
                 <CardHeader className="pb-2">
                   <div className="flex items-center justify-between mb-2">
@@ -883,7 +888,7 @@ export function AssessmentDetailPage() {
                       
                       <div className="grid grid-cols-1 lg:grid-cols-4 gap-3">
                         {[1, 2, 3, 4].map((rating) => {
-                          const isSelected = ratings[activeStandard.id] === rating;
+                          const isSelected = ratings[activeStandard.id!] === rating;
                           return (
                             <div 
                               key={rating}
@@ -897,7 +902,7 @@ export function AssessmentDetailPage() {
                                   : ""
                               )}
                               onClick={() => canEdit && 
-                                handleRatingChange(activeStandard.id, rating as Rating)}
+                                handleRatingChange(activeStandard.id!, rating as Rating)}
                             >
                               <div className="flex items-center justify-between">
                                 <div className="flex items-center gap-1.5">
@@ -928,14 +933,14 @@ export function AssessmentDetailPage() {
                         <div className="flex items-center justify-between mb-3">
                           <h3 className="text-base font-medium">Comments <span className="text-xs text-muted-foreground">(Optional)</span></h3>
                           <span className="text-xs text-muted-foreground">
-                            {evidence[activeStandard.id]?.length || 0} / 500
+                            {evidence[activeStandard.id!]?.length || 0} / 500
                           </span>
                         </div>
                         <Textarea
                           placeholder="Provide specific evidence to support your rating (optional)..."
-                          value={evidence[activeStandard.id] || ""}
+                          value={evidence[activeStandard.id!] || ""}
                           onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => 
-                            handleEvidenceChange(activeStandard.id, e.target.value)
+                            handleEvidenceChange(activeStandard.id!, e.target.value)
                           }
                           disabled={!canEdit}
                           className="min-h-[150px] resize-y"
@@ -952,7 +957,7 @@ export function AssessmentDetailPage() {
                         <div className="flex items-center justify-between mb-3">
                           <h3 className="text-base font-medium">Actions <span className="text-xs text-muted-foreground">(Optional)</span></h3>
                           <span className="text-xs text-muted-foreground">
-                            {actions[activeStandard.id]?.filter(a => a.completed).length || 0} / {actions[activeStandard.id]?.length || 0} completed
+                            {actions[activeStandard.id!]?.filter((a: any) => a.completed).length || 0} / {actions[activeStandard.id!]?.length || 0} completed
                           </span>
                         </div>
                         
@@ -961,15 +966,15 @@ export function AssessmentDetailPage() {
                           <div className="flex gap-2 mb-3">
                             <Input
                               placeholder="Add an action item..."
-                              value={newActionText[activeStandard.id] || ""}
+                              value={newActionText[activeStandard.id!] || ""}
                               onChange={(e) => setNewActionText(prev => ({
                                 ...prev,
-                                [activeStandard.id]: e.target.value
+                                [activeStandard.id!]: e.target.value
                               }))}
                               onKeyDown={(e) => {
                                 if (e.key === 'Enter') {
                                   e.preventDefault();
-                                  handleAddAction(activeStandard.id);
+                                  handleAddAction(activeStandard.id!);
                                 }
                               }}
                               className="flex-1"
