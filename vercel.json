@@ -1,9 +1,7 @@
 {
-  "buildCommand": "npm install && npm run build",
-  "outputDirectory": "dist",
-  "installCommand": "npm install",
-  "framework": null,
-  "rootDirectory": "assurly-frontend",
+  "buildCommand": "cd assurly-frontend && npm install && npm run build",
+  "outputDirectory": "assurly-frontend/dist",
+  "installCommand": "cd assurly-frontend && npm install",
   "headers": [
     {
       "source": "/(.*)",
