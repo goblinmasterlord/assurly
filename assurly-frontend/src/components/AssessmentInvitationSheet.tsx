@@ -247,7 +247,7 @@ export function AssessmentInvitationSheet({ open, onOpenChange, onSuccess }: Ass
   
   // Filter schools based on the search term
   const filteredSchools = schools.filter(school => 
-    school.name.toLowerCase().includes(searchTerm.toLowerCase())
+    (school.name || school.school_name).toLowerCase().includes(searchTerm.toLowerCase())
   );
 
   // Toggle school selection
@@ -264,7 +264,7 @@ export function AssessmentInvitationSheet({ open, onOpenChange, onSuccess }: Ass
     if (selectedSchools.length === schools.length) {
       setSelectedSchools([]);
     } else {
-      setSelectedSchools(schools.map(school => school.id));
+      setSelectedSchools(schools.map(school => school.id || school.school_id));
     }
   };
 
@@ -288,15 +288,14 @@ export function AssessmentInvitationSheet({ open, onOpenChange, onSuccess }: Ass
       
       // Create assessments for each selected category
       for (const category of selectedCategories) {
-        const assessmentIds = await createAssessments({
-          category,
-          schoolIds: selectedSchools,
-          dueDate: dueDate ? format(dueDate, "yyyy-MM-dd") : undefined,
-          term,
-          academicYear,
-          assignedTo: user?.id,
+        await createAssessments({
+          school_ids: selectedSchools,
+          aspect_code: category,
+          term_id: `${term}-${academicYear}`,
+          due_date: dueDate ? format(dueDate, "yyyy-MM-dd") : undefined,
+          assigned_to: user?.user_id || user?.id,
         });
-        totalAssessments += assessmentIds.length;
+        totalAssessments += selectedSchools.length;
       }
 
       // Show success toast immediately
@@ -393,21 +392,24 @@ export function AssessmentInvitationSheet({ open, onOpenChange, onSuccess }: Ass
                 </div>
               ) : (
                 <div className="divide-y">
-                  {filteredSchools.map((school) => (
+                  {filteredSchools.map((school) => {
+                    const schoolId = school.id || school.school_id;
+                    const schoolName = school.name || school.school_name;
+                    return (
                     <label
-                      key={school.id} 
+                      key={schoolId} 
                       className={cn(
                         "flex items-center gap-3 px-3 py-2 hover:bg-slate-50 cursor-pointer transition-colors",
-                        selectedSchools.includes(school.id) && "bg-slate-50"
+                        selectedSchools.includes(schoolId) && "bg-slate-50"
                       )}
                     >
                       <Checkbox 
-                        checked={selectedSchools.includes(school.id)}
-                        onCheckedChange={() => toggleSchool(school.id)}
+                        checked={selectedSchools.includes(schoolId)}
+                        onCheckedChange={() => toggleSchool(schoolId)}
                       />
-                      <span className="text-sm flex-1">{school.name}</span>
+                      <span className="text-sm flex-1">{schoolName}</span>
                     </label>
-                  ))}
+                  );})}
                 </div>
               )}
             </div>

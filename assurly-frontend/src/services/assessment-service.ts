@@ -5,7 +5,7 @@
 import apiClient from '@/lib/api-client';
 import { 
   transformAssessmentGroup,
-  transformAssessment, 
+  transformAssessment,
   transformSchool,
   transformStandard,
   transformAspect
@@ -437,6 +437,7 @@ export default {
   updateAssessment,
   createAssessments,
   bulkUpdateAssessments,
+  submitAssessment,
   
   // Standards
   getStandards,

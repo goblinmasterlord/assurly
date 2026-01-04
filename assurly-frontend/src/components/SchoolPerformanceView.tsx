@@ -225,7 +225,7 @@ export function SchoolPerformanceView({ assessments, refreshAssessments, isLoadi
 
       // Group by school and calculate scores
       historicalAssessments.forEach(assessment => {
-        const schoolId = assessment.school.id;
+        const schoolId = assessment.school_id;
         
         if (!schoolHistoricalData.has(schoolId)) {
           schoolHistoricalData.set(schoolId, []);
@@ -245,8 +245,8 @@ export function SchoolPerformanceView({ assessments, refreshAssessments, isLoadi
         }
 
         // Add category score if assessment is completed
-        if (assessment.status === "Completed" && assessment.overallScore) {
-          termData.categoryScores.set(assessment.category, assessment.overallScore);
+        if (assessment.status === "completed" && assessment.overallScore) {
+          termData.categoryScores.set(assessment.category!, assessment.overallScore);
         }
       });
     }
@@ -415,13 +415,13 @@ export function SchoolPerformanceView({ assessments, refreshAssessments, isLoadi
 
     // Process current term assessments
     filteredByTermAssessments.forEach(assessment => {
-      const schoolId = assessment.school.id;
+      const schoolId = assessment.school_id;
       
       if (!schoolMap.has(schoolId)) {
         schoolMap.set(schoolId, {
-          school: assessment.school,
+          school: assessment.school || { school_id: assessment.school_id, school_name: assessment.school_name, id: assessment.school_id, name: assessment.school_name },
           overallScore: 0,
-          status: "Not Started", // Will be calculated after all assessments are processed
+          status: "not_started", // Will be calculated after all assessments are processed
           assessmentsByCategory: [],
           criticalStandardsTotal: 0,
           lastUpdated: assessment.lastUpdated,
@@ -450,15 +450,15 @@ export function SchoolPerformanceView({ assessments, refreshAssessments, isLoadi
 
       // Check if this aspect requires intervention (for both completed AND in-progress assessments)
       // Score <= 1.5 means it has 1-rated standards that need attention
-      if ((assessment.status === 'Completed' || assessment.status === 'In Progress') && 
+      if ((assessment.status === 'completed' || assessment.status === 'in_progress') && 
           assessment.overallScore && assessment.overallScore <= 1.5) {
-        schoolData.aspectsWithInterventionRequired!.add(assessment.category);
+        schoolData.aspectsWithInterventionRequired!.add(assessment.category!);
       }
 
       // Add to assessments by category (for all assessments, not just completed)
       schoolData.assessmentsByCategory.push({
-        category: assessment.category,
-        name: assessment.name,
+        category: assessment.category!,
+        name: assessment.name!,
         status: assessment.status,
         completedStandards: assessment.completedStandards,
         totalStandards: assessment.totalStandards,
@@ -472,10 +472,10 @@ export function SchoolPerformanceView({ assessments, refreshAssessments, isLoadi
 
     // Calculate previous term scores for each school
     previousTermAssessments.forEach(assessment => {
-      const schoolId = assessment.school.id;
+      const schoolId = assessment.school_id;
       const schoolData = schoolMap.get(schoolId);
       
-      if (schoolData && assessment.status === 'Completed' && assessment.overallScore) {
+      if (schoolData && assessment.status === 'completed' && assessment.overallScore) {
         // Initialize previous score tracking if needed
         if (!schoolData.previousOverallScore) {
           schoolData.previousOverallScore = 0;
@@ -486,7 +486,7 @@ export function SchoolPerformanceView({ assessments, refreshAssessments, isLoadi
         schoolData.previousOverallScore += assessment.overallScore;
         
         // Track previous score by category
-        schoolData.changesByCategory!.set(assessment.category, assessment.overallScore);
+        schoolData.changesByCategory!.set(assessment.category!, assessment.overallScore);
       }
     });
 
@@ -548,10 +548,10 @@ export function SchoolPerformanceView({ assessments, refreshAssessments, isLoadi
       const matchesStatus = activeFilters.status.length === 0 || activeFilters.status.some(status => {
         return school.assessmentsByCategory.some(cat => {
           switch (status) {
-            case "completed": return cat.status === "Completed";
-            case "in-progress": return cat.status === "In Progress";
-            case "not-started": return cat.status === "Not Started";
-            case "overdue": return cat.status === "Overdue";
+            case "completed": return cat.status === "completed";
+            case "in-progress": return cat.status === "in_progress";
+            case "not-started": return cat.status === "not_started";
+            case "overdue": return cat.status === "not_started"; // Overdue is derived, not stored
             default: return false;
           }
         });
@@ -580,8 +580,8 @@ export function SchoolPerformanceView({ assessments, refreshAssessments, isLoadi
             bValue = b.school.name;
             break;
           case "assessments":
-            const aCompleted = a.assessmentsByCategory.filter(cat => cat.status === "Completed").length;
-            const bCompleted = b.assessmentsByCategory.filter(cat => cat.status === "Completed").length;
+            const aCompleted = a.assessmentsByCategory.filter(cat => cat.status === "completed").length;
+            const bCompleted = b.assessmentsByCategory.filter(cat => cat.status === "completed").length;
             const aTotal = a.assessmentsByCategory.length;
             const bTotal = b.assessmentsByCategory.length;
             aValue = aTotal > 0 ? (aCompleted / aTotal) : 0;
@@ -889,7 +889,7 @@ export function SchoolPerformanceView({ assessments, refreshAssessments, isLoadi
               <TableBody>
                 {filteredSchoolData.map((school, index) => {
                 const isExpanded = expandedSchools.has(school.school.id);
-                const completedCount = school.assessmentsByCategory.filter(cat => cat.status === "Completed").length;
+                const completedCount = school.assessmentsByCategory.filter(cat => cat.status === "completed").length;
                 const totalCount = school.assessmentsByCategory.length;
 
                 return (

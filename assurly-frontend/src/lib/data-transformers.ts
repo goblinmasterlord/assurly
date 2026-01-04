@@ -1,10 +1,7 @@
 // ============================================================================
 // v4.0 Data Transformers
 // ============================================================================
-// v4 API responses are mostly frontend-ready. Transformers now mainly:
-// 1. Add backward compatibility fields
-// 2. Normalize data structures
-// 3. Map aspect codes to legacy category format
+// v4 API responses are frontend-ready. Transformers add backward compatibility.
 
 import type {
   Assessment,
@@ -46,15 +43,11 @@ const aspectCodeToCategory = (aspectCode: string): AssessmentCategory => {
  * Maps API status to legacy display status
  */
 const mapStatus = (status: AssessmentStatus): string => {
-  const map: Partial<Record<AssessmentStatus, string>> = {
+  const map: Record<AssessmentStatus, string> = {
     'not_started': 'Not Started',
     'in_progress': 'In Progress',
     'completed': 'Completed',
     'approved': 'Completed',
-    'Not Started': 'Not Started',
-    'In Progress': 'In Progress',
-    'Completed': 'Completed',
-    'Overdue': 'Overdue',
   };
   return map[status] || status;
 };
@@ -88,7 +81,7 @@ const expandAcademicYear = (year: string): string => {
 // ============================================================================
 
 /**
- * Transforms v4 AssessmentGroup response (already frontend-ready)
+ * Transforms v4 AssessmentGroup response
  * Adds backward compatibility fields for legacy components
  */
 export const transformAssessmentGroup = (group: AssessmentGroup): Assessment => {
@@ -144,7 +137,7 @@ export const transformAssessmentGroup = (group: AssessmentGroup): Assessment => 
 // ============================================================================
 
 /**
- * Transforms v4 Assessment response (already frontend-ready)
+ * Transforms v4 Assessment response
  * Adds backward compatibility fields
  */
 export const transformAssessment = (assessment: Assessment): Assessment => {
@@ -166,8 +159,6 @@ export const transformAssessment = (assessment: Assessment): Assessment => {
     assignedTo: assessment.assigned_to_name ? [{
       id: assessment.assigned_to || '',
       name: assessment.assigned_to_name,
-      email: '',
-      role: '',
     }] : [],
     term: mapTermId(assessment.unique_term_id.split('-')[0]),
     academicYear: expandAcademicYear(assessment.academic_year),
@@ -175,7 +166,7 @@ export const transformAssessment = (assessment: Assessment): Assessment => {
 };
 
 /**
- * Transforms v4 AssessmentByAspect response (already frontend-ready)
+ * Transforms v4 AssessmentByAspect response
  */
 export const transformAssessmentByAspect = (data: AssessmentByAspect): AssessmentByAspect => {
   // v4 response is already perfect for frontend - pass through
@@ -183,7 +174,7 @@ export const transformAssessmentByAspect = (data: AssessmentByAspect): Assessmen
 };
 
 /**
- * Transforms v4 AssessmentStandard (already frontend-ready)
+ * Transforms v4 AssessmentStandard
  */
 export const transformAssessmentStandard = (standard: AssessmentStandard): AssessmentStandard => {
   // v4 response is already perfect - pass through
@@ -195,21 +186,25 @@ export const transformAssessmentStandard = (standard: AssessmentStandard): Asses
 // ============================================================================
 
 /**
- * Transforms v4 Standard response (already frontend-ready)
+ * Transforms v4 Standard response
  */
 export const transformStandard = (standard: Standard): Standard => {
-  // v4 response is already perfect - pass through
-  return standard;
+  return {
+    ...standard,
+    // Add backward compatibility fields
+    id: standard.mat_standard_id,
+    code: standard.standard_code,
+    title: standard.standard_name,
+    description: standard.standard_description,
+    version_number: standard.current_version,
+  };
 };
 
 /**
  * Transforms v4 standard response to include backward compat fields
  */
 export const transformStandardResponse = (apiStandard: Standard): Standard => {
-  return {
-    ...apiStandard,
-    // v4 already has all required fields
-  };
+  return transformStandard(apiStandard);
 };
 
 // ============================================================================
@@ -217,21 +212,23 @@ export const transformStandardResponse = (apiStandard: Standard): Standard => {
 // ============================================================================
 
 /**
- * Transforms v4 Aspect response (already frontend-ready)
+ * Transforms v4 Aspect response
  */
 export const transformAspect = (aspect: Aspect): Aspect => {
-  // v4 response is already perfect - pass through
-  return aspect;
+  return {
+    ...aspect,
+    // Add backward compatibility fields
+    id: aspect.mat_aspect_id,
+    name: aspect.aspect_name,
+    is_modified: aspect.is_custom, // Map is_custom to is_modified for legacy code
+  };
 };
 
 /**
  * Transforms v4 aspect response
  */
 export const transformAspectResponse = (apiAspect: Aspect): Aspect => {
-  return {
-    ...apiAspect,
-    // v4 already has all required fields
-  };
+  return transformAspect(apiAspect);
 };
 
 // ============================================================================
@@ -269,7 +266,7 @@ export const transformSchoolBasic = (schoolId: string, schoolName: string): Scho
 // ============================================================================
 
 /**
- * Transforms v4 Term response (already frontend-ready)
+ * Transforms v4 Term response
  */
 export const transformTerm = (term: Term): Term => {
   // v4 response is already perfect - pass through
@@ -282,13 +279,19 @@ export const transformTerm = (term: Term): Term => {
 
 /**
  * Transforms user ID to basic User object
- * For when we only have the ID
  */
 export const transformUserId = (userId: string, userName?: string): User => {
   return {
+    user_id: userId,
+    email: `${userId}@example.com`,
+    full_name: userName || `User ${userId}`,
+    mat_id: '',
+    school_id: null,
+    role_title: 'User',
+    is_active: true,
+    last_login: null,
     id: userId,
     name: userName || `User ${userId}`,
-    email: `${userId}@example.com`, // Placeholder
     role: 'User',
   };
 };
@@ -298,9 +301,18 @@ export const transformUserId = (userId: string, userName?: string): User => {
  */
 export const transformUser = (user: import('@/types/auth').User): User => {
   return {
+    user_id: user.user_id,
+    email: user.email,
+    full_name: user.full_name,
+    mat_id: user.mat_id,
+    mat_name: user.mat_name,
+    school_id: user.school_id,
+    school_name: user.school_name,
+    role_title: user.role_title,
+    is_active: user.is_active,
+    last_login: user.last_login,
     id: user.user_id,
     name: user.full_name,
-    email: user.email,
     role: user.role_title || 'User',
   };
 };
@@ -311,13 +323,11 @@ export const transformUser = (user: import('@/types/auth').User): User => {
 
 /**
  * Transforms assessment group to legacy Assessment format for list views
- * Used by components that expect the old Assessment interface
  */
 export const transformAssessmentSummary = transformAssessmentGroup;
 
 /**
  * Transforms assessment detail to legacy Assessment format
- * Used by components that expect the old Assessment interface with standards
  */
 export const transformAssessmentDetail = transformAssessment;
 
@@ -374,7 +384,6 @@ export const parseUniqueTerm = (uniqueTermId: string): { termId: string; academi
 
 /**
  * Parses assessment_id into components
- * cedar-park-primary-ES1-T1-2024-25 -> components
  */
 export const parseAssessmentId = (assessmentId: string): {
   schoolId: string;
@@ -382,15 +391,12 @@ export const parseAssessmentId = (assessmentId: string): {
   termId: string;
   academicYear: string;
 } => {
-  // Format: {school-id}-{standard-code}-{term}-{year}
-  // Split from the end to handle school IDs with hyphens
   const parts = assessmentId.split('-');
   
   if (parts.length < 5) {
     throw new Error(`Invalid assessment_id format: ${assessmentId}`);
   }
   
-  // Last 3 parts are: T{N}, YYYY, YY
   const academicYear = `${parts[parts.length - 2]}-${parts[parts.length - 1]}`;
   const termId = parts[parts.length - 3];
   const standardCode = parts[parts.length - 4];
@@ -406,7 +412,6 @@ export const parseAssessmentId = (assessmentId: string): {
 
 /**
  * Parses group_id into components
- * cedar-park-primary-EDU-T1-2024-25 -> components
  */
 export const parseGroupId = (groupId: string): {
   schoolId: string;
@@ -414,15 +419,12 @@ export const parseGroupId = (groupId: string): {
   termId: string;
   academicYear: string;
 } => {
-  // Format: {school-id}-{aspect-code}-{term}-{year}
-  // Split from the end to handle school IDs with hyphens
   const parts = groupId.split('-');
   
   if (parts.length < 5) {
     throw new Error(`Invalid group_id format: ${groupId}`);
   }
   
-  // Last 3 parts are: T{N}, YYYY, YY
   const academicYear = `${parts[parts.length - 2]}-${parts[parts.length - 1]}`;
   const termId = parts[parts.length - 3];
   const aspectCode = parts[parts.length - 4];
@@ -446,5 +448,3 @@ export {
   mapTermId,
   expandAcademicYear,
 };
-
-// Removed duplicate export - transformAssessment is defined earlier in the file 
