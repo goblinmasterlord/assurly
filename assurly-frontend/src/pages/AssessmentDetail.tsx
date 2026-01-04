@@ -183,7 +183,7 @@ export function AssessmentDetailPage() {
   useEffect(() => {
     if (assessment?.standards) {
       setRatings(assessment.standards.reduce((acc, standard) => {
-        if (standard.id) acc[standard.id] = standard.rating;
+        if (standard.id && standard.rating) acc[standard.id] = standard.rating;
         return acc;
       }, {} as Record<string, Rating>));
 
@@ -299,7 +299,7 @@ export function AssessmentDetailPage() {
         goToPreviousStandard();
       }
       // Numbers 1-4: Set rating for current standard (only when not typing)
-      else if (!isTyping && ["1", "2", "3", "4"].includes(e.key) && !e.ctrlKey && !e.metaKey) {
+      else if (!isTyping && ["1", "2", "3", "4"].includes(e.key) && !e.ctrlKey && !e.metaKey && activeStandard?.id) {
         handleRatingChange(activeStandard.id, parseInt(e.key) as Rating);
       }
       // Cmd/Ctrl+S: Save progress
@@ -467,7 +467,11 @@ export function AssessmentDetailPage() {
         return;
       }
 
-      await submitAssessment(id, standards);
+      await submitAssessment(standards.map(s => ({
+        assessment_id: id!,
+        rating: s.rating,
+        evidence_comments: s.evidence
+      })));
       
       // Force refresh of assessments cache to ensure immediate updates
       await assessmentService.refreshAllData();
@@ -512,7 +516,11 @@ export function AssessmentDetailPage() {
         evidence: evidence[standardId] || '',
       }));
 
-      await submitAssessment(id!, standards);
+      await submitAssessment(standards.map(s => ({
+        assessment_id: id!,
+        rating: s.rating,
+        evidence_comments: s.evidence
+      })));
       
       // Force refresh of assessments cache to ensure immediate updates
       await assessmentService.refreshAllData();
@@ -602,7 +610,7 @@ export function AssessmentDetailPage() {
                 <SelectContent>
                   {relatedAssessments.map(ra => (
                     <SelectItem key={ra.id} value={ra.id}>
-                      {ra.school.name}
+                      {ra.school?.name || ''}
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -723,8 +731,8 @@ export function AssessmentDetailPage() {
                   Last Updated
                 </p>
                 <p className="text-sm text-slate-900 font-medium">
-                  {assessment.lastUpdated !== "-" 
-                    ? new Date(assessment.lastUpdated).toLocaleDateString('en-GB', {
+                  {(assessment.last_updated || assessment.lastUpdated) && assessment.lastUpdated !== "-" 
+                    ? new Date(assessment.last_updated || assessment.lastUpdated!).toLocaleDateString('en-GB', {
                         day: 'numeric',
                         month: 'short'
                       })
@@ -915,7 +923,7 @@ export function AssessmentDetailPage() {
                               <p className="text-xs text-muted-foreground mt-1.5">
                                 {RatingDescriptions[rating as 1 | 2 | 3 | 4]}
                               </p>
-                              {role === "department-head" && assessment.status !== "Completed" && (
+                              {role === "department-head" && assessment.status !== "completed" && (
                                 <span className="absolute top-2 right-2 text-xs font-mono text-muted-foreground bg-gray-50 px-1.5 py-0.5 rounded">
                                   {rating}
                                 </span>
@@ -1035,7 +1043,7 @@ export function AssessmentDetailPage() {
                       <div>
                         <h3 className="text-base font-medium mb-3">Supporting Documents <span className="text-xs text-muted-foreground">(Optional)</span></h3>
                         <FileUpload
-                          onFilesChange={(files) => handleAttachmentsChange(activeStandard.id, files)}
+                          onFilesChange={(files) => activeStandard.id && handleAttachmentsChange(activeStandard.id, files)}
                           existingFiles={attachments[activeStandard.id] || []}
                           maxFiles={3}
                           acceptedTypes={[".pdf", ".doc", ".docx", ".xls", ".xlsx", ".jpg", ".jpeg", ".png"]}

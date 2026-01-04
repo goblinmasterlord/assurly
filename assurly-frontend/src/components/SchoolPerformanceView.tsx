@@ -466,7 +466,6 @@ export function SchoolPerformanceView({ assessments, refreshAssessments, isLoadi
         overallScore: assessment.overallScore || 0,
         lastUpdated: assessment.last_updated || assessment.lastUpdated || '',
         dueDate: assessment.due_date || undefined,
-        due_date: assessment.due_date || null,
         assignedTo: undefined,
         id: assessment.id!
       });
@@ -512,7 +511,7 @@ export function SchoolPerformanceView({ assessments, refreshAssessments, isLoadi
       schoolData.criticalStandardsTotal = schoolData.aspectsWithInterventionRequired!.size;
       
       // Calculate school-level status based on individual assessment statuses
-      schoolData.status = calculateSchoolStatus(schoolData.assessmentsByCategory.map(a => ({ status: a.status, due_date: a.due_date })));
+      schoolData.status = calculateSchoolStatus(schoolData.assessmentsByCategory.map(a => ({ status: a.status, due_date: a.dueDate || null })));
     });
 
     return Array.from(schoolMap.values());

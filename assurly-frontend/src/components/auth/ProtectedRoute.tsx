@@ -31,7 +31,7 @@ export function ProtectedRoute({ children, requiredRole }: ProtectedRouteProps) 
   }
 
   // Role-based authorization (for future use)
-  if (requiredRole && (user?.role || user?.role_title) !== requiredRole) {
+  if (requiredRole && ((user as any)?.role || user?.role_title) !== requiredRole) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-50 to-slate-100">
         <div className="text-center max-w-md">

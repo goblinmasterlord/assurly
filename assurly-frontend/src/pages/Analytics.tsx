@@ -342,6 +342,7 @@ export function AnalyticsPage() {
     ASSESSMENT_CATEGORIES.forEach(cat => categoryMap.set(cat, { scores: [], count: 0 }));
     
     currentTermAssessments.forEach(assessment => {
+      if (!assessment.category) return;
       const catData = categoryMap.get(assessment.category);
       if (catData) {
         catData.count++;
@@ -368,14 +369,16 @@ export function AnalyticsPage() {
 
     // 6. Calculate school performance
     const schoolMap = new Map<string, Assessment[]>();
-    schools.forEach(school => schoolMap.set(school.id, []));
+    schools.forEach(school => schoolMap.set(school.id!, []));
     currentTermAssessments.forEach(assessment => {
-      const schoolAssessments = schoolMap.get(assessment.school.id);
+      const schoolId = assessment.school?.id || assessment.school_id;
+      if (!schoolId) return;
+      const schoolAssessments = schoolMap.get(schoolId);
       if (schoolAssessments) schoolAssessments.push(assessment);
     });
 
     const schoolPerformance = schools.map(school => {
-      const schoolAssessments = schoolMap.get(school.id) || [];
+      const schoolAssessments = schoolMap.get(school.id!) || [];
       // Count both explicitly completed AND assessments that are 100% filled
       const completed = schoolAssessments.filter(a => 
         a.status === 'completed' || isAssessmentComplete(a)
@@ -383,7 +386,7 @@ export function AnalyticsPage() {
       const inProgress = schoolAssessments.filter(a => 
         a.status === 'in_progress' && !isAssessmentComplete(a)
       ).length;
-      const notStarted = schoolAssessments.filter(a => a.status === 'Not Started').length;
+      const notStarted = schoolAssessments.filter(a => a.status === 'not_started').length;
       const hasOverdue = schoolAssessments.some(a => a.status === 'not_started');
       
       const scores = completed.map(calculateAssessmentScore).filter(s => s > 0);
@@ -392,7 +395,7 @@ export function AnalyticsPage() {
         : 0;
 
       return {
-        school: school.name,
+        school: school.name!,
         overallScore,
         completedAssessments: completed.length,
         totalAssessments: schoolAssessments.length,
@@ -426,13 +429,13 @@ export function AnalyticsPage() {
 
         return {
           type,
-          school: a.school.name,
-          assessment: categoryNames[a.category] || a.category,
-          timestamp: a.lastUpdated,
+          school: a.school?.name || '',
+          assessment: categoryNames[a.category!] || a.category || '',
+          timestamp: a.last_updated || a.lastUpdated || '',
           status: a.status
         };
       })
-      .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
+      .sort((a, b) => new Date(b.timestamp || 0).getTime() - new Date(a.timestamp || 0).getTime())
       .slice(0, 5); // Show top 5 most recent
 
     return {
