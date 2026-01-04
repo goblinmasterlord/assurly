@@ -23,6 +23,7 @@ import { useUser } from "@/contexts/UserContext";
 import { useAssessments } from "@/hooks/use-assessments";
 import { getSchools } from "@/services/assessment-service";
 import type { School } from "@/types/assessment";
+import { isOverdue } from "@/utils/assessment";
 import { 
   AlertTriangle,
   Calendar, 
@@ -220,10 +221,12 @@ export function AssessmentsPage() {
   }, [assessments, selectedTerm, isMatAdmin]);
   
   // Show all schools from API - same as MAT admin view
-  const schoolOptions: MultiSelectOption[] = schools.map(school => ({
-    label: school.name,
-    value: school.id
-  }));
+  const schoolOptions: MultiSelectOption[] = schools
+    .filter(school => school.name && school.id)
+    .map(school => ({
+      label: school.name!,
+      value: school.id!
+    }));
   
   // Create filter options for multi-select components - SHOW ALL ASPECTS
   const categoryOptions: MultiSelectOption[] = assessmentCategories.map(categoryInfo => ({
@@ -261,26 +264,26 @@ export function AssessmentsPage() {
       let filtered = termFilteredAssessments.filter((assessment) => {
         // Search term filter
         const matchesSearch = 
-          assessment.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-          assessment.school.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-          assessment.category.toLowerCase().includes(searchTerm.toLowerCase());
+          (assessment.name || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+          (assessment.school?.name || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+          (assessment.category || '').toLowerCase().includes(searchTerm.toLowerCase());
         
         // Category filter
-        const matchesCategory = activeFilters.category.length === 0 || activeFilters.category.includes(assessment.category);
+        const matchesCategory = activeFilters.category.length === 0 || activeFilters.category.includes(assessment.category || '');
         
         // Status filter
         const matchesStatus = activeFilters.status.length === 0 || activeFilters.status.some((status: string) => {
           switch (status) {
-            case "completed": return assessment.status === "Completed";
-            case "in-progress": return assessment.status === "In Progress";
-            case "not-started": return assessment.status === "Not Started";
-            case "overdue": return assessment.status === "Overdue";
+            case "completed": return assessment.status === "completed";
+            case "in-progress": return assessment.status === "in_progress";
+            case "not-started": return assessment.status === "not_started";
+            case "overdue": return isOverdue(assessment);
             default: return false;
           }
         });
         
         // School filter  
-        const matchesSchool = activeFilters.school.length === 0 || activeFilters.school.includes(assessment.school.id);
+        const matchesSchool = activeFilters.school.length === 0 || activeFilters.school.includes(assessment.school?.id || assessment.school_id || '');
 
         return matchesSearch && matchesCategory && matchesStatus && matchesSchool;
       });
@@ -297,25 +300,27 @@ export function AssessmentsPage() {
               bValue = b.name;
               break;
             case "school":
-              aValue = a.school.name;
-              bValue = b.school.name;
+              aValue = a.school?.name || '';
+              bValue = b.school?.name || '';
               break;
             case "aspect":
-              aValue = getAspectDisplayName(a.category);
-              bValue = getAspectDisplayName(b.category);
+              aValue = getAspectDisplayName(a.category || '');
+              bValue = getAspectDisplayName(b.category || '');
               break;
             case "completion":
-              aValue = a.completedStandards / a.totalStandards;
-              bValue = b.completedStandards / b.totalStandards;
+              aValue = (a.completedStandards || 0) / (a.totalStandards || 1);
+              bValue = (b.completedStandards || 0) / (b.totalStandards || 1);
               break;
             case "dueDate":
-              aValue = a.dueDate ? new Date(a.dueDate).getTime() : 0;
-              bValue = b.dueDate ? new Date(b.dueDate).getTime() : 0;
+              aValue = a.due_date ? new Date(a.due_date).getTime() : 0;
+              bValue = b.due_date ? new Date(b.due_date).getTime() : 0;
               break;
             case "status":
-              const statusOrder = { "Overdue": 0, "In Progress": 1, "Not Started": 2, "Completed": 3 };
-              aValue = statusOrder[a.status as keyof typeof statusOrder] ?? 4;
-              bValue = statusOrder[b.status as keyof typeof statusOrder] ?? 4;
+              const statusOrder = { "overdue": 0, "in_progress": 1, "not_started": 2, "completed": 3 };
+              const aStatus = isOverdue(a) ? "overdue" : a.status;
+              const bStatus = isOverdue(b) ? "overdue" : b.status;
+              aValue = statusOrder[aStatus as keyof typeof statusOrder] ?? 4;
+              bValue = statusOrder[bStatus as keyof typeof statusOrder] ?? 4;
               break;
             default:
               return 0;
@@ -382,11 +387,11 @@ export function AssessmentsPage() {
   }, [schools, assessmentCategories, filtersRestored]);
   
   const overdueCount = useMemo(() => {
-    return termFilteredAssessments.filter(a => a.status === "Overdue").length;
+    return termFilteredAssessments.filter(a => isOverdue(a)).length;
   }, [termFilteredAssessments]);
   
   const inProgressCount = useMemo(() => {
-    return termFilteredAssessments.filter(a => a.status === "In Progress").length;
+    return termFilteredAssessments.filter(a => a.status === "in_progress").length;
   }, [termFilteredAssessments]);
   
   const getCategoryIcon = (category: string) => {
@@ -631,21 +636,21 @@ export function AssessmentsPage() {
                             <SchoolIcon className="h-4 w-4 text-slate-600" />
                           </div>
                           <span className="text-sm text-slate-700 font-medium truncate">
-                            {assessment.school.name}
+                            {assessment.school?.name || ''}
                           </span>
                         </div>
                       </TableCell>
                       <TableCell>
                         <div className="flex items-center gap-3">
                           <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-slate-50 border border-slate-200 flex-shrink-0">
-                            {getCategoryIcon(assessment.category)}
+                            {getCategoryIcon(assessment.category || '')}
                           </div>
                           <div className="min-w-0">
                             <p className="font-medium text-sm text-slate-900 leading-tight">
-                              {getAspectDisplayName(assessment.category)}
+                              {getAspectDisplayName(assessment.category || '')}
                             </p>
                             <p className="text-xs text-slate-500 mt-0.5">
-                              {assessment.name}
+                              {assessment.name || ''}
                             </p>
                           </div>
                         </div>
@@ -658,22 +663,22 @@ export function AssessmentsPage() {
                       </TableCell>
                       <TableCell className="text-center">
                         <div className="flex items-center justify-center gap-2">
-                          <span className="text-sm font-semibold text-slate-700 tabular-nums">{assessment.completedStandards}/{assessment.totalStandards}</span>
-                          <Progress value={(assessment.completedStandards / assessment.totalStandards) * 100} className="w-16 h-2" />
+                          <span className="text-sm font-semibold text-slate-700 tabular-nums">{assessment.completedStandards || 0}/{assessment.totalStandards || 0}</span>
+                          <Progress value={((assessment.completedStandards || 0) / (assessment.totalStandards || 1)) * 100} className="w-16 h-2" />
                         </div>
                       </TableCell>
                       <TableCell className="text-center">
-                        {assessment.dueDate ? (
+                        {assessment.due_date ? (
                           <div 
                             className={cn(
                               "inline-flex items-center gap-1.5 whitespace-nowrap rounded-md px-2 py-1 text-xs font-medium",
-                              assessment.status === "Overdue" ? "bg-rose-50 text-rose-700 border border-rose-100" : "bg-amber-50 text-amber-700 border border-amber-100"
+                              isOverdue(assessment) ? "bg-rose-50 text-rose-700 border border-rose-100" : "bg-amber-50 text-amber-700 border border-amber-100"
                             )}
                           >
                             <Calendar className="h-3.5 w-3.5" />
                             <span>
-                              {assessment.dueDate}
-                              {assessment.status === "Overdue" && " (Overdue)"}
+                              {assessment.due_date}
+                              {isOverdue(assessment) && " (Overdue)"}
                             </span>
                           </div>
                         ) : (
@@ -683,7 +688,7 @@ export function AssessmentsPage() {
                       <TableCell className="text-right pr-6">
                         <Button asChild variant="outline" size="sm" className="h-8 px-3">
                           <Link to={`/app/assessments/${assessment.id}`}>
-                            {assessment.status === "Completed" ? (
+                            {assessment.status === "completed" ? (
                               <>
                                 <Eye className="mr-1.5 h-3.5 w-3.5" />
                                 View

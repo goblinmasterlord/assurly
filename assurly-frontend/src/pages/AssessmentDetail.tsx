@@ -30,6 +30,7 @@ import {
 import { useUser } from "@/contexts/UserContext";
 import { submitAssessment } from "@/services/assessment-service"; // Keep submit function
 import { useAssessment } from "@/hooks/use-assessments"; // Optimized assessment fetching
+import { isOverdue } from "@/utils/assessment";
 import {
   AlertCircle,
   AlertTriangle,
@@ -541,13 +542,13 @@ export function AssessmentDetailPage() {
   
   const getStatusColor = (status: string) => {
     switch (status) {
-      case "Completed":
+      case "completed":
         return "bg-green-100 text-green-800 hover:bg-green-200";
-      case "In Progress":
+      case "in_progress":
         return "bg-blue-100 text-blue-800 hover:bg-blue-200";
-      case "Not Started":
+      case "not_started":
         return "bg-slate-100 text-slate-800 hover:bg-slate-200";
-      case "Overdue":
+      case "overdue":
         return "bg-red-100 text-red-800 hover:bg-red-200";
       default:
         return "bg-slate-100 text-slate-800 hover:bg-slate-200";
@@ -568,8 +569,8 @@ export function AssessmentDetailPage() {
   };
 
   const isCompleted = progressPercentage === 100;
-  const canSubmit = isCompleted && role === "department-head" && (assessment.status !== "Completed" || isEditMode);
-  const canEdit = role === "department-head" && (assessment.status !== "Completed" || isEditMode);
+  const canSubmit = isCompleted && role === "department-head" && (assessment.status !== "completed" || isEditMode);
+  const canEdit = role === "department-head" && (assessment.status !== "completed" || isEditMode);
   
   return (
     <div className="container max-w-7xl py-6 md:py-10">
@@ -607,7 +608,7 @@ export function AssessmentDetailPage() {
           )}
           
           {/* Edit Assessment Button for Department Heads */}
-          {role === "department-head" && assessment.status === "Completed" && !isEditMode && !isAdminView && (
+          {role === "department-head" && assessment.status === "completed" && !isEditMode && !isAdminView && (
             <Button
               variant="outline"
               size="sm"
@@ -635,7 +636,7 @@ export function AssessmentDetailPage() {
                   {assessment.name}
                 </h1>
                 <p className="text-sm text-slate-600 font-medium">
-                  {assessment.school.name} • {assessment.category}
+                  {assessment.school?.name || ''} • {assessment.category}
                 </p>
               </div>
             </div>
@@ -645,10 +646,10 @@ export function AssessmentDetailPage() {
               <Badge 
                 className={cn(
                   "px-3 py-1 text-sm font-medium border",
-                  assessment.status === "Completed" && "bg-emerald-100 text-emerald-700 border-emerald-200",
-                  assessment.status === "In Progress" && "bg-blue-100 text-blue-700 border-blue-200",
-                  assessment.status === "Not Started" && "bg-slate-100 text-slate-700 border-slate-200",
-                  assessment.status === "Overdue" && "bg-red-100 text-red-700 border-red-200"
+                  assessment.status === "completed" && "bg-emerald-100 text-emerald-700 border-emerald-200",
+                  assessment.status === "in_progress" && "bg-blue-100 text-blue-700 border-blue-200",
+                  assessment.status === "not_started" && "bg-slate-100 text-slate-700 border-slate-200",
+                  isOverdue(assessment) && "bg-red-100 text-red-700 border-red-200"
                 )}
               >
                 {assessment.status}
@@ -976,8 +977,8 @@ export function AssessmentDetailPage() {
                             <Button
                               type="button"
                               size="sm"
-                              onClick={() => handleAddAction(activeStandard.id)}
-                              disabled={!newActionText[activeStandard.id]?.trim()}
+                              onClick={() => activeStandard?.id && handleAddAction(activeStandard.id)}
+                              disabled={!activeStandard?.id || !newActionText[activeStandard.id]?.trim()}
                             >
                               Add
                             </Button>
@@ -986,16 +987,16 @@ export function AssessmentDetailPage() {
                         
                         {/* Actions List */}
                         <div className="space-y-2 min-h-[150px] max-h-[200px] overflow-y-auto border rounded-md p-3">
-                          {!actions[activeStandard.id] || actions[activeStandard.id].length === 0 ? (
+                          {!activeStandard?.id || !actions[activeStandard.id] || actions[activeStandard.id].length === 0 ? (
                             <p className="text-sm text-muted-foreground text-center py-8">
                               No actions added yet
                             </p>
                           ) : (
-                            actions[activeStandard.id].map((action) => (
+                            actions[activeStandard.id].map((action: any) => (
                               <div key={action.id} className="flex items-start gap-2 group">
                                 <Checkbox
                                   checked={action.completed}
-                                  onCheckedChange={() => handleToggleAction(activeStandard.id, action.id)}
+                                  onCheckedChange={() => activeStandard?.id && handleToggleAction(activeStandard.id, action.id)}
                                   disabled={!canEdit}
                                   className="mt-1"
                                 />
@@ -1007,7 +1008,7 @@ export function AssessmentDetailPage() {
                                     variant="ghost"
                                     size="sm"
                                     className="h-6 px-2 opacity-0 group-hover:opacity-100 transition-opacity"
-                                    onClick={() => handleDeleteAction(activeStandard.id, action.id)}
+                                    onClick={() => activeStandard?.id && handleDeleteAction(activeStandard.id, action.id)}
                                   >
                                     <XCircle className="h-3 w-3" />
                                   </Button>
@@ -1043,13 +1044,14 @@ export function AssessmentDetailPage() {
                     )}
 
                     {/* Show attachments in read-only mode for completed assessments or admin view */}
-                    {(isAdminView || assessment.status === "Completed") && 
+                    {(isAdminView || assessment.status === "completed") && 
+                     activeStandard?.id &&
                      attachments[activeStandard.id] && 
                      attachments[activeStandard.id].length > 0 && (
                       <div>
                         <h3 className="text-base font-medium mb-3">Supporting Documents</h3>
                         <div className="space-y-2">
-                          {attachments[activeStandard.id].map((file) => (
+                          {activeStandard?.id && attachments[activeStandard.id].map((file: any) => (
                             <div
                               key={file.id}
                               className="flex items-center justify-between p-3 bg-slate-50 border border-slate-200 rounded-lg"
@@ -1078,7 +1080,7 @@ export function AssessmentDetailPage() {
                   </div>
                 </CardContent>
                 
-                {role === "department-head" && (assessment.status !== "Completed" || isEditMode) && (
+                {role === "department-head" && (assessment.status !== "completed" || isEditMode) && (
                   <div className="pb-24">
                     {/* Add padding to account for sticky bottom bar */}
                   </div>
@@ -1090,7 +1092,7 @@ export function AssessmentDetailPage() {
       )}
       
       {/* Sticky Bottom Navigation Bar for Department Heads */}
-      {role === "department-head" && (assessment.status !== "Completed" || isEditMode) && !isAdminView && (
+      {role === "department-head" && (assessment.status !== "completed" || isEditMode) && !isAdminView && (
         <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-slate-200/60 shadow-lg z-50">
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
             <div className="flex items-center justify-between py-4">
@@ -1286,13 +1288,13 @@ export function AssessmentDetailPage() {
                 <div className="flex items-center space-x-3">
                   <div className="h-10 w-10 rounded-lg bg-slate-100 flex items-center justify-center">
                     <span className="text-slate-700 font-semibold text-sm">
-                      {Math.round((assessment.completedStandards / assessment.totalStandards) * 100)}%
+                      {Math.round(((assessment.completedStandards || 0) / (assessment.totalStandards || 1)) * 100)}%
                     </span>
                   </div>
                   <div>
                     <p className="text-xs text-slate-500 font-medium">Completion Rate</p>
                     <p className="text-sm font-semibold text-slate-900">
-                      {assessment.completedStandards}/{assessment.totalStandards} Standards
+                      {assessment.completedStandards || 0}/{assessment.totalStandards || 0} Standards
                     </p>
                   </div>
                 </div>
@@ -1304,10 +1306,10 @@ export function AssessmentDetailPage() {
                   <div>
                     <p className="text-xs text-slate-500 font-medium">Last Updated</p>
                     <p className="text-sm font-semibold text-slate-900">
-                      {new Date(assessment.lastUpdated).toLocaleDateString('en-GB', {
+                      {assessment.last_updated ? new Date(assessment.last_updated).toLocaleDateString('en-GB', {
                         day: 'numeric',
                         month: 'short'
-                      })}
+                      }) : 'N/A'}
                     </p>
                   </div>
                 </div>
@@ -1433,7 +1435,7 @@ export function AssessmentDetailPage() {
               Assessment Submitted Successfully
             </DialogTitle>
             <DialogDescription>
-              Thank you for completing the {assessment.name} for {assessment.school.name}.
+              Thank you for completing the {assessment.name} for {assessment.school?.name || ''}.
             </DialogDescription>
           </DialogHeader>
 
@@ -1442,7 +1444,7 @@ export function AssessmentDetailPage() {
               <h4 className="text-sm font-medium">Assessment Summary:</h4>
               <div className="grid grid-cols-2 gap-2 text-sm">
                 {[1, 2, 3, 4].map(rating => {
-                  const count = assessment.standards!.filter(s => ratings[s.id] === rating).length;
+                  const count = assessment.standards!.filter(s => s.id && ratings[s.id] === rating).length;
                   if (count === 0) return null;
                   
                   const color = rating === 1 ? "text-red-600" :
