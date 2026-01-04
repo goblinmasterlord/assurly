@@ -1,6 +1,6 @@
 // src/utils/assessment.ts
 
-import { Assessment, AssessmentGroup, AssessmentStatus, AssessmentStandard, AssessmentByAspect, Rating } from '../types/assessment';
+import type { Assessment, AssessmentGroup, AssessmentStatus, AssessmentStandard, AssessmentByAspect, Rating } from '../types/assessment';
 
 /**
  * Check if an assessment is overdue

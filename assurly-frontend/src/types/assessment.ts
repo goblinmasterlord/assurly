@@ -203,7 +203,7 @@ export interface Standard {
     created_at?: string;
 }
 
-export interface StandardDetail extends Standard {
+export interface StandardDetail extends Omit<Standard, 'current_version'> {
     created_at: string;
     updated_at: string;
     current_version: StandardVersion;
