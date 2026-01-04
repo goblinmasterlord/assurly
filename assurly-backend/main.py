@@ -1,4 +1,4 @@
-from fastapi import FastAPI, HTTPException, Query, Depends, status
+from fastapi import FastAPI, HTTPException, Query, Depends, status, Request
 from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
@@ -170,6 +170,43 @@ app.add_middleware(
     expose_headers=["*"],
     max_age=3600,  # Cache preflight requests for 1 hour
 )
+
+# Exception handler to ensure CORS headers are included in error responses
+# This fixes the issue where 401/403 errors don't include CORS headers
+@app.exception_handler(HTTPException)
+async def http_exception_handler(request: Request, exc: HTTPException):
+    """
+    Custom exception handler that ensures CORS headers are included in all responses,
+    including error responses. Without this, authentication errors (401) would not
+    include CORS headers, causing CORS errors in the browser instead of showing
+    the actual authentication error.
+    """
+    origin = request.headers.get("origin")
+
+    # List of allowed origins (must match CORS middleware config)
+    allowed_origins = [
+        "https://www.assurly.co.uk",
+        "https://assurly.co.uk",
+        "http://localhost:5173",
+        "http://localhost:3000",
+        "https://assurly-frontend-400616570417.europe-west2.run.app",
+    ]
+
+    # Prepare response
+    response = JSONResponse(
+        status_code=exc.status_code,
+        content={"detail": exc.detail}
+    )
+
+    # Add CORS headers if origin is allowed
+    if origin in allowed_origins:
+        response.headers["Access-Control-Allow-Origin"] = origin
+        response.headers["Access-Control-Allow-Credentials"] = "true"
+        response.headers["Access-Control-Allow-Methods"] = "GET, POST, PUT, DELETE, OPTIONS, PATCH"
+        response.headers["Access-Control-Allow-Headers"] = "*"
+        response.headers["Access-Control-Expose-Headers"] = "*"
+
+    return response
 
 # Security scheme for JWT authentication
 security = HTTPBearer(auto_error=False)
