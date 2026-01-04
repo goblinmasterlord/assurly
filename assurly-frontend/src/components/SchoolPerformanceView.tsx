@@ -356,11 +356,12 @@ export function SchoolPerformanceView({ assessments, refreshAssessments, isLoadi
     value: categoryInfo.value
   }));
 
-  const uniqueSchools = [...new Set(filteredByTermAssessments.map(a => a.school.id))];
+  const uniqueSchools = [...new Set(filteredByTermAssessments.map(a => a.school?.id).filter(Boolean))];
   const schoolOptions: MultiSelectOption[] = schools
+    .filter(school => school.name && school.id)
     .map((school: School) => ({
-      label: school.name,
-      value: school.id
+      label: school.name!,
+      value: school.id!
     }));
 
   // Optimistic filter update handlers
@@ -424,7 +425,7 @@ export function SchoolPerformanceView({ assessments, refreshAssessments, isLoadi
           status: "not_started", // Will be calculated after all assessments are processed
           assessmentsByCategory: [],
           criticalStandardsTotal: 0,
-          lastUpdated: assessment.lastUpdated,
+          lastUpdated: assessment.last_updated || assessment.lastUpdated || '',
           completedAssessments: 0,
           totalAssessments: 0,
           previousOverallScore: undefined,
@@ -460,13 +461,14 @@ export function SchoolPerformanceView({ assessments, refreshAssessments, isLoadi
         category: assessment.category!,
         name: assessment.name!,
         status: assessment.status,
-        completedStandards: assessment.completedStandards,
-        totalStandards: assessment.totalStandards,
+        completedStandards: assessment.completedStandards || 0,
+        totalStandards: assessment.totalStandards || 0,
         overallScore: assessment.overallScore || 0,
-        lastUpdated: assessment.lastUpdated,
-        dueDate: assessment.dueDate,
-        assignedTo: assessment.assignedTo,
-        id: assessment.id
+        lastUpdated: assessment.last_updated || assessment.lastUpdated || '',
+        dueDate: assessment.due_date || undefined,
+        due_date: assessment.due_date || null,
+        assignedTo: undefined,
+        id: assessment.id!
       });
     });
 
@@ -510,7 +512,7 @@ export function SchoolPerformanceView({ assessments, refreshAssessments, isLoadi
       schoolData.criticalStandardsTotal = schoolData.aspectsWithInterventionRequired!.size;
       
       // Calculate school-level status based on individual assessment statuses
-      schoolData.status = calculateSchoolStatus(schoolData.assessmentsByCategory);
+      schoolData.status = calculateSchoolStatus(schoolData.assessmentsByCategory.map(a => ({ status: a.status, due_date: a.due_date })));
     });
 
     return Array.from(schoolMap.values());
@@ -531,8 +533,8 @@ export function SchoolPerformanceView({ assessments, refreshAssessments, isLoadi
     
     let filtered = schoolPerformanceData.filter(school => {
       const matchesSearch = searchTerm === "" ||
-        school.school.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        (school.school.code && school.school.code.toLowerCase().includes(searchTerm.toLowerCase()));
+        (school.school?.name || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+        (school.school?.code && school.school.code.toLowerCase().includes(searchTerm.toLowerCase()));
 
       const matchesPerformance = activeFilters.performance.length === 0 || activeFilters.performance.some(filter => {
         switch (filter) {
@@ -561,7 +563,7 @@ export function SchoolPerformanceView({ assessments, refreshAssessments, isLoadi
         return school.assessmentsByCategory.some(cat => cat.category === category);
       });
 
-      const matchesSchool = activeFilters.school.length === 0 || activeFilters.school.includes(school.school.id);
+      const matchesSchool = activeFilters.school.length === 0 || activeFilters.school.includes(school.school?.id || '');
       
       const matchesCritical = !criticalFilter || school.criticalStandardsTotal > 0;
 
@@ -888,16 +890,16 @@ export function SchoolPerformanceView({ assessments, refreshAssessments, isLoadi
               </TableHeader>
               <TableBody>
                 {filteredSchoolData.map((school, index) => {
-                const isExpanded = expandedSchools.has(school.school.id);
+                const isExpanded = expandedSchools.has(school.school?.id || '');
                 const completedCount = school.assessmentsByCategory.filter(cat => cat.status === "completed").length;
                 const totalCount = school.assessmentsByCategory.length;
 
                 return (
-                  <React.Fragment key={school.school.id}>
+                  <React.Fragment key={school.school?.id || index}>
                     <TableRow 
                       className="cursor-pointer hover:bg-slate-50 transition-colors duration-200 animate-in fade-in-0 slide-in-from-bottom-1"
                       style={{ animationDelay: `${index * 80}ms`, animationFillMode: 'both' }}
-                      onClick={() => toggleSchoolExpansion(school.school.id)}
+                      onClick={() => toggleSchoolExpansion(school.school?.id || '')}
                     >
                       <TableCell className="w-12 px-2">
                         <Button variant="ghost" size="sm" className="h-6 w-6 p-0 mx-auto">
@@ -967,7 +969,7 @@ export function SchoolPerformanceView({ assessments, refreshAssessments, isLoadi
                       </TableCell>
                       <TableCell className="text-center">
                         {(() => {
-                          const historicalData = historicalTermsData.get(school.school.id) || [];
+                          const historicalData = historicalTermsData.get(school.school?.id || '') || [];
                           if (historicalData.length === 0) {
                             return <span className="text-sm text-slate-400">—</span>;
                           }
@@ -1106,7 +1108,7 @@ export function SchoolPerformanceView({ assessments, refreshAssessments, isLoadi
                                       </TableCell>
                                       <TableCell className="text-center">
                                         {(() => {
-                                          const historicalData = historicalTermsData.get(school.school.id) || [];
+                                          const historicalData = historicalTermsData.get(school.school?.id || '') || [];
                                           const categoryHistoricalData = historicalData
                                             .map(termData => ({
                                               term: termData.term,
