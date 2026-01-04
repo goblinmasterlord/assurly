@@ -293,7 +293,7 @@ export function AssessmentInvitationSheet({ open, onOpenChange, onSuccess }: Ass
           aspect_code: category,
           term_id: `${term}-${academicYear}`,
           due_date: dueDate ? format(dueDate, "yyyy-MM-dd") : undefined,
-          assigned_to: user?.user_id || user?.id,
+          assigned_to: user?.user_id,
         });
         totalAssessments += selectedSchools.length;
       }

@@ -119,7 +119,13 @@ export function useAssessment(assessmentId: string | undefined) {
     setError(null);
 
     try {
-      await assessmentService.submitAssessment(assessmentId, standards, submittedBy);
+      // Transform to v4 format
+      const updates = standards.map(s => ({
+        assessment_id: s.standardId,
+        rating: s.rating,
+        evidence_comments: s.evidence
+      }));
+      await assessmentService.bulkUpdateAssessments(updates);
       console.log('✅ Assessment submitted successfully');
     } catch (err: any) {
       const errorMessage = err.userMessage || err.message || 'Failed to submit assessment';
@@ -235,9 +241,16 @@ export function useCreateAssessment() {
     setError(null);
 
     try {
-      const assessmentIds = await assessmentService.createAssessments(request);
-      console.log('✅ Assessments created successfully:', assessmentIds);
-      return assessmentIds;
+      // Convert v3 format to v4 format
+      await assessmentService.createAssessments({
+        school_ids: request.schoolIds,
+        aspect_code: request.category,
+        term_id: `${request.term}-${request.academicYear}`,
+        due_date: request.dueDate,
+        assigned_to: request.assignedTo,
+      });
+      console.log('✅ Assessments created successfully');
+      return request.schoolIds;
     } catch (err: any) {
       const errorMessage = err.userMessage || err.message || 'Failed to create assessments';
       setError(errorMessage);

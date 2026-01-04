@@ -209,7 +209,6 @@ export const getAspectDisplayName = (category: string): string => {
     "Governance": "Governance",
     "Human Resources": "Human Resources",
     "Information Standards": "Information Standards",
-    "IT": "IT",
     
     // Legacy support for existing data
     "Finance & Procurement": "Finance",
@@ -241,7 +240,6 @@ export const getAspectShortCode = (category: string): string => {
     "Governance": "GV",
     "Human Resources": "HR",
     "Information Standards": "IS",
-    "IT": "IT",
     
     // Legacy support
     "Finance & Procurement": "FN",

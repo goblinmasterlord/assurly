@@ -437,7 +437,7 @@ export function SchoolPerformanceView({ assessments, refreshAssessments, isLoadi
       schoolData.totalAssessments++;
 
       // Only process COMPLETED assessments for scoring and critical standards
-      if (assessment.status === 'Completed') {
+      if (assessment.status === 'completed') {
         schoolData.completedAssessments++;
         
         schoolData.overallScore += assessment.overallScore || 0;
@@ -499,7 +499,7 @@ export function SchoolPerformanceView({ assessments, refreshAssessments, isLoadi
       // Calculate average previous overall score
       if (schoolData.previousOverallScore && schoolData.previousOverallScore > 0) {
         const prevCompletedCount = previousTermAssessments.filter(
-          a => a.school.id === schoolId && a.status === 'Completed'
+          a => a.school_id === schoolId && a.status === 'completed'
         ).length;
         if (prevCompletedCount > 0) {
           schoolData.previousOverallScore = schoolData.previousOverallScore / prevCompletedCount;
@@ -1135,7 +1135,7 @@ export function SchoolPerformanceView({ assessments, refreshAssessments, isLoadi
                                         })()}
                                       </TableCell>
                                       <TableCell className="text-center">
-                                        {categoryData.overallScore && categoryData.overallScore <= 1.5 && categoryData.status === 'Completed' ? (
+                                        {categoryData.overallScore && categoryData.overallScore <= 1.5 && categoryData.status === 'completed' ? (
                                           <Tooltip>
                                             <TooltipTrigger asChild>
                                               <Badge 
