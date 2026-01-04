@@ -1,7 +1,4 @@
 {
-  "buildCommand": "cd assurly-frontend && npm install && npm run build",
-  "outputDirectory": "assurly-frontend/dist",
-  "installCommand": "cd assurly-frontend && npm install",
   "headers": [
     {
       "source": "/(.*)",
