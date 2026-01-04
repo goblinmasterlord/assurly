@@ -58,7 +58,7 @@ apiClient.interceptors.request.use(
     if (typeof window !== 'undefined') {
       try {
         const token = localStorage.getItem('assurly_auth_token');
-        if (token && !config.url?.includes('/auth/request-magic-link')) {
+        if (token && !config.url?.includes('/auth/request-magic-link') && !config.url?.includes('/auth/verify/')) {
           config.headers.Authorization = `Bearer ${token}`;
           if (DEBUG_API) {
             logger.debug(`Adding auth token to request: ${config.url}`);

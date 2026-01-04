@@ -24,7 +24,7 @@ class AuthService {
 
   async requestMagicLink(request: LoginRequest): Promise<void> {
     try {
-      const response = await apiClient.post('/api/auth/login', {
+      const response = await apiClient.post('/api/auth/request-magic-link', {
         email: request.email
       });
       
@@ -47,9 +47,9 @@ class AuthService {
   async verifyToken(request: VerifyTokenRequest): Promise<AuthResponse> {
     try {
       logger.debug('Verifying token');
-      
+
       const response = await apiClient.get<any>(
-        `/api/auth/verify?token=${request.token}`
+        `/api/auth/verify/${request.token}`
       );
       
       logger.debug('Verification successful');
