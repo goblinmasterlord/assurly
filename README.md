@@ -4,9 +4,9 @@ Assurly is a production-ready, full-stack web platform for Multi-Academy Trusts 
 
 **Live Platform**: [https://www.assurly.co.uk](https://www.assurly.co.uk)
 
-## Project Structure
+## 📁 Project Structure
 
-This is a monorepo containing both the frontend and backend applications:
+This is a **monorepo** containing both the frontend and backend applications:
 
 ```
 Assurly/
@@ -27,21 +27,25 @@ Assurly/
 │   └── README.md             # Backend documentation
 │
 ├── docs/                      # Shared documentation
-│   ├── api/                  # API specifications
+│   ├── api/                  # API specifications and current docs
 │   │   ├── FRONTEND_API_SPECIFICATION_v4.md
-│   │   └── ASSESSMENT_API_SPECIFICATION.md
+│   │   ├── ASSESSMENT_API_SPECIFICATION_v4.md
+│   │   ├── PROJECT_STRUCTURE.md
+│   │   ├── REORGANIZATION_SUMMARY.md
+│   │   └── V4_MIGRATION_SUMMARY.md
 │   ├── archive/              # Historical documentation
+│   │   ├── MIGRATION_*.md    # Migration guides
+│   │   └── API_DOCUMENTATION_v1.md
 │   ├── design/               # Design and branding docs
+│   │   ├── BRANDING_UPDATES.md
+│   │   └── ux-recommendations.md
 │   └── fixes/                # Bug fix documentation
 │
 ├── db.json                    # Mock database for development
-├── BUGFIX_SUMMARY.md         # Bug fixes summary
-├── V4_MIGRATION_SUMMARY.md   # Migration notes
-├── TESTING_CHECKLIST.md      # Testing procedures
 └── README.md                 # This file
 ```
 
-## Quick Start
+## 🚀 Quick Start
 
 ### Frontend Development
 
@@ -61,6 +65,7 @@ cd assurly-backend
 pip install -r requirements.txt
 uvicorn main:app --reload
 # API available at http://localhost:8000
+# Swagger docs at http://localhost:8000/docs
 ```
 
 See [assurly-backend/README.md](assurly-backend/README.md) for detailed backend documentation.
@@ -93,7 +98,7 @@ User Browser
 [MySQL Database - Cloud SQL]
 ```
 
-## Key Features
+## ✨ Key Features
 
 ### 🔐 Authentication & Security
 - Magic link authentication (passwordless)
@@ -138,7 +143,7 @@ User Browser
 - Search and filtering
 - Version control ready
 
-## Technology Stack
+## 🛠️ Technology Stack
 
 ### Frontend Technologies
 | Category | Technology |
@@ -171,7 +176,7 @@ User Browser
 | **Email** | SMTP (Gmail) |
 | **DNS/CDN** | Vercel |
 
-## Development Workflow
+## 🔧 Development Workflow
 
 ### 1. Frontend Development
 
@@ -233,12 +238,12 @@ npm run dev
 
 The frontend dev server is configured to proxy API requests to the backend.
 
-## API Documentation
+## 📚 API Documentation
 
 ### Complete API Reference
 
 - **Frontend API Specification**: [docs/api/FRONTEND_API_SPECIFICATION_v4.md](docs/api/FRONTEND_API_SPECIFICATION_v4.md)
-- **Assessment API Specification**: [docs/api/ASSESSMENT_API_SPECIFICATION.md](docs/api/ASSESSMENT_API_SPECIFICATION.md)
+- **Assessment API Specification**: [docs/api/ASSESSMENT_API_SPECIFICATION_v4.md](docs/api/ASSESSMENT_API_SPECIFICATION_v4.md)
 - **Backend API Documentation**: [assurly-backend/API_DOCUMENTATION.md](assurly-backend/API_DOCUMENTATION.md)
 
 ### Key Endpoints
@@ -266,7 +271,7 @@ The frontend dev server is configured to proxy API requests to the backend.
 - `GET /api/terms` - List academic terms
 - `GET /api/users` - List users
 
-## Environment Configuration
+## ⚙️ Environment Configuration
 
 ### Frontend (.env in assurly-frontend/)
 
@@ -303,7 +308,7 @@ EMAIL_FROM=noreply@assurly.com
 EMAIL_FROM_NAME=Assurly Platform
 ```
 
-## Deployment
+## 🚀 Deployment
 
 ### Frontend (Vercel)
 
@@ -333,7 +338,7 @@ gcloud run deploy assurly-api \
   --allow-unauthenticated
 ```
 
-## Testing
+## 🧪 Testing
 
 ### Frontend Testing
 ```bash
@@ -363,40 +368,40 @@ python test_phase2_auth.py
 python gmail_creds_test.py
 ```
 
-### Complete Testing Checklist
-
-See [TESTING_CHECKLIST.md](TESTING_CHECKLIST.md) for comprehensive testing procedures.
-
-## Documentation
+## 📖 Documentation
 
 ### Getting Started
 - **Frontend README**: [assurly-frontend/README.md](assurly-frontend/README.md)
 - **Backend README**: [assurly-backend/README.md](assurly-backend/README.md)
-- **Quick Start**: [docs/MIGRATION_QUICK_START.md](docs/MIGRATION_QUICK_START.md)
-- **V4 Quick Start**: [docs/V4_QUICK_START.md](docs/V4_QUICK_START.md)
+- **Project Structure**: [docs/api/PROJECT_STRUCTURE.md](docs/api/PROJECT_STRUCTURE.md)
+- **V4 Quick Start**: [docs/api/V4_QUICK_START.md](docs/api/V4_QUICK_START.md)
 
 ### API Documentation
 - **Frontend API v4**: [docs/api/FRONTEND_API_SPECIFICATION_v4.md](docs/api/FRONTEND_API_SPECIFICATION_v4.md)
-- **Assessment API**: [docs/api/ASSESSMENT_API_SPECIFICATION.md](docs/api/ASSESSMENT_API_SPECIFICATION.md)
+- **Assessment API**: [docs/api/ASSESSMENT_API_SPECIFICATION_v4.md](docs/api/ASSESSMENT_API_SPECIFICATION_v4.md)
 - **Backend API**: [assurly-backend/API_DOCUMENTATION.md](assurly-backend/API_DOCUMENTATION.md)
 
 ### Architecture & Design
-- **Migration Analysis**: [docs/MIGRATION_ANALYSIS.md](docs/MIGRATION_ANALYSIS.md)
-- **Schema Analysis**: [docs/SCHEMA_ANALYSIS.md](docs/SCHEMA_ANALYSIS.md)
-- **Field Mapping**: [docs/FIELD_MAPPING_REFERENCE.md](docs/FIELD_MAPPING_REFERENCE.md)
+- **Migration Analysis**: [docs/archive/MIGRATION_ANALYSIS.md](docs/archive/MIGRATION_ANALYSIS.md)
+- **Schema Analysis**: [docs/archive/SCHEMA_ANALYSIS.md](docs/archive/SCHEMA_ANALYSIS.md)
+- **Field Mapping**: [docs/archive/FIELD_MAPPING_REFERENCE.md](docs/archive/FIELD_MAPPING_REFERENCE.md)
 - **Branding Updates**: [docs/design/BRANDING_UPDATES.md](docs/design/BRANDING_UPDATES.md)
 - **UX Recommendations**: [docs/design/ux-recommendations.md](docs/design/ux-recommendations.md)
 
+### Project Organization
+- **Reorganization Summary**: [docs/api/REORGANIZATION_SUMMARY.md](docs/api/REORGANIZATION_SUMMARY.md)
+- **Documentation Organization**: [docs/api/DOCS_ORGANIZATION.md](docs/api/DOCS_ORGANIZATION.md)
+- **V4 Migration**: [docs/api/V4_MIGRATION_SUMMARY.md](docs/api/V4_MIGRATION_SUMMARY.md)
+
 ### Bug Fixes & Changes
-- **Bug Fix Summary**: [BUGFIX_SUMMARY.md](BUGFIX_SUMMARY.md)
-- **V4 Migration**: [V4_MIGRATION_SUMMARY.md](V4_MIGRATION_SUMMARY.md)
-- **Change Notes**: [docs/changenotes.md](docs/changenotes.md)
+- **Bug Fixes**: [docs/fixes/](docs/fixes/)
+- **Change Notes**: [docs/archive/changenotes.md](docs/archive/changenotes.md)
 
 ### Historical Documentation
 - **Migration Guides**: [docs/archive/](docs/archive/)
 - **Previous Versions**: [docs/archive/API_DOCUMENTATION_v1.md](docs/archive/API_DOCUMENTATION_v1.md)
 
-## Troubleshooting
+## 🔧 Troubleshooting
 
 ### Common Issues
 
@@ -428,7 +433,7 @@ npm run dev
 - Verify SMTP credentials in backend .env
 - Check SMTP port (587 for TLS)
 
-## Contributing
+## 🤝 Contributing
 
 ### Code Style
 
@@ -458,7 +463,7 @@ npm run dev
 - Feature branches: `feature/feature-name`
 - Bug fix branches: `fix/bug-name`
 
-## Security
+## 🔒 Security
 
 ### Production Checklist
 
@@ -494,7 +499,7 @@ npm run dev
 ✅ Role-based access control  
 ✅ Protected routes and endpoints  
 
-## Performance
+## ⚡ Performance
 
 ### Frontend Optimizations
 - Route-based code splitting
@@ -511,7 +516,7 @@ npm run dev
 - Response caching
 - Pagination support
 
-## Browser Support
+## 🌐 Browser Support
 
 - Chrome (latest)
 - Firefox (latest)
@@ -519,20 +524,20 @@ npm run dev
 - Edge (latest)
 - Mobile: iOS Safari, Chrome for Android
 
-## License
+## 📄 License
 
 Proprietary - Harbour Learning Trust
 
-## Support
+## 📞 Support
 
 For questions or issues:
-- Check documentation in `/docs`
+- Check documentation in [`docs/`](docs/)
 - Review troubleshooting section above
 - Contact the Assurly development team
 
 ---
 
-**Current Version**: 2.0.0  
-**Last Updated**: January 2026  
+**Current Version**: 2.0.0 (Monorepo Structure)  
+**Last Updated**: January 4, 2026  
 **Live Platform**: [https://www.assurly.co.uk](https://www.assurly.co.uk)  
 **Maintained by**: Assurly Development Team
