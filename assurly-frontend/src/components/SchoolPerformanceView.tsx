@@ -67,9 +67,9 @@ import {
   InlineRefreshSkeleton 
 } from "@/components/ui/skeleton-loaders";
 import { getAspectDisplayName, calculateSchoolStatus, getStatusColor, getStatusIcon } from "@/lib/assessment-utils";
-import { assessmentCategories } from "@/lib/mock-data";
 import { FilterBar } from "@/components/ui/filter-bar";
-import { getSchools } from "@/services/assessment-service";
+import { getSchools, getAspects } from "@/services/assessment-service";
+import type { Aspect } from "@/types/assessment";
 import { useOptimisticFilter } from "@/hooks/use-optimistic-filter";
 import { useInlineLoading } from "@/hooks/use-inline-loading";
 import { useLocalStorage } from "@/hooks/use-local-storage";
@@ -122,11 +122,14 @@ export function SchoolPerformanceView({ assessments, refreshAssessments, isLoadi
   });
   const [schools, setSchools] = useState<School[]>([]);
   const [schoolsLoading, setSchoolsLoading] = useState(true);
+  const [aspects, setAspects] = useState<Aspect[]>([]);
+  const [aspectsLoading, setAspectsLoading] = useState(true);
   const inlineLoading = useInlineLoading();
 
-  // Fetch schools from API
+  // Fetch schools and aspects from API
   useEffect(() => {
-    const fetchSchools = async () => {
+    const fetchData = async () => {
+      // Fetch schools
       try {
         setSchoolsLoading(true);
         const schoolsData = await getSchools();
@@ -137,9 +140,21 @@ export function SchoolPerformanceView({ assessments, refreshAssessments, isLoadi
       } finally {
         setSchoolsLoading(false);
       }
+
+      // Fetch aspects (MAT-specific)
+      try {
+        setAspectsLoading(true);
+        const aspectsData = await getAspects();
+        setAspects(aspectsData);
+      } catch (error) {
+        console.error('Failed to fetch aspects:', error);
+        setAspects([]);
+      } finally {
+        setAspectsLoading(false);
+      }
     };
     
-    fetchSchools();
+    fetchData();
   }, []);
 
   // Get available terms from assessments
@@ -351,10 +366,27 @@ export function SchoolPerformanceView({ assessments, refreshAssessments, isLoadi
     { label: "Overdue", value: "overdue" }
   ];
 
-  const categoryOptions: MultiSelectOption[] = assessmentCategories.map(categoryInfo => ({
-    label: getAspectDisplayName(categoryInfo.value),
-    value: categoryInfo.value
-  }));
+  // Create filter options for multi-select components - USE MAT-SPECIFIC ASPECTS
+  // Map aspect codes to category names for filtering compatibility with assessment.category
+  const categoryOptions: MultiSelectOption[] = aspects.map(aspect => {
+    // Map aspect_code to legacy category format (EDU -> education, HR -> hr, etc.)
+    const aspectCode = aspect.aspect_code.toUpperCase();
+    const categoryMap: Record<string, string> = {
+      'EDU': 'education',
+      'HR': 'hr',
+      'FIN': 'finance',
+      'EST': 'estates',
+      'GOV': 'governance',
+      'IT': 'it',
+      'IS': 'is',
+    };
+    const categoryValue = categoryMap[aspectCode] || aspectCode.toLowerCase();
+    
+    return {
+      label: aspect.aspect_name,
+      value: categoryValue
+    };
+  });
 
   const uniqueSchools = [...new Set(filteredByTermAssessments.map(a => a.school?.id).filter(Boolean))];
   const schoolOptions: MultiSelectOption[] = schools

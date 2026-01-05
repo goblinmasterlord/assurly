@@ -28,11 +28,11 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
 import { cn } from "@/lib/utils";
-import { getSchools, createAssessments, getAspects } from "@/services/assessment-service";
+import { getSchools, createAssessments, getAspects, getTerms } from "@/services/assessment-service";
 import { useToast } from "@/hooks/use-toast";
 import { getAspectDisplayName } from "@/lib/assessment-utils";
 import { useAuth } from "@/contexts/AuthContext";
-import type { AssessmentCategory, School, AcademicTerm, AcademicYear, Aspect } from "@/types/assessment";
+import type { AssessmentCategory, School, Aspect, Term } from "@/types/assessment";
 
 type AssessmentInvitationSheetProps = {
   open: boolean;
@@ -189,40 +189,13 @@ export function AssessmentInvitationSheet({ open, onOpenChange, onSuccess }: Ass
   const [schoolsLoading, setSchoolsLoading] = useState(false);
   const [aspects, setAspects] = useState<Aspect[]>([]);
   const [aspectsLoading, setAspectsLoading] = useState(false);
+  const [terms, setTerms] = useState<Term[]>([]);
+  const [termsLoading, setTermsLoading] = useState(false);
+  const [selectedTermId, setSelectedTermId] = useState<string>("");
   const { toast } = useToast();
   const { user } = useAuth();
-  const [term, setTerm] = useState<AcademicTerm>("Autumn");
-  const [academicYear, setAcademicYear] = useState<AcademicYear>("");
   
-  // Determine default term and academic year based on current date
-  useEffect(() => {
-    const now = new Date();
-    const month = now.getMonth(); // 0 Jan ... 11 Dec
-    let defaultTerm: string;
-    if (month >= 8) {
-      defaultTerm = "Autumn";
-    } else if (month >= 4) {
-      defaultTerm = "Summer";
-    } else {
-      defaultTerm = "Spring";
-    }
-    const year = now.getFullYear();
-    const startYear = month >= 8 ? year : year - 1;
-    const endYearShort = (startYear + 1).toString().slice(-2);
-    const defaultAcademicYear = `${startYear}-${endYearShort}`;
-    setTerm(defaultTerm as AcademicTerm);
-    setAcademicYear(defaultAcademicYear);
-  }, []);
-
-  const termOptions = ["Autumn", "Spring", "Summer"];
-  // Generate a list of the current and next 2 academic years for convenience
-  const academicYearOptions = Array.from({ length: 3 }, (_, idx) => {
-    const start = new Date().getFullYear() + idx - 1; // start with previous/current depending on month
-    const endShort = (start + 1).toString().slice(-2);
-    return `${start}-${endShort}`;
-  });
-  
-  // Fetch schools and aspects when component opens
+  // Fetch schools, aspects, and terms when component opens
   useEffect(() => {
     const fetchData = async () => {
       if (!open) return;
@@ -257,6 +230,27 @@ export function AssessmentInvitationSheet({ open, onOpenChange, onSuccess }: Ass
         });
       } finally {
         setAspectsLoading(false);
+      }
+
+      // Fetch terms
+      setTermsLoading(true);
+      try {
+        const termsData = await getTerms();
+        setTerms(termsData);
+        // Set default to current term if available, otherwise first term
+        if (termsData.length > 0) {
+          const currentTerm = termsData.find(t => t.is_current) || termsData[0];
+          setSelectedTermId(currentTerm.unique_term_id);
+        }
+      } catch (error) {
+        console.error('Failed to fetch terms:', error);
+        toast({
+          title: "Error loading terms",
+          description: "Failed to load terms. Please try again.",
+          variant: "destructive",
+        });
+      } finally {
+        setTermsLoading(false);
       }
     };
 
@@ -309,7 +303,7 @@ export function AssessmentInvitationSheet({ open, onOpenChange, onSuccess }: Ass
         await createAssessments({
           school_ids: selectedSchools,
           aspect_code: category,
-          term_id: `${term}-${academicYear}`,
+          term_id: selectedTermId,
           due_date: dueDate ? format(dueDate, "yyyy-MM-dd") : undefined,
           assigned_to: user?.user_id,
         });
@@ -333,6 +327,11 @@ export function AssessmentInvitationSheet({ open, onOpenChange, onSuccess }: Ass
       setSelectedSchools([]);
       setDueDate(undefined);
       setSearchTerm("");
+      // Reset term to current term if available
+      if (terms.length > 0) {
+        const currentTerm = terms.find(t => t.is_current) || terms[0];
+        setSelectedTermId(currentTerm.unique_term_id);
+      }
       onOpenChange(false);
     } catch (error) {
       console.error('Error in assessment creation:', error);
@@ -519,38 +518,29 @@ export function AssessmentInvitationSheet({ open, onOpenChange, onSuccess }: Ass
               </p>
             </div>
             
-            <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-2">
-                <Label htmlFor="term" className="text-xs text-muted-foreground">
-                  Term
-                </Label>
-                <Select value={term} onValueChange={(val) => setTerm(val as AcademicTerm)}>
+            <div className="space-y-2">
+              <Label htmlFor="term" className="text-xs text-muted-foreground">
+                Term
+              </Label>
+              {termsLoading ? (
+                <div className="flex items-center justify-center py-4">
+                  <Loader2 className="h-4 w-4 animate-spin text-slate-400" />
+                  <span className="ml-2 text-sm text-muted-foreground">Loading terms...</span>
+                </div>
+              ) : (
+                <Select value={selectedTermId} onValueChange={setSelectedTermId}>
                   <SelectTrigger id="term" className="h-9">
-                    <SelectValue placeholder="Term" />
+                    <SelectValue placeholder="Select term..." />
                   </SelectTrigger>
                   <SelectContent>
-                    {termOptions.map((t) => (
-                      <SelectItem key={t} value={t}>{t}</SelectItem>
+                    {terms.map((term) => (
+                      <SelectItem key={term.unique_term_id} value={term.unique_term_id}>
+                        {term.term_name} {term.academic_year}
+                      </SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
-              </div>
-              
-              <div className="space-y-2">
-                <Label htmlFor="academicYear" className="text-xs text-muted-foreground">
-                  Academic Year
-                </Label>
-                <Select value={academicYear} onValueChange={setAcademicYear}>
-                  <SelectTrigger id="academicYear" className="h-9">
-                    <SelectValue placeholder="Year" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {academicYearOptions.map((y) => (
-                      <SelectItem key={y} value={y}>{y}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
+              )}
             </div>
             
             <div className="space-y-2">
@@ -598,7 +588,7 @@ export function AssessmentInvitationSheet({ open, onOpenChange, onSuccess }: Ass
             <Button
               type="button"
               className="flex-1 gap-2"
-              disabled={selectedCategories.length === 0 || selectedSchools.length === 0 || loading}
+              disabled={selectedCategories.length === 0 || selectedSchools.length === 0 || !selectedTermId || loading}
               onClick={handleSendInvitations}
             >
               {loading ? (
