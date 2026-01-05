@@ -1164,8 +1164,6 @@ async def create_standard(
 ):
     """
     Create a new MAT-specific standard with version 1.
-    Supports copy-on-write from default standards.
-    Requires authentication.
     """
     try:
         connection = get_db_connection()
@@ -1197,24 +1195,28 @@ async def create_standard(
                 detail=f"Standard with code '{standard.standard_code}' already exists for this aspect"
             )
 
-        # Generate IDs
-        mat_standard_id = str(uuid.uuid4())
-        version_id = str(uuid.uuid4())
+        # Generate IDs - use readable format
+        mat_standard_id = f"{current_mat_id}-{standard.standard_code}"
+        version_id = f"{mat_standard_id}-v1"
 
-        # Insert mat_standard record
+        # Insert mat_standard record (with current_version_id)
         insert_standard_query = """
             INSERT INTO mat_standards
-            (mat_standard_id, mat_id, mat_aspect_id, standard_code, sort_order,
-             source_standard_id, is_active, created_at, updated_at)
-            VALUES (%s, %s, %s, %s, %s, %s, 1, NOW(), NOW())
+            (mat_standard_id, mat_id, mat_aspect_id, standard_code, standard_name,
+             standard_description, sort_order, source_standard_id, current_version_id,
+             is_custom, is_modified, is_active, created_at, updated_at)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, 1, 0, 1, NOW(), NOW())
         """
         cursor.execute(insert_standard_query, (
             mat_standard_id,
             current_mat_id,
             standard.mat_aspect_id,
             standard.standard_code,
+            standard.standard_name,
+            standard.standard_description,
             standard.sort_order,
-            standard.source_standard_id
+            standard.source_standard_id,
+            version_id  # Set current_version_id
         ))
 
         # Insert version 1
@@ -1234,20 +1236,29 @@ async def create_standard(
             current_user.user_id
         ))
 
+        # ✅ COMMIT THE TRANSACTION
+        connection.commit()
+
         # Fetch the created standard with current version
         select_query = """
             SELECT
-                ms.mat_standard_id, ms.standard_code,
-                sv.standard_name, sv.standard_description,
-                ms.sort_order, ms.mat_id, ms.mat_aspect_id,
-                ma.aspect_code, ma.aspect_name,
-                sv.version_id, sv.version_number,
-                CASE WHEN ms.source_standard_id IS NULL THEN 1 ELSE 0 END as is_custom,
-                0 as is_modified
+                ms.mat_standard_id,
+                ms.mat_id,
+                ms.standard_code,
+                sv.standard_name,
+                sv.standard_description,
+                ms.sort_order,
+                ms.mat_aspect_id,
+                ma.aspect_code,
+                ma.aspect_name,
+                sv.version_id as current_version_id,
+                sv.version_number as current_version,
+                ms.is_custom,
+                ms.is_modified
             FROM mat_standards ms
             JOIN mat_aspects ma ON ms.mat_aspect_id = ma.mat_aspect_id
-            JOIN standard_versions sv ON ms.mat_standard_id = sv.mat_standard_id
-            WHERE ms.mat_standard_id = %s AND sv.effective_to IS NULL
+            JOIN standard_versions sv ON ms.current_version_id = sv.version_id
+            WHERE ms.mat_standard_id = %s
         """
         cursor.execute(select_query, (mat_standard_id,))
         created_standard = cursor.fetchone()
@@ -1258,6 +1269,9 @@ async def create_standard(
     except HTTPException:
         raise
     except Exception as e:
+        if connection:
+            connection.rollback()
+            connection.close()
         raise HTTPException(status_code=500, detail=f"Failed to create standard: {str(e)}")
 
 @app.put("/api/standards/{mat_standard_id}", tags=["Standards"])
