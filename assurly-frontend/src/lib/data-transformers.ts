@@ -188,10 +188,11 @@ export const transformAssessmentStandard = (standard: AssessmentStandard): Asses
 /**
  * Transforms v4 Standard response
  */
-export const transformStandard = (standard: Standard): Standard => {
-  // Extract version number from current_version_id if current_version is missing
-  // Handle both number and string types, and ensure proper conversion
-  let versionNumber: number | null | undefined = standard.current_version;
+export const transformStandard = (standard: any): Standard => {
+  // The API may return either version_id/version_number OR current_version_id/current_version
+  // Map both to ensure compatibility
+  const versionId = (standard.version_id || standard.current_version_id) as string | undefined;
+  let versionNumber: number | null | undefined = standard.version_number ?? standard.current_version;
   
   // Convert string to number if needed
   if (typeof versionNumber === 'string') {
@@ -201,10 +202,10 @@ export const transformStandard = (standard: Standard): Standard => {
     }
   }
   
-  // If current_version is null, undefined, or 0, try to extract from current_version_id
+  // If version number is still missing, try to extract from version_id
   if (versionNumber === null || versionNumber === undefined || versionNumber === 0) {
-    if (standard.current_version_id) {
-      const match = standard.current_version_id.match(/v(\d+)$/);
+    if (versionId) {
+      const match = versionId.match(/v(\d+)$/);
       if (match) {
         versionNumber = parseInt(match[1], 10);
       }
@@ -217,14 +218,15 @@ export const transformStandard = (standard: Standard): Standard => {
 
   return {
     ...standard,
+    // Map version fields to expected Standard interface fields
+    current_version_id: versionId || standard.current_version_id || '',
+    current_version: versionNumber,
     // Add backward compatibility fields
     id: standard.mat_standard_id,
     code: standard.standard_code,
     title: standard.standard_name,
     description: standard.standard_description,
     version_number: versionNumber,
-    // Ensure current_version is set if it was missing
-    current_version: standard.current_version ?? versionNumber,
   };
 };
 

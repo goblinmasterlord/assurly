@@ -48,37 +48,41 @@ export function SortableStandardCard({ standard, onEdit, onHistory, onDelete }: 
 
     // Get version number - try current_version first, then version_number, then extract from current_version_id
     const getVersionNumber = (): number => {
-        // Handle current_version - convert string to number if needed
+        // Try current_version first (primary field)
         const currentVersion = standard.current_version;
-        if (currentVersion !== null && currentVersion !== undefined) {
+        if (currentVersion !== null && currentVersion !== undefined && currentVersion !== 0) {
             if (typeof currentVersion === 'string') {
                 const parsed = parseInt(currentVersion, 10);
-                if (!isNaN(parsed)) {
+                if (!isNaN(parsed) && parsed > 0) {
                     return parsed;
                 }
-            } else if (typeof currentVersion === 'number') {
+            } else if (typeof currentVersion === 'number' && currentVersion > 0) {
                 return currentVersion;
             }
         }
         
-        // Try version_number
+        // Try version_number (legacy/fallback field)
         const versionNumber = standard.version_number;
-        if (versionNumber !== null && versionNumber !== undefined) {
+        if (versionNumber !== null && versionNumber !== undefined && versionNumber !== 0) {
             if (typeof versionNumber === 'string') {
                 const parsed = parseInt(versionNumber, 10);
-                if (!isNaN(parsed)) {
+                if (!isNaN(parsed) && parsed > 0) {
                     return parsed;
                 }
-            } else if (typeof versionNumber === 'number') {
+            } else if (typeof versionNumber === 'number' && versionNumber > 0) {
                 return versionNumber;
             }
         }
         
         // Extract version from current_version_id (e.g., "HLT-LD1-v2" -> 2)
-        if (standard.current_version_id) {
-            const match = standard.current_version_id.match(/v(\d+)$/);
+        const versionId = standard.current_version_id;
+        if (versionId) {
+            const match = versionId.match(/v(\d+)$/);
             if (match) {
-                return parseInt(match[1], 10);
+                const parsed = parseInt(match[1], 10);
+                if (!isNaN(parsed) && parsed > 0) {
+                    return parsed;
+                }
             }
         }
         return 1; // Default to version 1

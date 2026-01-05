@@ -1439,8 +1439,21 @@ async def delete_standard(
         deleted_id = f"{mat_standard_id}-deleted-{timestamp}"
         deleted_code = f"{original_code}-{short_suffix}"
         
-        # STEP 1: Rename all version_ids for this standard
-        # First get all versions
+        # STEP 1: Clear current_version_id on mat_standards first
+        cursor.execute("""
+            UPDATE mat_standards
+            SET current_version_id = NULL
+            WHERE mat_standard_id = %s
+        """, (mat_standard_id,))
+
+        # STEP 2: Clear all parent_version_id references (break the chain)
+        cursor.execute("""
+            UPDATE standard_versions
+            SET parent_version_id = NULL
+            WHERE mat_standard_id = %s
+        """, (mat_standard_id,))
+
+        # STEP 3: Now rename all version_ids (no FK dependencies now)
         cursor.execute("""
             SELECT version_id FROM standard_versions
             WHERE mat_standard_id = %s
@@ -1456,12 +1469,11 @@ async def delete_standard(
                 WHERE version_id = %s
             """, (new_version_id, old_version_id))
 
-        # STEP 2: Update mat_standards (current_version_id will cascade, but set to NULL to be safe)
+        # STEP 4: Update mat_standards
         delete_query = """
             UPDATE mat_standards
             SET mat_standard_id = %s,
                 standard_code = %s,
-                current_version_id = NULL,
                 is_active = 0,
                 updated_at = NOW()
             WHERE mat_standard_id = %s AND mat_id = %s

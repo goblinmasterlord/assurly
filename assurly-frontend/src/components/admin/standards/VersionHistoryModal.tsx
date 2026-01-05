@@ -30,37 +30,41 @@ export function VersionHistoryModal({ open, onOpenChange, standard }: VersionHis
 
     // Helper to get version number with fallbacks
     const getVersionNumber = (std: Standard): number => {
-        // Handle current_version - convert string to number if needed
+        // Try current_version first (primary field)
         const currentVersion = std.current_version;
-        if (currentVersion !== null && currentVersion !== undefined) {
+        if (currentVersion !== null && currentVersion !== undefined && currentVersion !== 0) {
             if (typeof currentVersion === 'string') {
                 const parsed = parseInt(currentVersion, 10);
-                if (!isNaN(parsed)) {
+                if (!isNaN(parsed) && parsed > 0) {
                     return parsed;
                 }
-            } else if (typeof currentVersion === 'number') {
+            } else if (typeof currentVersion === 'number' && currentVersion > 0) {
                 return currentVersion;
             }
         }
         
-        // Try version_number
+        // Try version_number (legacy/fallback field)
         const versionNumber = std.version_number;
-        if (versionNumber !== null && versionNumber !== undefined) {
+        if (versionNumber !== null && versionNumber !== undefined && versionNumber !== 0) {
             if (typeof versionNumber === 'string') {
                 const parsed = parseInt(versionNumber, 10);
-                if (!isNaN(parsed)) {
+                if (!isNaN(parsed) && parsed > 0) {
                     return parsed;
                 }
-            } else if (typeof versionNumber === 'number') {
+            } else if (typeof versionNumber === 'number' && versionNumber > 0) {
                 return versionNumber;
             }
         }
         
         // Extract from current_version_id
-        if (std.current_version_id) {
-            const match = std.current_version_id.match(/v(\d+)$/);
+        const versionId = std.current_version_id;
+        if (versionId) {
+            const match = versionId.match(/v(\d+)$/);
             if (match) {
-                return parseInt(match[1], 10);
+                const parsed = parseInt(match[1], 10);
+                if (!isNaN(parsed) && parsed > 0) {
+                    return parsed;
+                }
             }
         }
         return 1;
