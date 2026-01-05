@@ -1,4 +1,7 @@
 {
+  "buildCommand": "cd assurly-frontend && npm install && npm run build",
+  "outputDirectory": "assurly-frontend/dist",
+  "installCommand": "cd assurly-frontend && npm install",
   "headers": [
     {
       "source": "/(.*)",
@@ -32,6 +35,12 @@
           "value": "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; font-src 'self' data:; connect-src https://assurly-frontend-400616570417.europe-west2.run.app https://*.vercel.app; frame-ancestors 'none'; base-uri 'self'; form-action 'self';"
         }
       ]
+    }
+  ],
+  "rewrites": [
+    {
+      "source": "/(.*)",
+      "destination": "/index.html"
     }
   ]
 } 
