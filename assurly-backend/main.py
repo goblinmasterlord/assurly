@@ -1005,10 +1005,19 @@ async def get_standards(
         cursor = connection.cursor()
 
         query = """
-            SELECT ms.mat_standard_id, ms.standard_code, ms.standard_name,
-                   ms.standard_description, ms.sort_order, ms.is_custom, ms.is_modified,
-                   ma.mat_aspect_id, ma.aspect_code, ma.aspect_name,
-                   sv.version_id as current_version_id, sv.version_number as current_version
+            SELECT ms.mat_standard_id,
+                   ms.mat_id,
+                   ms.standard_code,
+                   ms.standard_name,
+                   ms.standard_description,
+                   ms.sort_order,
+                   ms.is_custom,
+                   ms.is_modified,
+                   ma.mat_aspect_id,
+                   ma.aspect_code,
+                   ma.aspect_name,
+                   sv.version_id as current_version_id,
+                   sv.version_number as current_version
             FROM mat_standards ms
             JOIN mat_aspects ma ON ms.mat_aspect_id = ma.mat_aspect_id
             LEFT JOIN standard_versions sv ON ms.current_version_id = sv.version_id
@@ -1489,13 +1498,23 @@ async def get_aspects(
 
         # Get MAT-specific aspects with standard counts
         query = """
-            SELECT mat_aspect_id, aspect_code, aspect_name, aspect_description,
-                   sort_order, is_custom,
+            SELECT ma.mat_aspect_id,
+                   ma.mat_id,
+                   ma.aspect_code,
+                   ma.aspect_name,
+                   ma.aspect_description,
+                   ma.sort_order,
+                   ma.is_custom,
+                   CASE WHEN ma.source_aspect_id IS NOT NULL AND
+                        (ma.aspect_name != COALESCE(da.aspect_name, '') OR
+                         ma.aspect_description != COALESCE(da.aspect_description, ''))
+                   THEN 1 ELSE 0 END as is_modified,
                    (SELECT COUNT(*) FROM mat_standards ms
                     WHERE ms.mat_aspect_id = ma.mat_aspect_id AND ms.is_active = TRUE) as standards_count
             FROM mat_aspects ma
-            WHERE mat_id = %s AND is_active = TRUE
-            ORDER BY sort_order
+            LEFT JOIN aspects da ON ma.source_aspect_id = da.aspect_id
+            WHERE ma.mat_id = %s AND ma.is_active = TRUE
+            ORDER BY ma.sort_order
         """
 
         cursor.execute(query, (current_mat_id,))
