@@ -1389,7 +1389,7 @@ async def delete_standard(
     current_user: UserResponse = Depends(get_current_user)
 ):
     """
-    Soft delete a standard by marking inactive and freeing up the ID.
+    Soft delete a standard by marking inactive and freeing up the ID, code, and versions.
     """
     try:
         connection = get_db_connection()
@@ -1397,42 +1397,53 @@ async def delete_standard(
 
         # Verify standard exists and belongs to user's MAT
         check_query = """
-            SELECT mat_standard_id FROM mat_standards
+            SELECT mat_standard_id, standard_code FROM mat_standards
             WHERE mat_standard_id = %s AND mat_id = %s AND is_active = 1
         """
         cursor.execute(check_query, (mat_standard_id, current_mat_id))
-        if not cursor.fetchone():
+        row = cursor.fetchone()
+        
+        if not row:
             connection.close()
             raise HTTPException(status_code=404, detail="Standard not found")
 
-        # Soft delete: rename ID to free it up, mark inactive
+        original_code = row['standard_code']
+
+        # Generate deleted suffixes
         import time
-        deleted_id = f"{mat_standard_id}-deleted-{int(time.time())}"
+        timestamp = int(time.time())
+        short_suffix = str(timestamp)[-6:]
+        deleted_id = f"{mat_standard_id}-deleted-{timestamp}"
+        deleted_code = f"{original_code}-{short_suffix}"
         
+        # STEP 1: Rename all version_ids for this standard
+        # First get all versions
+        cursor.execute("""
+            SELECT version_id FROM standard_versions
+            WHERE mat_standard_id = %s
+        """, (mat_standard_id,))
+        versions = cursor.fetchall()
+        
+        for version in versions:
+            old_version_id = version['version_id']
+            new_version_id = f"{old_version_id}-deleted-{timestamp}"
+            cursor.execute("""
+                UPDATE standard_versions
+                SET version_id = %s
+                WHERE version_id = %s
+            """, (new_version_id, old_version_id))
+
+        # STEP 2: Update mat_standards (current_version_id will cascade, but set to NULL to be safe)
         delete_query = """
             UPDATE mat_standards
             SET mat_standard_id = %s,
+                standard_code = %s,
+                current_version_id = NULL,
                 is_active = 0,
                 updated_at = NOW()
             WHERE mat_standard_id = %s AND mat_id = %s
         """
-        cursor.execute(delete_query, (deleted_id, mat_standard_id, current_mat_id))
-
-        # Also update standard_versions to point to new ID
-        update_versions_query = """
-            UPDATE standard_versions
-            SET mat_standard_id = %s
-            WHERE mat_standard_id = %s
-        """
-        cursor.execute(update_versions_query, (deleted_id, mat_standard_id))
-
-        # Update any assessments referencing this standard (optional - or leave orphaned)
-        update_assessments_query = """
-            UPDATE assessments
-            SET mat_standard_id = %s
-            WHERE mat_standard_id = %s
-        """
-        cursor.execute(update_assessments_query, (deleted_id, mat_standard_id))
+        cursor.execute(delete_query, (deleted_id, deleted_code, mat_standard_id, current_mat_id))
 
         connection.commit()
         connection.close()
