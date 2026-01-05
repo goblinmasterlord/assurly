@@ -1199,13 +1199,13 @@ async def create_standard(
         mat_standard_id = f"{current_mat_id}-{standard.standard_code}"
         version_id = f"{mat_standard_id}-v1"
 
-        # Insert mat_standard record (with current_version_id)
+        # STEP 1: Insert mat_standard record WITHOUT current_version_id
         insert_standard_query = """
             INSERT INTO mat_standards
             (mat_standard_id, mat_id, mat_aspect_id, standard_code, standard_name,
              standard_description, sort_order, source_standard_id, current_version_id,
              is_custom, is_modified, is_active, created_at, updated_at)
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, 1, 0, 1, NOW(), NOW())
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, NULL, 1, 0, 1, NOW(), NOW())
         """
         cursor.execute(insert_standard_query, (
             mat_standard_id,
@@ -1215,11 +1215,10 @@ async def create_standard(
             standard.standard_name,
             standard.standard_description,
             standard.sort_order,
-            standard.source_standard_id,
-            version_id  # Set current_version_id
+            standard.source_standard_id
         ))
 
-        # Insert version 1
+        # STEP 2: Insert version 1
         insert_version_query = """
             INSERT INTO standard_versions
             (version_id, mat_standard_id, version_number, standard_code,
@@ -1236,7 +1235,15 @@ async def create_standard(
             current_user.user_id
         ))
 
-        # ✅ COMMIT THE TRANSACTION
+        # STEP 3: Update mat_standards to set current_version_id
+        update_version_query = """
+            UPDATE mat_standards
+            SET current_version_id = %s
+            WHERE mat_standard_id = %s
+        """
+        cursor.execute(update_version_query, (version_id, mat_standard_id))
+
+        # COMMIT THE TRANSACTION
         connection.commit()
 
         # Fetch the created standard with current version
@@ -1375,22 +1382,20 @@ async def update_standard(
             connection.close()
         raise HTTPException(status_code=500, detail=str(e))
 
-@app.delete("/api/standards/{mat_standard_id}", status_code=status.HTTP_204_NO_CONTENT, tags=["Standards"])
+@app.delete("/api/standards/{mat_standard_id}", tags=["Standards"])
 async def delete_standard(
     mat_standard_id: str,
     current_mat_id: str = Depends(get_current_mat),
     current_user: UserResponse = Depends(get_current_user)
 ):
     """
-    Soft delete a MAT standard (sets is_active = 0).
-    Enforces MAT isolation.
-    Requires authentication.
+    Soft delete a standard by marking inactive and freeing up the ID.
     """
     try:
         connection = get_db_connection()
         cursor = connection.cursor()
 
-        # Check if standard exists and belongs to user's MAT
+        # Verify standard exists and belongs to user's MAT
         check_query = """
             SELECT mat_standard_id FROM mat_standards
             WHERE mat_standard_id = %s AND mat_id = %s AND is_active = 1
@@ -1398,41 +1403,52 @@ async def delete_standard(
         cursor.execute(check_query, (mat_standard_id, current_mat_id))
         if not cursor.fetchone():
             connection.close()
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"Standard not found or access denied"
-            )
+            raise HTTPException(status_code=404, detail="Standard not found")
 
-        # Check if there are active assessments using this standard
-        # Note: In production schema, assessments reference mat_standard_id + version_id
-        assessments_query = """
-            SELECT COUNT(*) as count FROM assessments
-            WHERE mat_standard_id = %s
-        """
-        cursor.execute(assessments_query, (mat_standard_id,))
-        result = cursor.fetchone()
-
-        if result and result['count'] > 0:
-            connection.close()
-            raise HTTPException(
-                status_code=status.HTTP_409_CONFLICT,
-                detail=f"Cannot delete standard because it is used in {result['count']} assessments."
-            )
-
-        # Soft delete standard
+        # Soft delete: rename ID to free it up, mark inactive
+        import time
+        deleted_id = f"{mat_standard_id}-deleted-{int(time.time())}"
+        
         delete_query = """
             UPDATE mat_standards
-            SET is_active = 0, updated_at = NOW()
+            SET mat_standard_id = %s,
+                is_active = 0,
+                updated_at = NOW()
+            WHERE mat_standard_id = %s AND mat_id = %s
+        """
+        cursor.execute(delete_query, (deleted_id, mat_standard_id, current_mat_id))
+
+        # Also update standard_versions to point to new ID
+        update_versions_query = """
+            UPDATE standard_versions
+            SET mat_standard_id = %s
             WHERE mat_standard_id = %s
         """
-        cursor.execute(delete_query, (mat_standard_id,))
+        cursor.execute(update_versions_query, (deleted_id, mat_standard_id))
 
+        # Update any assessments referencing this standard (optional - or leave orphaned)
+        update_assessments_query = """
+            UPDATE assessments
+            SET mat_standard_id = %s
+            WHERE mat_standard_id = %s
+        """
+        cursor.execute(update_assessments_query, (deleted_id, mat_standard_id))
+
+        connection.commit()
         connection.close()
-        return None
+
+        return JSONResponse(content={
+            "message": "Standard deleted successfully",
+            "mat_standard_id": mat_standard_id,
+            "archived_as": deleted_id
+        }, status_code=200)
 
     except HTTPException:
         raise
     except Exception as e:
+        if connection:
+            connection.rollback()
+            connection.close()
         raise HTTPException(status_code=500, detail=f"Failed to delete standard: {str(e)}")
 
 # Version History Endpoint
