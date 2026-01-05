@@ -49,28 +49,28 @@ export function SortableStandardCard({ standard, onEdit, onHistory, onDelete }: 
     // Get version number - try current_version first, then version_number, then extract from current_version_id
     const getVersionNumber = (): number => {
         // Handle current_version - convert string to number if needed
-        let version = standard.current_version;
-        if (version !== null && version !== undefined) {
-            if (typeof version === 'string') {
-                const parsed = parseInt(version, 10);
+        const currentVersion = standard.current_version;
+        if (currentVersion !== null && currentVersion !== undefined) {
+            if (typeof currentVersion === 'string') {
+                const parsed = parseInt(currentVersion, 10);
                 if (!isNaN(parsed)) {
                     return parsed;
                 }
-            } else if (typeof version === 'number') {
-                return version;
+            } else if (typeof currentVersion === 'number') {
+                return currentVersion;
             }
         }
         
         // Try version_number
-        version = standard.version_number;
-        if (version !== null && version !== undefined) {
-            if (typeof version === 'string') {
-                const parsed = parseInt(version, 10);
+        const versionNumber = standard.version_number;
+        if (versionNumber !== null && versionNumber !== undefined) {
+            if (typeof versionNumber === 'string') {
+                const parsed = parseInt(versionNumber, 10);
                 if (!isNaN(parsed)) {
                     return parsed;
                 }
-            } else if (typeof version === 'number') {
-                return version;
+            } else if (typeof versionNumber === 'number') {
+                return versionNumber;
             }
         }
         

@@ -89,28 +89,28 @@ export function CreateStandardModal({ open, onOpenChange, onSave, standard, defa
     // Helper to get version number with fallbacks
     const getVersionNumber = (std: Standard): number => {
         // Handle current_version - convert string to number if needed
-        let version = std.current_version;
-        if (version !== null && version !== undefined) {
-            if (typeof version === 'string') {
-                const parsed = parseInt(version, 10);
+        const currentVersion = std.current_version;
+        if (currentVersion !== null && currentVersion !== undefined) {
+            if (typeof currentVersion === 'string') {
+                const parsed = parseInt(currentVersion, 10);
                 if (!isNaN(parsed)) {
                     return parsed;
                 }
-            } else if (typeof version === 'number') {
-                return version;
+            } else if (typeof currentVersion === 'number') {
+                return currentVersion;
             }
         }
         
         // Try version_number
-        version = std.version_number;
-        if (version !== null && version !== undefined) {
-            if (typeof version === 'string') {
-                const parsed = parseInt(version, 10);
+        const versionNumber = std.version_number;
+        if (versionNumber !== null && versionNumber !== undefined) {
+            if (typeof versionNumber === 'string') {
+                const parsed = parseInt(versionNumber, 10);
                 if (!isNaN(parsed)) {
                     return parsed;
                 }
-            } else if (typeof version === 'number') {
-                return version;
+            } else if (typeof versionNumber === 'number') {
+                return versionNumber;
             }
         }
         
