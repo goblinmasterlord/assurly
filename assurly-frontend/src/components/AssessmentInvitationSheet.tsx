@@ -28,12 +28,11 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
 import { cn } from "@/lib/utils";
-import { assessmentCategories } from "@/lib/mock-data";
-import { getSchools, createAssessments } from "@/services/assessment-service";
+import { getSchools, createAssessments, getAspects } from "@/services/assessment-service";
 import { useToast } from "@/hooks/use-toast";
 import { getAspectDisplayName } from "@/lib/assessment-utils";
 import { useAuth } from "@/contexts/AuthContext";
-import type { AssessmentCategory, School, AcademicTerm, AcademicYear } from "@/types/assessment";
+import type { AssessmentCategory, School, AcademicTerm, AcademicYear, Aspect } from "@/types/assessment";
 
 type AssessmentInvitationSheetProps = {
   open: boolean;
@@ -180,7 +179,7 @@ const SimpleDatePicker = ({
 };
 
 export function AssessmentInvitationSheet({ open, onOpenChange, onSuccess }: AssessmentInvitationSheetProps) {
-  const [selectedCategories, setSelectedCategories] = useState<AssessmentCategory[]>([]);
+  const [selectedCategories, setSelectedCategories] = useState<string[]>([]);
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedSchools, setSelectedSchools] = useState<string[]>([]);
   const [dueDate, setDueDate] = useState<Date>();
@@ -188,6 +187,8 @@ export function AssessmentInvitationSheet({ open, onOpenChange, onSuccess }: Ass
   const [loading, setLoading] = useState(false);
   const [schools, setSchools] = useState<School[]>([]);
   const [schoolsLoading, setSchoolsLoading] = useState(false);
+  const [aspects, setAspects] = useState<Aspect[]>([]);
+  const [aspectsLoading, setAspectsLoading] = useState(false);
   const { toast } = useToast();
   const { user } = useAuth();
   const [term, setTerm] = useState<AcademicTerm>("Autumn");
@@ -221,9 +222,12 @@ export function AssessmentInvitationSheet({ open, onOpenChange, onSuccess }: Ass
     return `${start}-${endShort}`;
   });
   
-  // Fetch schools when component mounts
+  // Fetch schools and aspects when component opens
   useEffect(() => {
-    const fetchSchools = async () => {
+    const fetchData = async () => {
+      if (!open) return;
+      
+      // Fetch schools
       setSchoolsLoading(true);
       try {
         const schoolsData = await getSchools();
@@ -238,11 +242,25 @@ export function AssessmentInvitationSheet({ open, onOpenChange, onSuccess }: Ass
       } finally {
         setSchoolsLoading(false);
       }
+
+      // Fetch aspects (MAT-specific)
+      setAspectsLoading(true);
+      try {
+        const aspectsData = await getAspects();
+        setAspects(aspectsData);
+      } catch (error) {
+        console.error('Failed to fetch aspects:', error);
+        toast({
+          title: "Error loading aspects",
+          description: "Failed to load aspects. Please try again.",
+          variant: "destructive",
+        });
+      } finally {
+        setAspectsLoading(false);
+      }
     };
 
-    if (open) {
-      fetchSchools();
-    }
+    fetchData();
   }, [open, toast]);
   
   // Filter schools based on the search term
@@ -270,10 +288,10 @@ export function AssessmentInvitationSheet({ open, onOpenChange, onSuccess }: Ass
 
   // Toggle all categories
   const toggleAllCategories = () => {
-    if (selectedCategories.length === assessmentCategories.length) {
+    if (selectedCategories.length === aspects.length) {
       setSelectedCategories([]);
     } else {
-      setSelectedCategories(assessmentCategories.map(cat => cat.value));
+      setSelectedCategories(aspects.map(aspect => aspect.aspect_code));
     }
   };
 
@@ -311,11 +329,11 @@ export function AssessmentInvitationSheet({ open, onOpenChange, onSuccess }: Ass
       }
       
       // Close the sheet and reset form
-      onOpenChange(false);
       setSelectedCategories([]);
       setSelectedSchools([]);
       setDueDate(undefined);
       setSearchTerm("");
+      onOpenChange(false);
     } catch (error) {
       console.error('Error in assessment creation:', error);
       toast({
@@ -433,8 +451,9 @@ export function AssessmentInvitationSheet({ open, onOpenChange, onSuccess }: Ass
                 size="sm" 
                 className="text-xs"
                 onClick={toggleAllCategories}
+                disabled={aspectsLoading || aspects.length === 0}
               >
-                {selectedCategories.length === assessmentCategories.length ? 'Deselect all' : 'Select all'} ({assessmentCategories.length})
+                {selectedCategories.length === aspects.length ? 'Deselect all' : 'Select all'} ({aspects.length})
               </Button>
               {selectedCategories.length > 0 && (
                 <Badge variant="secondary" className="text-xs">
@@ -443,33 +462,50 @@ export function AssessmentInvitationSheet({ open, onOpenChange, onSuccess }: Ass
               )}
             </div>
             
-            <div className="grid grid-cols-1 gap-2">
-              {assessmentCategories.map((cat) => (
-                <label
-                  key={cat.value}
-                  className={cn(
-                    "flex items-center gap-3 p-3 rounded-lg border cursor-pointer transition-colors",
-                    selectedCategories.includes(cat.value) 
-                      ? "border-primary bg-primary/5" 
-                      : "border-slate-200 hover:border-slate-300"
-                  )}
-                >
-                  <Checkbox 
-                    checked={selectedCategories.includes(cat.value)}
-                    onCheckedChange={(checked) => {
-                      if (checked) {
-                        setSelectedCategories(prev => [...prev, cat.value]);
-                      } else {
-                        setSelectedCategories(prev => prev.filter(c => c !== cat.value));
-                      }
-                    }}
-                  />
-                  <div className="flex-1">
-                    <div className="font-medium text-sm">{getAspectDisplayName(cat.value)}</div>
-                  </div>
-                </label>
-              ))}
-            </div>
+            {aspectsLoading ? (
+              <div className="flex flex-col items-center justify-center py-8">
+                <Loader2 className="h-5 w-5 animate-spin text-slate-400" />
+                <p className="text-sm text-muted-foreground mt-2">Loading aspects...</p>
+              </div>
+            ) : aspects.length === 0 ? (
+              <div className="flex flex-col items-center justify-center py-8 text-sm text-muted-foreground">
+                <p>No aspects available</p>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 gap-2">
+                {aspects.map((aspect) => {
+                  const aspectCode = aspect.aspect_code;
+                  return (
+                    <label
+                      key={aspect.mat_aspect_id}
+                      className={cn(
+                        "flex items-center gap-3 p-3 rounded-lg border cursor-pointer transition-colors",
+                        selectedCategories.includes(aspectCode) 
+                          ? "border-primary bg-primary/5" 
+                          : "border-slate-200 hover:border-slate-300"
+                      )}
+                    >
+                      <Checkbox 
+                        checked={selectedCategories.includes(aspectCode)}
+                        onCheckedChange={(checked) => {
+                          if (checked) {
+                            setSelectedCategories(prev => [...prev, aspectCode]);
+                          } else {
+                            setSelectedCategories(prev => prev.filter(c => c !== aspectCode));
+                          }
+                        }}
+                      />
+                      <div className="flex-1">
+                        <div className="font-medium text-sm">{aspect.aspect_name}</div>
+                        {aspect.aspect_description && (
+                          <div className="text-xs text-muted-foreground mt-0.5">{aspect.aspect_description}</div>
+                        )}
+                      </div>
+                    </label>
+                  );
+                })}
+              </div>
+            )}
           </div>
           
           {/* Due Date & Term Selection - Combined */}

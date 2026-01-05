@@ -21,8 +21,8 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useUser } from "@/contexts/UserContext";
 // import { getAssessments } from "@/services/assessment-service"; // REPLACED with optimized hook
 import { useAssessments } from "@/hooks/use-assessments";
-import { getSchools } from "@/services/assessment-service";
-import type { School } from "@/types/assessment";
+import { getSchools, getAspects } from "@/services/assessment-service";
+import type { School, Aspect } from "@/types/assessment";
 import { isOverdue } from "@/utils/assessment";
 import { 
   AlertTriangle,
@@ -60,7 +60,6 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { getAspectDisplayName } from "@/lib/assessment-utils";
 import { Progress } from "@/components/ui/progress";
 import { SortableTableHead, type SortDirection } from "@/components/ui/sortable-table-head";
-import { assessmentCategories } from "@/lib/mock-data";
 import { usePreload } from "@/hooks/use-preload";
 import { debounce } from "@/lib/performance-utils";
 
@@ -93,6 +92,8 @@ export function AssessmentsPage() {
   });
   const [schools, setSchools] = useState<School[]>([]);
   const [schoolsLoading, setSchoolsLoading] = useState(true);
+  const [aspects, setAspects] = useState<Aspect[]>([]);
+  const [aspectsLoading, setAspectsLoading] = useState(true);
   const { preloadRoute, cancelPreload } = usePreload();
   
   // Optimistic filter update handlers with persistence
@@ -144,9 +145,10 @@ export function AssessmentsPage() {
     });
   }, []);
   
-  // Fetch schools from API
+  // Fetch schools and aspects from API
   useEffect(() => {
-    const fetchSchools = async () => {
+    const fetchData = async () => {
+      // Fetch schools
       try {
         setSchoolsLoading(true);
         const schoolsData = await getSchools();
@@ -158,9 +160,22 @@ export function AssessmentsPage() {
       } finally {
         setSchoolsLoading(false);
       }
+
+      // Fetch aspects (MAT-specific)
+      try {
+        setAspectsLoading(true);
+        const aspectsData = await getAspects();
+        setAspects(aspectsData);
+      } catch (error) {
+        console.error('Failed to fetch aspects:', error);
+        // Fallback to empty array to prevent crashes
+        setAspects([]);
+      } finally {
+        setAspectsLoading(false);
+      }
     };
     
-    fetchSchools();
+    fetchData();
   }, []);
   
   // Get available terms from assessments (for department head view)
@@ -228,11 +243,27 @@ export function AssessmentsPage() {
       value: school.id!
     }));
   
-  // Create filter options for multi-select components - SHOW ALL ASPECTS
-  const categoryOptions: MultiSelectOption[] = assessmentCategories.map(categoryInfo => ({
-    label: getAspectDisplayName(categoryInfo.value),
-    value: categoryInfo.value
-  }));
+  // Create filter options for multi-select components - USE MAT-SPECIFIC ASPECTS
+  // Map aspect codes to category names for filtering compatibility with assessment.category
+  const categoryOptions: MultiSelectOption[] = aspects.map(aspect => {
+    // Map aspect_code to legacy category format (EDU -> education, HR -> hr, etc.)
+    const aspectCode = aspect.aspect_code.toUpperCase();
+    const categoryMap: Record<string, string> = {
+      'EDU': 'education',
+      'HR': 'hr',
+      'FIN': 'finance',
+      'EST': 'estates',
+      'GOV': 'governance',
+      'IT': 'it',
+      'IS': 'is',
+    };
+    const categoryValue = categoryMap[aspectCode] || aspectCode.toLowerCase();
+    
+    return {
+      label: aspect.aspect_name,
+      value: categoryValue
+    };
+  });
   
   // Category options for multi-select
 
@@ -361,15 +392,17 @@ export function AssessmentsPage() {
   // Calculate how many assessments are overdue or in-progress (based on term-filtered assessments)
   // Restore filters from localStorage AFTER options are loaded
   useEffect(() => {
-    if (!filtersRestored && schools.length > 0 && assessmentCategories.length > 0) {
+    if (!filtersRestored && schools.length > 0 && aspects.length > 0) {
       try {
         const saved = localStorage.getItem('assurly_assessment_filters');
         if (saved) {
           const savedFilters = JSON.parse(saved);
           // Validate that saved filter values exist in current options
+          // Convert aspect codes to lowercase for comparison
+          const aspectCodesLower = aspects.map(a => a.aspect_code.toLowerCase());
           const validatedFilters = {
             category: savedFilters.category?.filter((c: string) => 
-              assessmentCategories.some(cat => cat.value === c)
+              aspectCodesLower.includes(c.toLowerCase())
             ) || [],
             status: savedFilters.status || [],
             school: savedFilters.school?.filter((s: string) => 
@@ -384,7 +417,7 @@ export function AssessmentsPage() {
       }
       setFiltersRestored(true);
     }
-  }, [schools, assessmentCategories, filtersRestored]);
+  }, [schools, aspects, filtersRestored]);
   
   const overdueCount = useMemo(() => {
     return termFilteredAssessments.filter(a => isOverdue(a)).length;
