@@ -28,10 +28,27 @@ interface VersionHistoryModalProps {
 export function VersionHistoryModal({ open, onOpenChange, standard }: VersionHistoryModalProps) {
     if (!standard) return null;
 
+    // Helper to get version number with fallbacks
+    const getVersionNumber = (std: Standard): number => {
+        if (std.current_version !== null && std.current_version !== undefined) {
+            return std.current_version;
+        }
+        if (std.version_number !== null && std.version_number !== undefined) {
+            return std.version_number;
+        }
+        if (std.current_version_id) {
+            const match = std.current_version_id.match(/v(\d+)$/);
+            if (match) {
+                return parseInt(match[1], 10);
+            }
+        }
+        return 1;
+    };
+
     // Use v3.0 fields
     const currentVersion = {
         id: 'current',
-        version: standard.version_number || 1,
+        version: getVersionNumber(standard),
         createdAt: standard.updated_at || standard.created_at || new Date().toISOString(),
         createdBy: 'System', // TODO: Add created_by_user to Standard type when available
         changeType: 'current'

@@ -189,6 +189,21 @@ export const transformAssessmentStandard = (standard: AssessmentStandard): Asses
  * Transforms v4 Standard response
  */
 export const transformStandard = (standard: Standard): Standard => {
+  // Extract version number from current_version_id if current_version is missing
+  let versionNumber = standard.current_version;
+  if (versionNumber === null || versionNumber === undefined) {
+    if (standard.current_version_id) {
+      const match = standard.current_version_id.match(/v(\d+)$/);
+      if (match) {
+        versionNumber = parseInt(match[1], 10);
+      }
+    }
+    // Default to 1 if still not found
+    if (versionNumber === null || versionNumber === undefined) {
+      versionNumber = 1;
+    }
+  }
+
   return {
     ...standard,
     // Add backward compatibility fields
@@ -196,7 +211,9 @@ export const transformStandard = (standard: Standard): Standard => {
     code: standard.standard_code,
     title: standard.standard_name,
     description: standard.standard_description,
-    version_number: standard.current_version,
+    version_number: versionNumber,
+    // Ensure current_version is set if it was missing
+    current_version: standard.current_version ?? versionNumber,
   };
 };
 

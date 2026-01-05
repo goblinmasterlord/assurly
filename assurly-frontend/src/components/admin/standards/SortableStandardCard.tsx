@@ -46,6 +46,26 @@ export function SortableStandardCard({ standard, onEdit, onHistory, onDelete }: 
         position: 'relative' as const,
     };
 
+    // Get version number - try current_version first, then version_number, then extract from current_version_id
+    const getVersionNumber = (): number => {
+        if (standard.current_version !== null && standard.current_version !== undefined) {
+            return standard.current_version;
+        }
+        if (standard.version_number !== null && standard.version_number !== undefined) {
+            return standard.version_number;
+        }
+        // Extract version from current_version_id (e.g., "HLT-LD1-v2" -> 2)
+        if (standard.current_version_id) {
+            const match = standard.current_version_id.match(/v(\d+)$/);
+            if (match) {
+                return parseInt(match[1], 10);
+            }
+        }
+        return 1; // Default to version 1
+    };
+
+    const versionNumber = getVersionNumber();
+
     return (
         <div ref={setNodeRef} style={style} className="mb-4">
             <Card className="group hover:border-primary/50 transition-colors">
@@ -65,7 +85,7 @@ export function SortableStandardCard({ standard, onEdit, onHistory, onDelete }: 
                             </Badge>
                             <h3 className="font-semibold truncate">{standard.standard_name}</h3>
                             <Badge variant="secondary" className="text-xs">
-                                v{standard.version_number}
+                                v{versionNumber}
                             </Badge>
                             {standard.is_custom && (
                                 <Badge variant="outline" className="text-teal-600 border-teal-200 bg-teal-50 text-xs">

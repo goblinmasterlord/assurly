@@ -86,16 +86,34 @@ export function CreateStandardModal({ open, onOpenChange, onSave, standard, defa
         return `${aspectCode}${maxNumber + 1}`;
     }, [aspects, allStandards]);
 
+    // Helper to get version number with fallbacks
+    const getVersionNumber = (std: Standard): number => {
+        if (std.current_version !== null && std.current_version !== undefined) {
+            return std.current_version;
+        }
+        if (std.version_number !== null && std.version_number !== undefined) {
+            return std.version_number;
+        }
+        if (std.current_version_id) {
+            const match = std.current_version_id.match(/v(\d+)$/);
+            if (match) {
+                return parseInt(match[1], 10);
+            }
+        }
+        return 1;
+    };
+
     useEffect(() => {
         if (!open) return; // Don't run if modal is closed
         
         if (standard) {
+            const currentVersion = getVersionNumber(standard);
             form.reset({
                 standard_code: standard.standard_code,
                 standard_name: standard.standard_name,
                 standard_description: standard.standard_description || '',
                 mat_aspect_id: standard.mat_aspect_id || '',
-                change_reason: `Updating standard (currently v${standard.version_number})`,
+                change_reason: `Updating standard (currently v${currentVersion})`,
             });
         } else {
             const nextCode = defaultAspectId ? generateNextStandardCode(defaultAspectId) : '';
@@ -258,7 +276,7 @@ export function CreateStandardModal({ open, onOpenChange, onSave, standard, defa
                             name="change_reason"
                             render={({ field }) => (
                                 <FormItem>
-                                    <FormLabel>Reason for Change {standard && `(creating v${(standard.version_number || 1) + 1})`}</FormLabel>
+                                    <FormLabel>Reason for Change {standard && `(creating v${getVersionNumber(standard) + 1})`}</FormLabel>
                                     <FormControl>
                                         <div className="relative">
                                             <Textarea
