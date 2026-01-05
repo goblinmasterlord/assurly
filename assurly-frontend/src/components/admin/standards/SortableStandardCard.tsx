@@ -48,12 +48,32 @@ export function SortableStandardCard({ standard, onEdit, onHistory, onDelete }: 
 
     // Get version number - try current_version first, then version_number, then extract from current_version_id
     const getVersionNumber = (): number => {
-        if (standard.current_version !== null && standard.current_version !== undefined) {
-            return standard.current_version;
+        // Handle current_version - convert string to number if needed
+        let version = standard.current_version;
+        if (version !== null && version !== undefined) {
+            if (typeof version === 'string') {
+                const parsed = parseInt(version, 10);
+                if (!isNaN(parsed)) {
+                    return parsed;
+                }
+            } else if (typeof version === 'number') {
+                return version;
+            }
         }
-        if (standard.version_number !== null && standard.version_number !== undefined) {
-            return standard.version_number;
+        
+        // Try version_number
+        version = standard.version_number;
+        if (version !== null && version !== undefined) {
+            if (typeof version === 'string') {
+                const parsed = parseInt(version, 10);
+                if (!isNaN(parsed)) {
+                    return parsed;
+                }
+            } else if (typeof version === 'number') {
+                return version;
+            }
         }
+        
         // Extract version from current_version_id (e.g., "HLT-LD1-v2" -> 2)
         if (standard.current_version_id) {
             const match = standard.current_version_id.match(/v(\d+)$/);

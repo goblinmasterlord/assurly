@@ -1035,8 +1035,31 @@ async def get_standards(
         cursor.execute(query, params)
         standards = cursor.fetchall()
 
+        # Map response to ensure version_number is properly set for Pydantic model
+        # and convert current_version to integer if it's a string
+        mapped_standards = []
+        for std in standards:
+            mapped_std = dict(std)
+            # Ensure version_number is set from current_version for Pydantic model compatibility
+            if 'current_version' in mapped_std and mapped_std['current_version'] is not None:
+                # Convert to int if it's a string or Decimal
+                version_val = mapped_std['current_version']
+                if isinstance(version_val, str):
+                    try:
+                        version_val = int(version_val)
+                    except (ValueError, TypeError):
+                        version_val = None
+                elif hasattr(version_val, '__int__'):
+                    version_val = int(version_val)
+                mapped_std['version_number'] = version_val
+                mapped_std['current_version'] = version_val  # Ensure it's an int
+            # Also set version_id from current_version_id for Pydantic model
+            if 'current_version_id' in mapped_std and mapped_std['current_version_id']:
+                mapped_std['version_id'] = mapped_std['current_version_id']
+            mapped_standards.append(mapped_std)
+
         connection.close()
-        return standards
+        return mapped_standards
 
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to fetch standards: {str(e)}")

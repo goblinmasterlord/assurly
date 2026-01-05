@@ -190,8 +190,19 @@ export const transformAssessmentStandard = (standard: AssessmentStandard): Asses
  */
 export const transformStandard = (standard: Standard): Standard => {
   // Extract version number from current_version_id if current_version is missing
-  let versionNumber = standard.current_version;
-  if (versionNumber === null || versionNumber === undefined) {
+  // Handle both number and string types, and ensure proper conversion
+  let versionNumber: number | null | undefined = standard.current_version;
+  
+  // Convert string to number if needed
+  if (typeof versionNumber === 'string') {
+    versionNumber = parseInt(versionNumber, 10);
+    if (isNaN(versionNumber)) {
+      versionNumber = null;
+    }
+  }
+  
+  // If current_version is null, undefined, or 0, try to extract from current_version_id
+  if (versionNumber === null || versionNumber === undefined || versionNumber === 0) {
     if (standard.current_version_id) {
       const match = standard.current_version_id.match(/v(\d+)$/);
       if (match) {
@@ -199,7 +210,7 @@ export const transformStandard = (standard: Standard): Standard => {
       }
     }
     // Default to 1 if still not found
-    if (versionNumber === null || versionNumber === undefined) {
+    if (versionNumber === null || versionNumber === undefined || versionNumber === 0) {
       versionNumber = 1;
     }
   }
