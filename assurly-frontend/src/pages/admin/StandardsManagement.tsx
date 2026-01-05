@@ -280,10 +280,9 @@ export default function StandardsManagement() {
                     </p>
                 </div>
                 <div className="flex gap-3">
-                    {/* TODO: Fix cogwheel dropdown freezing issue - temporarily disabled */}
                     <DropdownMenu open={isEditAspectDropdownOpen} onOpenChange={setIsEditAspectDropdownOpen}>
                         <DropdownMenuTrigger asChild>
-                            <Button variant="outline" size="icon" title="Options" disabled>
+                            <Button variant="outline" size="icon" title="Options">
                                 <Settings className="h-4 w-4" />
                             </Button>
                         </DropdownMenuTrigger>
@@ -296,7 +295,7 @@ export default function StandardsManagement() {
                                 }}
                             >
                                 <Edit2 className="mr-2 h-3 w-3" />
-                                Edit {currentAspect.name}
+                                Edit {currentAspect.aspect_name}
                             </DropdownMenuItem>
                             {currentAspect.is_custom && (
                                 <DropdownMenuItem
@@ -344,7 +343,10 @@ export default function StandardsManagement() {
                     <Separator />
                     <ScrollArea className="flex-1">
                         <div className="p-2 space-y-1">
-                            {aspects.map((aspect) => {
+                            {aspects
+                                .slice()
+                                .sort((a, b) => a.aspect_name.localeCompare(b.aspect_name))
+                                .map((aspect) => {
                                 const count = standards.filter(s => s.mat_aspect_id === aspect.mat_aspect_id).length;
                                 return (
                                     <button
