@@ -23,6 +23,13 @@ import {
     DropdownMenuItem,
     DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu';
+import {
+    Select,
+    SelectContent,
+    SelectItem,
+    SelectTrigger,
+    SelectValue
+} from '@/components/ui/select';
 import { type Aspect, type Standard } from '@/types/assessment';
 import { cn } from '@/lib/utils';
 import { CreateStandardModal } from '@/components/admin/standards/CreateStandardModal';
@@ -64,6 +71,8 @@ export default function StandardsManagement() {
 
     const [selectedAspect, setSelectedAspect] = useState<Aspect | undefined>(undefined);
     const [searchQuery, setSearchQuery] = useState('');
+    const [aspectCategoryFilter, setAspectCategoryFilter] = useState<'all' | 'ofsted' | 'operational'>('all');
+    const [standardTypeFilter, setStandardTypeFilter] = useState<'all' | 'assurance' | 'risk'>('all');
     const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
     const [isAspectModalOpen, setIsAspectModalOpen] = useState(false);
     const [isHistoryModalOpen, setIsHistoryModalOpen] = useState(false);
@@ -98,6 +107,13 @@ export default function StandardsManagement() {
 
     const currentAspect = selectedAspect || aspects[0]; // Fallback
 
+    // Filter aspects by category
+    const filteredAspects = aspects.filter(aspect => {
+        if (aspectCategoryFilter === 'all') return true;
+        return aspect.aspect_category === aspectCategoryFilter;
+    });
+
+    // Filter standards by aspect, search, and type
     const filteredStandards = currentAspect
         ? standards
             .filter(s => s.mat_aspect_id === currentAspect.mat_aspect_id)
@@ -105,6 +121,10 @@ export default function StandardsManagement() {
                 s.standard_name.toLowerCase().includes(searchQuery.toLowerCase()) ||
                 s.standard_code.toLowerCase().includes(searchQuery.toLowerCase())
             )
+            .filter(s => {
+                if (standardTypeFilter === 'all') return true;
+                return s.standard_type === standardTypeFilter;
+            })
             .sort((a, b) => (a.sort_order || 0) - (b.sort_order || 0))
         : [];
 
@@ -331,7 +351,17 @@ export default function StandardsManagement() {
                         <CardTitle className="text-lg">Aspects</CardTitle>
                         <CardDescription>Select an area to manage</CardDescription>
                     </CardHeader>
-                    <div className="px-4 pb-2">
+                    <div className="px-4 pb-2 space-y-2">
+                        <Select value={aspectCategoryFilter} onValueChange={(value) => setAspectCategoryFilter(value as 'all' | 'ofsted' | 'operational')}>
+                            <SelectTrigger className="h-8 text-xs">
+                                <SelectValue placeholder="Filter by category" />
+                            </SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="all">All Categories</SelectItem>
+                                <SelectItem value="ofsted">Ofsted Only</SelectItem>
+                                <SelectItem value="operational">Operational Only</SelectItem>
+                            </SelectContent>
+                        </Select>
                         <Button
                             variant="outline"
                             className="w-full justify-start text-xs h-8"
@@ -344,7 +374,7 @@ export default function StandardsManagement() {
                     <Separator />
                     <ScrollArea className="flex-1">
                         <div className="p-2 space-y-1">
-                            {aspects
+                            {filteredAspects
                                 .slice()
                                 .sort((a, b) => a.aspect_name.localeCompare(b.aspect_name))
                                 .map((aspect) => {
@@ -395,6 +425,16 @@ export default function StandardsManagement() {
                                 onChange={(e) => setSearchQuery(e.target.value)}
                             />
                         </div>
+                        <Select value={standardTypeFilter} onValueChange={(value) => setStandardTypeFilter(value as 'all' | 'assurance' | 'risk')}>
+                            <SelectTrigger className="w-[180px]">
+                                <SelectValue placeholder="Filter by type" />
+                            </SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="all">All Types</SelectItem>
+                                <SelectItem value="assurance">Assurance Only</SelectItem>
+                                <SelectItem value="risk">Risk Only</SelectItem>
+                            </SelectContent>
+                        </Select>
                         <div className="flex items-center gap-2 text-sm text-muted-foreground">
                             <span className="font-medium text-foreground">{filteredStandards.length}</span> standards
                         </div>
