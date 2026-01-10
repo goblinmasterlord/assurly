@@ -229,7 +229,7 @@ DB_CONFIG = {
 # Assessment Models
 class StandardRatingSubmission(BaseModel):
     mat_standard_id: str  # Changed from standard_id
-    rating: Optional[int] = None  # 1-4 or null for not rated
+    rating: Optional[int] = None  # 1-5 or null for not rated
     evidence_comments: str = ""
     submitted_by: str
 
@@ -255,18 +255,21 @@ class MatAspectBase(BaseModel):
     aspect_code: str
     aspect_name: str
     aspect_description: Optional[str] = None
+    aspect_category: str = 'operational'  # 'ofsted' or 'operational'
     sort_order: int = 0
 
 class MatAspectCreate(BaseModel):
     aspect_code: str
     aspect_name: str
     aspect_description: Optional[str] = None
+    aspect_category: str = 'operational'  # 'ofsted' or 'operational'
     sort_order: int = 0
     source_aspect_id: Optional[str] = None  # If copying from default
 
 class MatAspectUpdate(BaseModel):
     aspect_name: Optional[str] = None
     aspect_description: Optional[str] = None
+    aspect_category: Optional[str] = None  # 'ofsted' or 'operational'
     sort_order: Optional[int] = None
 
 class MatAspectResponse(MatAspectBase):
@@ -281,6 +284,7 @@ class MatStandardBase(BaseModel):
     standard_code: str
     standard_name: str
     standard_description: Optional[str] = None
+    standard_type: str = 'assurance'  # 'assurance' or 'risk'
     sort_order: int = 0
 
 class MatStandardCreate(BaseModel):
@@ -288,12 +292,14 @@ class MatStandardCreate(BaseModel):
     standard_code: str
     standard_name: str
     standard_description: Optional[str] = None
+    standard_type: str = 'assurance'  # 'assurance' or 'risk'
     sort_order: int = 0
     source_standard_id: Optional[str] = None  # If copying from default
 
 class MatStandardUpdate(BaseModel):
     standard_name: Optional[str] = None
     standard_description: Optional[str] = None
+    standard_type: Optional[str] = None  # 'assurance' or 'risk'
     sort_order: Optional[int] = None
     change_reason: Optional[str] = None  # For version history
 
@@ -314,6 +320,7 @@ class StandardVersionResponse(BaseModel):
     standard_code: str
     standard_name: str
     standard_description: Optional[str] = None
+    standard_type: Optional[str] = None  # 'assurance' or 'risk'
     effective_from: datetime
     effective_to: Optional[datetime] = None
     created_by_user_id: Optional[str] = None
@@ -992,12 +999,13 @@ async def get_schools(
 @app.get("/api/standards", response_model=List[MatStandardResponse], tags=["Standards"])
 async def get_standards(
     aspect_code: Optional[str] = None,
+    standard_type: Optional[str] = None,
     current_mat_id: str = Depends(get_current_mat),
     current_user: UserResponse = Depends(get_current_user)
 ):
     """
     Get list of MAT-specific standards with current versions.
-    Optionally filtered by aspect_code.
+    Optionally filtered by aspect_code and/or standard_type ('assurance' or 'risk').
     Requires authentication.
     """
     try:
@@ -1010,6 +1018,7 @@ async def get_standards(
                    ms.standard_code,
                    ms.standard_name,
                    ms.standard_description,
+                   ms.standard_type,
                    ms.sort_order,
                    ms.is_custom,
                    ms.is_modified,
@@ -1029,6 +1038,11 @@ async def get_standards(
         if aspect_code:
             query += " AND ma.aspect_code = %s"
             params.append(aspect_code)
+
+        # Optional filtering by standard_type
+        if standard_type:
+            query += " AND ms.standard_type = %s"
+            params.append(standard_type)
 
         query += " ORDER BY ma.sort_order, ms.sort_order"
 
@@ -1226,9 +1240,9 @@ async def create_standard(
         insert_standard_query = """
             INSERT INTO mat_standards
             (mat_standard_id, mat_id, mat_aspect_id, standard_code, standard_name,
-             standard_description, sort_order, source_standard_id, current_version_id,
+             standard_description, standard_type, sort_order, source_standard_id, current_version_id,
              is_custom, is_modified, is_active, created_at, updated_at)
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, NULL, 1, 0, 1, NOW(), NOW())
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, NULL, 1, 0, 1, NOW(), NOW())
         """
         cursor.execute(insert_standard_query, (
             mat_standard_id,
@@ -1237,6 +1251,7 @@ async def create_standard(
             standard.standard_code,
             standard.standard_name,
             standard.standard_description,
+            standard.standard_type,
             standard.sort_order,
             standard.source_standard_id
         ))
@@ -1245,9 +1260,9 @@ async def create_standard(
         insert_version_query = """
             INSERT INTO standard_versions
             (version_id, mat_standard_id, version_number, standard_code,
-             standard_name, standard_description, effective_from, effective_to,
+             standard_name, standard_description, standard_type, effective_from, effective_to,
              created_by_user_id, change_reason, created_at)
-            VALUES (%s, %s, 1, %s, %s, %s, NOW(), NULL, %s, 'Initial version', NOW())
+            VALUES (%s, %s, 1, %s, %s, %s, %s, NOW(), NULL, %s, 'Initial version', NOW())
         """
         cursor.execute(insert_version_query, (
             version_id,
@@ -1255,6 +1270,7 @@ async def create_standard(
             standard.standard_code,
             standard.standard_name,
             standard.standard_description,
+            standard.standard_type,
             current_user.user_id
         ))
 
@@ -1277,6 +1293,7 @@ async def create_standard(
                 ms.standard_code,
                 sv.standard_name,
                 sv.standard_description,
+                sv.standard_type,
                 ms.sort_order,
                 ms.mat_aspect_id,
                 ma.aspect_code,
@@ -1348,6 +1365,7 @@ async def update_standard(
 
         new_name = update_data.get('standard_name')
         new_description = update_data.get('standard_description')
+        new_type = update_data.get('standard_type')
         change_reason = update_data.get('change_reason', '')
 
         # Close old version
@@ -1359,19 +1377,27 @@ async def update_standard(
         cursor.execute("""
             INSERT INTO standard_versions
             (version_id, mat_standard_id, version_number, standard_code, standard_name,
-             standard_description, parent_version_id, effective_from, created_at,
+             standard_description, standard_type, parent_version_id, effective_from, created_at,
              created_by_user_id, change_reason)
-            VALUES (%s, %s, %s, %s, %s, %s, %s, NOW(), NOW(), %s, %s)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, NOW(), NOW(), %s, %s)
         """, (new_version_id, mat_standard_id, new_version_num, standard_code,
-              new_name, new_description, old_version_id, current_user.user_id, change_reason))
+              new_name, new_description, new_type, old_version_id, current_user.user_id, change_reason))
 
-        # Update mat_standards
-        cursor.execute("""
-            UPDATE mat_standards
-            SET standard_name = %s, standard_description = %s,
-                current_version_id = %s, is_modified = TRUE, updated_at = NOW()
-            WHERE mat_standard_id = %s AND mat_id = %s
-        """, (new_name, new_description, new_version_id, mat_standard_id, current_mat_id))
+        # Update mat_standards - handle standard_type conditionally
+        if new_type:
+            cursor.execute("""
+                UPDATE mat_standards
+                SET standard_name = %s, standard_description = %s, standard_type = %s,
+                    current_version_id = %s, is_modified = TRUE, updated_at = NOW()
+                WHERE mat_standard_id = %s AND mat_id = %s
+            """, (new_name, new_description, new_type, new_version_id, mat_standard_id, current_mat_id))
+        else:
+            cursor.execute("""
+                UPDATE mat_standards
+                SET standard_name = %s, standard_description = %s,
+                    current_version_id = %s, is_modified = TRUE, updated_at = NOW()
+                WHERE mat_standard_id = %s AND mat_id = %s
+            """, (new_name, new_description, new_version_id, mat_standard_id, current_mat_id))
 
         # Log edit (store old/new as JSON)
         import json
@@ -1560,11 +1586,13 @@ async def get_standard_versions(
 
 @app.get("/api/aspects", response_model=List[MatAspectResponse], tags=["Aspects"])
 async def get_aspects(
+    aspect_category: Optional[str] = None,
     current_mat_id: str = Depends(get_current_mat),
     current_user: UserResponse = Depends(get_current_user)
 ):
     """
     Get list of MAT-specific aspects with standard counts.
+    Optionally filtered by aspect_category ('ofsted' or 'operational').
     Returns aspects for the authenticated user's MAT, including both default and custom aspects.
     Requires authentication.
     """
@@ -1579,6 +1607,7 @@ async def get_aspects(
                    ma.aspect_code,
                    ma.aspect_name,
                    ma.aspect_description,
+                   ma.aspect_category,
                    ma.sort_order,
                    ma.is_custom,
                    CASE WHEN ma.source_aspect_id IS NOT NULL AND
@@ -1590,10 +1619,17 @@ async def get_aspects(
             FROM mat_aspects ma
             LEFT JOIN aspects da ON ma.source_aspect_id = da.aspect_id
             WHERE ma.mat_id = %s AND ma.is_active = TRUE
-            ORDER BY ma.sort_order
         """
+        params = [current_mat_id]
 
-        cursor.execute(query, (current_mat_id,))
+        # Optional filtering by aspect_category
+        if aspect_category:
+            query += " AND ma.aspect_category = %s"
+            params.append(aspect_category)
+
+        query += " ORDER BY ma.sort_order"
+
+        cursor.execute(query, params)
         aspects = cursor.fetchall()
 
         connection.close()
@@ -2148,6 +2184,7 @@ async def get_assessments_by_aspect(
                 ms.standard_code,
                 ms.standard_name,
                 ms.standard_description,
+                ms.standard_type,
                 ms.sort_order,
                 a.rating,
                 a.evidence_comments,
@@ -2586,6 +2623,8 @@ async def bulk_update_assessments(
 async def get_trends(
     school_id: Optional[str] = None,
     aspect_code: Optional[str] = None,
+    aspect_category: Optional[str] = None,
+    standard_type: Optional[str] = None,
     from_term: Optional[str] = None,
     to_term: Optional[str] = None,
     current_mat_id: str = Depends(get_current_mat),
@@ -2598,6 +2637,8 @@ async def get_trends(
     Query Parameters:
     - school_id (optional): Filter to single school
     - aspect_code (optional): Filter to single aspect
+    - aspect_category (optional): Filter by 'ofsted' or 'operational'
+    - standard_type (optional): Filter by 'assurance' or 'risk'
     - from_term (optional): Start term, e.g., T1-2023-24
     - to_term (optional): End term, e.g., T1-2025-26
     """
@@ -2618,7 +2659,8 @@ async def get_trends(
                 COUNT(CASE WHEN a.rating = 1 THEN 1 END) as inadequate_count,
                 COUNT(CASE WHEN a.rating = 2 THEN 1 END) as requires_improvement_count,
                 COUNT(CASE WHEN a.rating = 3 THEN 1 END) as good_count,
-                COUNT(CASE WHEN a.rating = 4 THEN 1 END) as outstanding_count
+                COUNT(CASE WHEN a.rating = 4 THEN 1 END) as outstanding_count,
+                COUNT(CASE WHEN a.rating = 5 THEN 1 END) as exceptional_count
             FROM assessments a
             JOIN schools s ON a.school_id = s.school_id
             JOIN mat_standards ms ON a.mat_standard_id = ms.mat_standard_id
@@ -2635,6 +2677,14 @@ async def get_trends(
         if aspect_code:
             query += " AND ma.aspect_code = %s"
             params.append(aspect_code)
+
+        if aspect_category:
+            query += " AND ma.aspect_category = %s"
+            params.append(aspect_category)
+
+        if standard_type:
+            query += " AND ms.standard_type = %s"
+            params.append(standard_type)
 
         if from_term:
             query += " AND a.unique_term_id >= %s"
@@ -2668,7 +2718,8 @@ async def get_trends(
                     "inadequate": row['inadequate_count'],
                     "requires_improvement": row['requires_improvement_count'],
                     "good": row['good_count'],
-                    "outstanding": row['outstanding_count']
+                    "outstanding": row['outstanding_count'],
+                    "exceptional": row['exceptional_count']
                 }
             })
 
