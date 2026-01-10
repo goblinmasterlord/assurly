@@ -45,6 +45,7 @@ import {
     verticalListSortingStrategy
 } from '@dnd-kit/sortable';
 import { SortableStandardCard } from '@/components/admin/standards/SortableStandardCard';
+import { AspectCategoryBadge } from '@/components/AspectCategoryBadge';
 import { useStandardsPersistence } from '@/hooks/use-standards-persistence';
 
 export default function StandardsManagement() {
@@ -359,8 +360,13 @@ export default function StandardsManagement() {
                                                 : "hover:bg-muted text-muted-foreground hover:text-foreground"
                                         )}
                                     >
-                                        <div className="flex flex-col items-start">
-                                            <span>{aspect.aspect_name}</span>
+                                        <div className="flex flex-col items-start gap-1">
+                                            <div className="flex items-center gap-2">
+                                                <span>{aspect.aspect_name}</span>
+                                                {aspect.aspect_category && (
+                                                    <AspectCategoryBadge category={aspect.aspect_category} className="text-[10px] h-4 px-1" />
+                                                )}
+                                            </div>
                                             <span className="text-[10px] text-muted-foreground font-normal">
                                                 {count} standard{count !== 1 ? 's' : ''}
                                             </span>

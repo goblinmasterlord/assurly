@@ -58,21 +58,24 @@ export const getRatingColor = (rating: number) => {
   if (rating < 2) return "bg-rose-500";
   if (rating < 3) return "bg-amber-500";
   if (rating < 4) return "bg-emerald-500";
-  return "bg-indigo-600";
+  if (rating < 5) return "bg-indigo-600";
+  return "bg-purple-600";
 };
 
 export const getRatingTextColor = (rating: number) => {
   if (rating < 2) return "text-rose-700";
   if (rating < 3) return "text-amber-700";
   if (rating < 4) return "text-emerald-700";
-  return "text-indigo-700";
+  if (rating < 5) return "text-indigo-700";
+  return "text-purple-700";
 };
 
 export const getRatingGradient = (rating: number) => {
   if (rating < 2) return "bg-gradient-to-r from-rose-50 to-white";
   if (rating < 3) return "bg-gradient-to-r from-amber-50 to-white";
   if (rating < 4) return "bg-gradient-to-r from-emerald-50 to-white";
-  return "bg-gradient-to-r from-indigo-50 to-white";
+  if (rating < 5) return "bg-gradient-to-r from-indigo-50 to-white";
+  return "bg-gradient-to-r from-purple-50 to-white";
 };
 
 /**

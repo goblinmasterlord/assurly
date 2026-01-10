@@ -20,6 +20,7 @@ import {
     DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu';
 import { type Standard } from '@/types/assessment';
+import { StandardTypeBadge } from '@/components/StandardTypeBadge';
 
 interface SortableStandardCardProps {
     standard: Standard;
@@ -120,6 +121,9 @@ export function SortableStandardCard({ standard, onEdit, onHistory, onDelete }: 
                                 <Badge variant="outline" className="text-amber-600 border-amber-200 bg-amber-50 text-xs">
                                     Modified
                                 </Badge>
+                            )}
+                            {standard.standard_type && (
+                                <StandardTypeBadge type={standard.standard_type} />
                             )}
                         </div>
 

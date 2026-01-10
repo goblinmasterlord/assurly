@@ -160,10 +160,14 @@ export const bulkUpdateAssessments = async (updates: BulkUpdate[]): Promise<void
  * GET /api/standards
  * List all standards for the MAT
  */
-export const getStandards = async (aspectCode?: string): Promise<Standard[]> => {
+export const getStandards = async (filters?: {
+  aspect_code?: string;
+  standard_type?: 'assurance' | 'risk';
+}): Promise<Standard[]> => {
   try {
     const params = new URLSearchParams();
-    if (aspectCode) params.append('aspect_code', aspectCode);
+    if (filters?.aspect_code) params.append('aspect_code', filters.aspect_code);
+    if (filters?.standard_type) params.append('standard_type', filters.standard_type);
 
     const url = `/api/standards${params.toString() ? `?${params}` : ''}`;
     const response = await apiClient.get<Standard[]>(url);
@@ -201,6 +205,7 @@ export const updateStandard = async (
     await apiClient.put(`/api/standards/${matStandardId}`, {
       standard_name: update.standard_name,
       standard_description: update.standard_description,
+      standard_type: update.standard_type,
       change_reason: update.change_reason
     });
   } catch (error) {
@@ -218,10 +223,14 @@ export const createStandard = async (data: {
   standard_code: string;
   standard_name: string;
   standard_description: string;
+  standard_type?: 'assurance' | 'risk';
   sort_order: number;
 }): Promise<Standard> => {
   try {
-    const response = await apiClient.post<Standard>('/api/standards', data);
+    const response = await apiClient.post<Standard>('/api/standards', {
+      ...data,
+      standard_type: data.standard_type || 'assurance'
+    });
     return transformStandard(response.data);
   } catch (error) {
     console.error('Failed to create standard:', error);
@@ -266,9 +275,15 @@ export const reorderStandards = async (updates: Array<{
  * GET /api/aspects
  * List all aspects for the MAT
  */
-export const getAspects = async (): Promise<Aspect[]> => {
+export const getAspects = async (filters?: {
+  aspect_category?: 'ofsted' | 'operational';
+}): Promise<Aspect[]> => {
   try {
-    const response = await apiClient.get<Aspect[]>('/api/aspects');
+    const params = new URLSearchParams();
+    if (filters?.aspect_category) params.append('aspect_category', filters.aspect_category);
+
+    const url = `/api/aspects${params.toString() ? `?${params}` : ''}`;
+    const response = await apiClient.get<Aspect[]>(url);
     return response.data.map(transformAspect);
   } catch (error) {
     console.error('Failed to fetch aspects:', error);
@@ -298,10 +313,14 @@ export const createAspect = async (data: {
   aspect_code: string;
   aspect_name: string;
   aspect_description: string;
+  aspect_category?: 'ofsted' | 'operational';
   sort_order: number;
 }): Promise<Aspect> => {
   try {
-    const response = await apiClient.post<Aspect>('/api/aspects', data);
+    const response = await apiClient.post<Aspect>('/api/aspects', {
+      ...data,
+      aspect_category: data.aspect_category || 'operational'
+    });
     return transformAspect(response.data);
   } catch (error) {
     console.error('Failed to create aspect:', error);
@@ -399,6 +418,8 @@ export const getTerms = async (academicYear?: string): Promise<Term[]> => {
 export const getAnalyticsTrends = async (filters?: {
   school_id?: string;
   aspect_code?: string;
+  aspect_category?: 'ofsted' | 'operational';
+  standard_type?: 'assurance' | 'risk';
   from_term?: string;
   to_term?: string;
 }): Promise<any> => {
@@ -406,6 +427,8 @@ export const getAnalyticsTrends = async (filters?: {
     const params = new URLSearchParams();
     if (filters?.school_id) params.append('school_id', filters.school_id);
     if (filters?.aspect_code) params.append('aspect_code', filters.aspect_code);
+    if (filters?.aspect_category) params.append('aspect_category', filters.aspect_category);
+    if (filters?.standard_type) params.append('standard_type', filters.standard_type);
     if (filters?.from_term) params.append('from_term', filters.from_term);
     if (filters?.to_term) params.append('to_term', filters.to_term);
 

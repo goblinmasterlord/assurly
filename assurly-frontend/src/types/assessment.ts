@@ -4,7 +4,9 @@
 
 // Core Types
 export type AssessmentStatus = 'not_started' | 'in_progress' | 'completed' | 'approved';
-export type Rating = 1 | 2 | 3 | 4 | null;
+export type Rating = 1 | 2 | 3 | 4 | 5 | null;
+export type StandardType = 'assurance' | 'risk';
+export type AspectCategory = 'ofsted' | 'operational';
 export type SchoolType = 'primary' | 'secondary' | 'all_through' | 'special' | 'central';
 export type TrendDirection = 'improving' | 'declining' | 'stable' | 'no_data';
 
@@ -28,7 +30,8 @@ export const RatingLabels: Record<NonNullable<Rating>, string> = {
   1: "Inadequate",
   2: "Requires Improvement",
   3: "Good",
-  4: "Outstanding"
+  4: "Outstanding",
+  5: "Exceptional"
 };
 
 // Rating descriptions for each level
@@ -36,7 +39,8 @@ export const RatingDescriptions: Record<NonNullable<Rating>, string> = {
   1: "Significant concerns requiring immediate action",
   2: "Areas identified for development",
   3: "Solid performance meeting expected standards",
-  4: "Exemplary practice exceeding expectations"
+  4: "Exemplary practice exceeding expectations",
+  5: "World-class performance setting the benchmark"
 };
 
 // ============================================================================
@@ -147,6 +151,7 @@ export interface AssessmentStandard {
     standard_code: string;
     standard_name: string;
     standard_description: string;
+    standard_type?: StandardType;
     sort_order: number;
     rating: Rating;
     evidence_comments: string | null;
@@ -183,6 +188,7 @@ export interface Standard {
     standard_code: string;          // ES1
     standard_name: string;
     standard_description: string;
+    standard_type?: StandardType;    // 'assurance' or 'risk'
     sort_order: number;
     is_custom: boolean;
     is_modified: boolean;
@@ -224,6 +230,7 @@ export interface StandardVersion {
 export interface StandardUpdate {
     standard_name: string;
     standard_description: string;
+    standard_type?: StandardType;
     change_reason?: string;
 }
 
@@ -236,6 +243,7 @@ export interface Aspect {
     aspect_code: string;            // EDU
     aspect_name: string;
     aspect_description: string;
+    aspect_category?: AspectCategory; // 'ofsted' or 'operational'
     sort_order: number;
     is_custom: boolean;
     standards_count: number;
@@ -313,6 +321,7 @@ export interface RatingDistribution {
     requires_improvement: number;
     good: number;
     outstanding: number;
+    exceptional: number;
 }
 
 // ============================================================================

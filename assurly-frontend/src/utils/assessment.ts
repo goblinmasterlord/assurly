@@ -86,7 +86,8 @@ export function getRatingLabel(rating: number | null): string {
         1: 'Inadequate',
         2: 'Requires Improvement',
         3: 'Good',
-        4: 'Outstanding'
+        4: 'Outstanding',
+        5: 'Exceptional'
     };
     return labels[rating] || 'Unknown';
 }
@@ -100,7 +101,8 @@ export function getRatingColor(rating: number | null): string {
         1: 'red',
         2: 'orange',
         3: 'green',
-        4: 'blue'
+        4: 'blue',
+        5: 'purple'
     };
     return colors[rating] || 'gray';
 }

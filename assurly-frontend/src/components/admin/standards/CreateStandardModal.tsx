@@ -28,7 +28,8 @@ import { useEffect, useCallback } from 'react';
 const formSchema = z.object({
     standard_code: z.string().min(2, 'Code must be at least 2 characters').max(10, 'Code must be less than 10 characters'),
     standard_name: z.string().min(5, 'Title must be at least 5 characters'),
-    standard_description: z.string().min(20, 'Description must be at least 20 characters').max(250, 'Description must be less than 250 characters'),
+    standard_description: z.string().min(20, 'Description must be at least 20 characters').max(1000, 'Description must be less than 1000 characters'),
+    standard_type: z.enum(['assurance', 'risk']).optional().default('assurance'),
     mat_aspect_id: z.string().min(1, 'Please select an aspect'),
     change_reason: z.string().min(5, 'Please describe the reason for this change').max(200, 'Reason must be less than 200 characters'),
 });
@@ -52,6 +53,7 @@ export function CreateStandardModal({ open, onOpenChange, onSave, standard, defa
             standard_code: '',
             standard_name: '',
             standard_description: '',
+            standard_type: 'assurance' as const,
             mat_aspect_id: defaultAspectId || '',
             change_reason: standard ? 'Updated standard' : 'Initial version',
         },
@@ -137,6 +139,7 @@ export function CreateStandardModal({ open, onOpenChange, onSave, standard, defa
                 standard_code: standard.standard_code,
                 standard_name: standard.standard_name,
                 standard_description: standard.standard_description || '',
+                standard_type: standard.standard_type || 'assurance',
                 mat_aspect_id: standard.mat_aspect_id || '',
                 change_reason: `Updating standard (currently v${currentVersion})`,
             });
@@ -146,6 +149,7 @@ export function CreateStandardModal({ open, onOpenChange, onSave, standard, defa
                 standard_code: nextCode,
                 standard_name: '',
                 standard_description: '',
+                standard_type: 'assurance' as const,
                 mat_aspect_id: defaultAspectId || '',
                 change_reason: 'Initial version',
             });
@@ -172,6 +176,7 @@ export function CreateStandardModal({ open, onOpenChange, onSave, standard, defa
             standard_code: values.standard_code,
             standard_name: values.standard_name,
             standard_description: values.standard_description,
+            standard_type: values.standard_type,
             aspect_code: selectedAspect?.aspect_code,
             aspect_name: selectedAspect?.aspect_name,
             sort_order: standard?.sort_order ?? 0,
@@ -280,17 +285,45 @@ export function CreateStandardModal({ open, onOpenChange, onSave, standard, defa
                                                 value={field.value || ''}
                                                 onChange={(e) => {
                                                     const value = e.target.value;
-                                                    if (value.length <= 250) {
+                                                    if (value.length <= 1000) {
                                                         field.onChange(e);
                                                     }
                                                 }}
                                             />
-                                            <div className={`absolute bottom-2 right-2 text-xs ${(field.value?.length || 0) >= 250 ? 'text-destructive font-medium' : 'text-muted-foreground'
+                                            <div className={`absolute bottom-2 right-2 text-xs ${(field.value?.length || 0) >= 1000 ? 'text-destructive font-medium' : 'text-muted-foreground'
                                                 }`}>
-                                                {field.value?.length || 0}/250
+                                                {field.value?.length || 0}/1000
                                             </div>
                                         </div>
                                     </FormControl>
+                                    <FormMessage />
+                                </FormItem>
+                            )}
+                        />
+
+                        <FormField
+                            control={form.control}
+                            name="standard_type"
+                            render={({ field }) => (
+                                <FormItem>
+                                    <FormLabel>Type</FormLabel>
+                                    <Select 
+                                        onValueChange={field.onChange} 
+                                        value={field.value || 'assurance'}
+                                    >
+                                        <FormControl>
+                                            <SelectTrigger>
+                                                <SelectValue placeholder="Select type" />
+                                            </SelectTrigger>
+                                        </FormControl>
+                                        <SelectContent>
+                                            <SelectItem value="assurance">Assurance</SelectItem>
+                                            <SelectItem value="risk">Risk</SelectItem>
+                                        </SelectContent>
+                                    </Select>
+                                    <FormDescription>
+                                        Assurance standards measure positive outcomes. Risk standards identify potential issues.
+                                    </FormDescription>
                                     <FormMessage />
                                 </FormItem>
                             )}
