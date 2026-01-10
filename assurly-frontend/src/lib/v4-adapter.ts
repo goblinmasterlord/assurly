@@ -30,7 +30,7 @@ export interface LegacyStandard {
   code: string;
   title: string;
   description: string;
-  rating: 1 | 2 | 3 | 4 | null;
+  rating: 1 | 2 | 3 | 4 | 5 | null;
   evidence: string | null;
   sort_order: number;
 }
@@ -141,11 +141,11 @@ export function adaptAssessmentUpdateToV4(legacyUpdate: {
   rating: number | null;
   evidence: string;
 }): {
-  rating: 1 | 2 | 3 | 4 | null;
+  rating: 1 | 2 | 3 | 4 | 5 | null;
   evidence_comments: string;
 } {
   return {
-    rating: legacyUpdate.rating as 1 | 2 | 3 | 4 | null,
+    rating: legacyUpdate.rating as 1 | 2 | 3 | 4 | 5 | null,
     evidence_comments: legacyUpdate.evidence
   };
 }

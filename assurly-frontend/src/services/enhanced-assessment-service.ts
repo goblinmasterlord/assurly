@@ -195,7 +195,7 @@ export class EnhancedAssessmentService {
     console.log(`[EnhancedService] Fetching standards${aspectCode ? ` for ${aspectCode}` : ''}...`);
     const standards = await requestCache.get(
       cacheKey as any,
-      () => apiGetStandards(aspectCode)
+      () => apiGetStandards(aspectCode ? { aspect_code: aspectCode } : undefined)
     );
     console.log(`[EnhancedService] Fetched ${standards.length} standards`);
     return standards;

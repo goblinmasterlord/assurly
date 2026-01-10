@@ -29,7 +29,7 @@ const formSchema = z.object({
     standard_code: z.string().min(2, 'Code must be at least 2 characters').max(10, 'Code must be less than 10 characters'),
     standard_name: z.string().min(5, 'Title must be at least 5 characters'),
     standard_description: z.string().min(20, 'Description must be at least 20 characters').max(1000, 'Description must be less than 1000 characters'),
-    standard_type: z.enum(['assurance', 'risk']).optional().default('assurance'),
+    standard_type: z.enum(['assurance', 'risk']),
     mat_aspect_id: z.string().min(1, 'Please select an aspect'),
     change_reason: z.string().min(5, 'Please describe the reason for this change').max(200, 'Reason must be less than 200 characters'),
 });
@@ -46,14 +46,16 @@ interface CreateStandardModalProps {
     allStandards?: Standard[]; // All standards to help generate next ID
 }
 
+type FormData = z.infer<typeof formSchema>;
+
 export function CreateStandardModal({ open, onOpenChange, onSave, standard, defaultAspectId, aspects, allStandards = [] }: CreateStandardModalProps) {
-    const form = useForm<z.infer<typeof formSchema>>({
+    const form = useForm<FormData>({
         resolver: zodResolver(formSchema),
         defaultValues: {
             standard_code: '',
             standard_name: '',
             standard_description: '',
-            standard_type: 'assurance' as const,
+            standard_type: 'assurance',
             mat_aspect_id: defaultAspectId || '',
             change_reason: standard ? 'Updated standard' : 'Initial version',
         },
@@ -149,7 +151,7 @@ export function CreateStandardModal({ open, onOpenChange, onSave, standard, defa
                 standard_code: nextCode,
                 standard_name: '',
                 standard_description: '',
-                standard_type: 'assurance' as const,
+                standard_type: 'assurance',
                 mat_aspect_id: defaultAspectId || '',
                 change_reason: 'Initial version',
             });
@@ -165,7 +167,7 @@ export function CreateStandardModal({ open, onOpenChange, onSave, standard, defa
         }
     }, [watchedAspectId, standard, open, generateNextStandardCode]);
 
-    function onSubmit(values: z.infer<typeof formSchema>) {
+    function onSubmit(values: FormData) {
         // Create a standard object from the form values (v3.0)
         const selectedAspect = aspects.find(a => a.mat_aspect_id === values.mat_aspect_id);
 
