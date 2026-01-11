@@ -1101,6 +1101,7 @@ async def get_standard(
                 ms.standard_code,
                 ms.standard_name,
                 ms.standard_description,
+                ms.standard_type,
                 ms.sort_order,
                 ms.is_custom,
                 ms.is_modified,
@@ -1131,6 +1132,7 @@ async def get_standard(
                 standard_code,
                 standard_name,
                 standard_description,
+                standard_type,
                 effective_from,
                 effective_to,
                 change_reason,
@@ -1659,6 +1661,7 @@ async def get_aspect(
                 ma.aspect_code,
                 ma.aspect_name,
                 ma.aspect_description,
+                ma.aspect_category,
                 ma.sort_order,
                 ma.mat_id,
                 ma.source_aspect_id,
@@ -1673,7 +1676,7 @@ async def get_aspect(
             LEFT JOIN aspects da ON ma.source_aspect_id = da.aspect_id
             WHERE ma.mat_aspect_id = %s AND ma.mat_id = %s AND ma.is_active = 1
             GROUP BY ma.mat_aspect_id, ma.aspect_code, ma.aspect_name,
-                     ma.aspect_description, ma.sort_order, ma.mat_id,
+                     ma.aspect_description, ma.aspect_category, ma.sort_order, ma.mat_id,
                      ma.source_aspect_id, da.aspect_name, da.aspect_description
         """
 
@@ -1740,8 +1743,8 @@ async def create_aspect(
         insert_query = """
             INSERT INTO mat_aspects
             (mat_aspect_id, mat_id, aspect_code, aspect_name, aspect_description,
-             sort_order, source_aspect_id, is_active, created_at, updated_at)
-            VALUES (%s, %s, %s, %s, %s, %s, %s, 1, NOW(), NOW())
+             aspect_category, sort_order, source_aspect_id, is_active, created_at, updated_at)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, 1, NOW(), NOW())
         """
         cursor.execute(insert_query, (
             mat_aspect_id,
@@ -1749,6 +1752,7 @@ async def create_aspect(
             aspect.aspect_code,
             aspect.aspect_name,
             aspect.aspect_description,
+            aspect.aspect_category,
             aspect.sort_order,
             aspect.source_aspect_id
         ))
@@ -1756,7 +1760,7 @@ async def create_aspect(
         # Fetch the created aspect
         fetch_query = """
             SELECT mat_aspect_id, aspect_code, aspect_name, aspect_description,
-                   sort_order, mat_id, source_aspect_id,
+                   aspect_category, sort_order, mat_id, source_aspect_id,
                    CASE WHEN source_aspect_id IS NULL THEN 1 ELSE 0 END as is_custom,
                    0 as is_modified,
                    0 as standards_count
@@ -1815,6 +1819,10 @@ async def update_aspect(
             update_fields.append("aspect_description = %s")
             update_values.append(aspect.aspect_description)
 
+        if aspect.aspect_category is not None:
+            update_fields.append("aspect_category = %s")
+            update_values.append(aspect.aspect_category)
+
         if aspect.sort_order is not None:
             update_fields.append("sort_order = %s")
             update_values.append(aspect.sort_order)
@@ -1840,7 +1848,7 @@ async def update_aspect(
         select_query = """
             SELECT
                 ma.mat_aspect_id, ma.aspect_code, ma.aspect_name, ma.aspect_description,
-                ma.sort_order, ma.mat_id, ma.source_aspect_id,
+                ma.aspect_category, ma.sort_order, ma.mat_id, ma.source_aspect_id,
                 CASE WHEN ma.source_aspect_id IS NULL THEN 1 ELSE 0 END as is_custom,
                 CASE WHEN ma.source_aspect_id IS NOT NULL AND
                      (ma.aspect_name != COALESCE(da.aspect_name, '') OR
@@ -1852,7 +1860,7 @@ async def update_aspect(
             LEFT JOIN aspects da ON ma.source_aspect_id = da.aspect_id
             WHERE ma.mat_aspect_id = %s
             GROUP BY ma.mat_aspect_id, ma.aspect_code, ma.aspect_name,
-                     ma.aspect_description, ma.sort_order, ma.mat_id,
+                     ma.aspect_description, ma.aspect_category, ma.sort_order, ma.mat_id,
                      ma.source_aspect_id, da.aspect_name, da.aspect_description
         """
         cursor.execute(select_query, (mat_aspect_id,))
