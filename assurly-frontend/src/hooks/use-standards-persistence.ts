@@ -61,7 +61,7 @@ export function useStandardsPersistence() {
                 standard_code: standard.standard_code,
                 standard_name: standard.standard_name,
                 standard_description: standard.standard_description || '',
-                standard_type: standard.standard_type,
+                ...(standard.standard_type && { standard_type: standard.standard_type }),
                 sort_order: standard.sort_order ?? 0,
             });
             
@@ -104,7 +104,7 @@ export function useStandardsPersistence() {
                 {
                     standard_name: standard.standard_name,
                     standard_description: standard.standard_description,
-                    standard_type: standard.standard_type,
+                    ...(standard.standard_type && { standard_type: standard.standard_type }),
                     change_reason: standard.change_reason || 'Updated standard',
                 }
             );
@@ -212,7 +212,7 @@ export function useStandardsPersistence() {
                 aspect_code: aspect.aspect_code,
                 aspect_name: aspect.aspect_name,
                 aspect_description: aspect.aspect_description || '',
-                aspect_category: aspect.aspect_category,
+                ...(aspect.aspect_category && { aspect_category: aspect.aspect_category }),
                 sort_order: aspect.sort_order ?? 0,
             });
             
@@ -251,7 +251,7 @@ export function useStandardsPersistence() {
                 {
                     aspect_name: aspect.aspect_name,
                     aspect_description: aspect.aspect_description,
-                    aspect_category: aspect.aspect_category,
+                    ...(aspect.aspect_category && { aspect_category: aspect.aspect_category }),
                     sort_order: aspect.sort_order,
                 }
             );
