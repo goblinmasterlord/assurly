@@ -50,6 +50,7 @@ export function useStandardsPersistence() {
         standard_code: string;
         standard_name: string;
         standard_description: string;
+        standard_type?: 'assurance' | 'risk';
         sort_order: number;
     }) => {
         try {
@@ -60,6 +61,7 @@ export function useStandardsPersistence() {
                 standard_code: standard.standard_code,
                 standard_name: standard.standard_name,
                 standard_description: standard.standard_description || '',
+                standard_type: standard.standard_type,
                 sort_order: standard.sort_order ?? 0,
             });
             
@@ -91,6 +93,7 @@ export function useStandardsPersistence() {
         mat_standard_id: string;
         standard_name: string;
         standard_description: string;
+        standard_type?: 'assurance' | 'risk';
         change_reason?: string;
     }) => {
         try {
@@ -101,6 +104,7 @@ export function useStandardsPersistence() {
                 {
                     standard_name: standard.standard_name,
                     standard_description: standard.standard_description,
+                    standard_type: standard.standard_type,
                     change_reason: standard.change_reason || 'Updated standard',
                 }
             );
@@ -198,6 +202,7 @@ export function useStandardsPersistence() {
         aspect_code: string;
         aspect_name: string;
         aspect_description: string;
+        aspect_category?: 'ofsted' | 'operational';
         sort_order: number;
     }) => {
         try {
@@ -207,6 +212,7 @@ export function useStandardsPersistence() {
                 aspect_code: aspect.aspect_code,
                 aspect_name: aspect.aspect_name,
                 aspect_description: aspect.aspect_description || '',
+                aspect_category: aspect.aspect_category,
                 sort_order: aspect.sort_order ?? 0,
             });
             
@@ -234,6 +240,7 @@ export function useStandardsPersistence() {
         mat_aspect_id: string;
         aspect_name: string;
         aspect_description: string;
+        aspect_category?: 'ofsted' | 'operational';
         sort_order: number;
     }) => {
         try {
@@ -244,6 +251,7 @@ export function useStandardsPersistence() {
                 {
                     aspect_name: aspect.aspect_name,
                     aspect_description: aspect.aspect_description,
+                    aspect_category: aspect.aspect_category,
                     sort_order: aspect.sort_order,
                 }
             );

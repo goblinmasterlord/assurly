@@ -21,12 +21,14 @@ import {
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Button } from '@/components/ui/button';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { type Aspect } from '@/types/assessment';
 
 const formSchema = z.object({
     aspect_name: z.string().min(3, 'Name must be at least 3 characters'),
     aspect_code: z.string().min(2, 'Code must be at least 2 characters').max(10, 'Code must be less than 10 characters'),
     aspect_description: z.string().optional(),
+    aspect_category: z.enum(['ofsted', 'operational']).optional(),
 });
 
 interface CreateAspectModalProps {
@@ -43,6 +45,7 @@ export function CreateAspectModal({ open, onOpenChange, onSave, aspect }: Create
             aspect_name: '',
             aspect_code: '',
             aspect_description: '',
+            aspect_category: 'operational' as const,
         },
     });
 
@@ -54,12 +57,14 @@ export function CreateAspectModal({ open, onOpenChange, onSave, aspect }: Create
                     aspect_name: aspect.aspect_name,
                     aspect_code: aspect.aspect_code.toUpperCase(),
                     aspect_description: aspect.aspect_description || '',
+                    aspect_category: aspect.aspect_category || 'operational',
                 });
             } else {
                 form.reset({
                     aspect_name: '',
                     aspect_code: '',
                     aspect_description: '',
+                    aspect_category: 'operational' as const,
                 });
             }
         }
@@ -71,6 +76,7 @@ export function CreateAspectModal({ open, onOpenChange, onSave, aspect }: Create
             aspect_code: values.aspect_code.toLowerCase(),
             aspect_name: values.aspect_name,
             aspect_description: values.aspect_description || '',
+            aspect_category: values.aspect_category || 'operational',
             sort_order: aspect?.sort_order ?? 0,
             is_custom: aspect ? aspect.is_custom : true,
             is_modified: aspect ? aspect.is_modified : false,
@@ -136,6 +142,31 @@ export function CreateAspectModal({ open, onOpenChange, onSave, aspect }: Create
                                             {...field}
                                         />
                                     </FormControl>
+                                    <FormMessage />
+                                </FormItem>
+                            )}
+                        />
+
+                        <FormField
+                            control={form.control}
+                            name="aspect_category"
+                            render={({ field }) => (
+                                <FormItem>
+                                    <FormLabel>Category</FormLabel>
+                                    <Select 
+                                        onValueChange={field.onChange} 
+                                        value={field.value || 'operational'}
+                                    >
+                                        <FormControl>
+                                            <SelectTrigger>
+                                                <SelectValue placeholder="Select category" />
+                                            </SelectTrigger>
+                                        </FormControl>
+                                        <SelectContent>
+                                            <SelectItem value="ofsted">Ofsted</SelectItem>
+                                            <SelectItem value="operational">Operational</SelectItem>
+                                        </SelectContent>
+                                    </Select>
                                     <FormMessage />
                                 </FormItem>
                             )}

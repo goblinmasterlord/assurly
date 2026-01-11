@@ -346,7 +346,7 @@ export default function StandardsManagement() {
 
             <div className="flex-1 flex gap-6 overflow-hidden">
                 {/* Sidebar - Aspects */}
-                <Card className="w-64 flex-shrink-0 flex flex-col h-full">
+                <Card className="w-80 flex-shrink-0 flex flex-col h-full">
                     <CardHeader className="pb-3">
                         <CardTitle className="text-lg">Aspects</CardTitle>
                         <CardDescription>Select an area to manage</CardDescription>

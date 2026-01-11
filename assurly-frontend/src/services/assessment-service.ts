@@ -337,6 +337,7 @@ export const updateAspect = async (
   data: {
     aspect_name: string;
     aspect_description: string;
+    aspect_category?: 'ofsted' | 'operational';
     sort_order: number;
   }
 ): Promise<void> => {
