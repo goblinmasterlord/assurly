@@ -384,17 +384,17 @@ export default function StandardsManagement() {
                                         key={aspect.mat_aspect_id}
                                         onClick={() => setSelectedAspect(aspect)}
                                         className={cn(
-                                            "w-full text-left px-3 py-2.5 rounded-md text-sm font-medium transition-colors flex flex-col gap-1.5 group",
+                                            "w-full text-left px-3 py-2.5 rounded-md text-sm font-medium transition-colors flex flex-col gap-1.5 group min-w-0",
                                             currentAspect.mat_aspect_id === aspect.mat_aspect_id
                                                 ? "bg-primary/10 text-primary"
                                                 : "hover:bg-muted text-muted-foreground hover:text-foreground"
                                         )}
                                     >
-                                        <div className="flex items-center gap-2 w-full">
-                                            <span className="truncate flex-1">{aspect.aspect_name}</span>
+                                        <div className="flex items-center gap-2 w-full min-w-0">
+                                            <span className="truncate flex-1 min-w-0">{aspect.aspect_name}</span>
                                         </div>
-                                        <div className="flex items-center gap-2 w-full">
-                                            <span className="text-[10px] text-muted-foreground font-normal">
+                                        <div className="flex items-center gap-2 w-full flex-wrap min-w-0">
+                                            <span className="text-[10px] text-muted-foreground font-normal whitespace-nowrap">
                                                 {count} standard{count !== 1 ? 's' : ''}
                                             </span>
                                             {aspect.aspect_category && (
