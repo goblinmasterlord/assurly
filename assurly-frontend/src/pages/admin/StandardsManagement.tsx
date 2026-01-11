@@ -390,22 +390,22 @@ export default function StandardsManagement() {
                                                 : "hover:bg-muted text-muted-foreground hover:text-foreground"
                                         )}
                                     >
-                                        <div className="flex flex-col items-start gap-1">
-                                            <div className="flex items-center gap-2">
-                                                <span>{aspect.aspect_name}</span>
-                                                {aspect.aspect_category && (
-                                                    <AspectCategoryBadge category={aspect.aspect_category} className="text-[10px] h-4 px-1" />
-                                                )}
-                                            </div>
+                                        <div className="flex flex-col items-start gap-1 flex-1 min-w-0">
+                                            <span className="truncate">{aspect.aspect_name}</span>
                                             <span className="text-[10px] text-muted-foreground font-normal">
                                                 {count} standard{count !== 1 ? 's' : ''}
                                             </span>
                                         </div>
-                                        {aspect.is_custom ? (
-                                            <Badge variant="secondary" className="text-[10px] h-4 px-1">Custom</Badge>
-                                        ) : (
-                                            <Badge variant="outline" className="text-[10px] h-4 px-1 text-muted-foreground">Default</Badge>
-                                        )}
+                                        <div className="flex items-center gap-1 flex-shrink-0 ml-2">
+                                            {aspect.aspect_category && (
+                                                <AspectCategoryBadge category={aspect.aspect_category} className="text-[10px] h-4 px-1" />
+                                            )}
+                                            {aspect.is_custom ? (
+                                                <Badge variant="secondary" className="text-[10px] h-4 px-1">Custom</Badge>
+                                            ) : (
+                                                <Badge variant="outline" className="text-[10px] h-4 px-1 text-muted-foreground">Default</Badge>
+                                            )}
+                                        </div>
                                     </button>
                                 );
                             })}

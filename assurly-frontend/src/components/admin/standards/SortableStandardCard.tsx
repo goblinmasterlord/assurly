@@ -112,16 +112,6 @@ export function SortableStandardCard({ standard, onEdit, onHistory, onDelete }: 
                             <Badge variant="secondary" className="text-xs">
                                 v{versionNumber}
                             </Badge>
-                            {standard.is_custom && (
-                                <Badge variant="outline" className="text-teal-600 border-teal-200 bg-teal-50 text-xs">
-                                    Custom
-                                </Badge>
-                            )}
-                            {standard.is_modified && (
-                                <Badge variant="outline" className="text-amber-600 border-amber-200 bg-amber-50 text-xs">
-                                    Modified
-                                </Badge>
-                            )}
                             {standard.standard_type && (
                                 <StandardTypeBadge type={standard.standard_type} />
                             )}
