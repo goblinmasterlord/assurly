@@ -392,14 +392,14 @@ export default function StandardsManagement() {
                                     >
                                         <div className="flex items-center gap-2 w-full">
                                             <span className="truncate flex-1">{aspect.aspect_name}</span>
-                                            {aspect.aspect_category && (
-                                                <AspectCategoryBadge category={aspect.aspect_category} className="text-[10px] h-4 px-1 flex-shrink-0" />
-                                            )}
                                         </div>
                                         <div className="flex items-center gap-2 w-full">
                                             <span className="text-[10px] text-muted-foreground font-normal">
                                                 {count} standard{count !== 1 ? 's' : ''}
                                             </span>
+                                            {aspect.aspect_category && (
+                                                <AspectCategoryBadge category={aspect.aspect_category} className="text-[10px] h-4 px-1 flex-shrink-0" />
+                                            )}
                                             {aspect.is_custom ? (
                                                 <Badge variant="secondary" className="text-[10px] h-4 px-1 flex-shrink-0">Custom</Badge>
                                             ) : (
