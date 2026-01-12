@@ -91,6 +91,15 @@ export function SortableStandardCard({ standard, onEdit, onHistory, onDelete }: 
 
     const versionNumber = getVersionNumber();
 
+    // Truncate description to 250 characters for display
+    const truncateDescription = (text: string, maxLength: number = 250): string => {
+        if (!text) return '';
+        if (text.length <= maxLength) return text;
+        return text.substring(0, maxLength).trim() + '...';
+    };
+
+    const displayDescription = truncateDescription(standard.standard_description || '', 250);
+
     return (
         <div ref={setNodeRef} style={style} className="mb-4">
             <Card className="group hover:border-primary/50 transition-colors">
@@ -117,8 +126,8 @@ export function SortableStandardCard({ standard, onEdit, onHistory, onDelete }: 
                             )}
                         </div>
 
-                        <p className="text-sm text-muted-foreground line-clamp-2 mb-3">
-                            {standard.standard_description}
+                        <p className="text-sm text-muted-foreground line-clamp-2 mb-3 break-words">
+                            {displayDescription}
                         </p>
 
                         <div className="flex items-center gap-4 text-xs text-muted-foreground">

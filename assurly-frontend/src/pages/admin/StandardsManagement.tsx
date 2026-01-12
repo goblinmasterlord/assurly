@@ -73,6 +73,8 @@ export default function StandardsManagement() {
     const [searchQuery, setSearchQuery] = useState('');
     const [aspectCategoryFilter, setAspectCategoryFilter] = useState<'all' | 'ofsted' | 'operational'>('all');
     const [standardTypeFilter, setStandardTypeFilter] = useState<'all' | 'assurance' | 'risk'>('all');
+    const [aspectSortBy, setAspectSortBy] = useState<'name' | 'category'>('name');
+    const [aspectSortOrder, setAspectSortOrder] = useState<'asc' | 'desc'>('asc');
     const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
     const [isAspectModalOpen, setIsAspectModalOpen] = useState(false);
     const [isHistoryModalOpen, setIsHistoryModalOpen] = useState(false);
@@ -107,11 +109,25 @@ export default function StandardsManagement() {
 
     const currentAspect = selectedAspect || aspects[0]; // Fallback
 
-    // Filter aspects by category
-    const filteredAspects = aspects.filter(aspect => {
-        if (aspectCategoryFilter === 'all') return true;
-        return aspect.aspect_category === aspectCategoryFilter;
-    });
+    // Filter and sort aspects
+    const filteredAspects = aspects
+        .filter(aspect => {
+            if (aspectCategoryFilter === 'all') return true;
+            return aspect.aspect_category === aspectCategoryFilter;
+        })
+        .sort((a, b) => {
+            let comparison = 0;
+            
+            if (aspectSortBy === 'name') {
+                comparison = a.aspect_name.localeCompare(b.aspect_name);
+            } else if (aspectSortBy === 'category') {
+                const categoryA = a.aspect_category || '';
+                const categoryB = b.aspect_category || '';
+                comparison = categoryA.localeCompare(categoryB);
+            }
+            
+            return aspectSortOrder === 'asc' ? comparison : -comparison;
+        });
 
     // Filter standards by aspect, search, and type
     const filteredStandards = currentAspect
@@ -292,7 +308,7 @@ export default function StandardsManagement() {
     }
 
     return (
-        <div className="container mx-auto py-6 max-w-7xl h-[calc(100vh-4rem)] flex flex-col">
+        <div className="container mx-auto py-6 h-[calc(100vh-4rem)] flex flex-col">
             <div className="flex justify-between items-center mb-6">
                 <div>
                     <h1 className="text-3xl font-bold tracking-tight">Standards Management</h1>
@@ -362,6 +378,21 @@ export default function StandardsManagement() {
                                 <SelectItem value="operational">Operational Only</SelectItem>
                             </SelectContent>
                         </Select>
+                        <Select value={`${aspectSortBy}-${aspectSortOrder}`} onValueChange={(value) => {
+                            const [sortBy, sortOrder] = value.split('-') as ['name' | 'category', 'asc' | 'desc'];
+                            setAspectSortBy(sortBy);
+                            setAspectSortOrder(sortOrder);
+                        }}>
+                            <SelectTrigger className="h-8 text-xs">
+                                <SelectValue placeholder="Sort by" />
+                            </SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="name-asc">Name (A-Z)</SelectItem>
+                                <SelectItem value="name-desc">Name (Z-A)</SelectItem>
+                                <SelectItem value="category-asc">Category (A-Z)</SelectItem>
+                                <SelectItem value="category-desc">Category (Z-A)</SelectItem>
+                            </SelectContent>
+                        </Select>
                         <Button
                             variant="outline"
                             className="w-full justify-start text-xs h-8"
@@ -374,10 +405,7 @@ export default function StandardsManagement() {
                     <Separator />
                     <ScrollArea className="flex-1">
                         <div className="p-2 space-y-1">
-                            {filteredAspects
-                                .slice()
-                                .sort((a, b) => a.aspect_name.localeCompare(b.aspect_name))
-                                .map((aspect) => {
+                            {filteredAspects.map((aspect) => {
                                 const count = standards.filter(s => s.mat_aspect_id === aspect.mat_aspect_id).length;
                                 return (
                                     <button
@@ -415,6 +443,29 @@ export default function StandardsManagement() {
 
                 {/* Main Content - Standards List */}
                 <div className="flex-1 flex flex-col min-w-0">
+                    {/* Aspect Overview Section */}
+                    {currentAspect && (
+                        <Card className="mb-4">
+                            <CardContent className="p-4">
+                                <div className="flex items-start justify-between gap-4">
+                                    <div className="flex-1 min-w-0">
+                                        <div className="flex items-center gap-3 mb-2">
+                                            <h2 className="text-xl font-semibold">{currentAspect.aspect_name}</h2>
+                                            {currentAspect.aspect_category && (
+                                                <AspectCategoryBadge category={currentAspect.aspect_category} />
+                                            )}
+                                        </div>
+                                        {currentAspect.aspect_description && (
+                                            <p className="text-sm text-muted-foreground">
+                                                {currentAspect.aspect_description}
+                                            </p>
+                                        )}
+                                    </div>
+                                </div>
+                            </CardContent>
+                        </Card>
+                    )}
+                    
                     <div className="mb-4 flex gap-4 items-center">
                         <div className="relative flex-1">
                             <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
