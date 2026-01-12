@@ -1349,9 +1349,11 @@ async def update_standard(
 
         # Get current version info
         cursor.execute("""
-            SELECT ms.current_version_id, ms.standard_code, sv.version_number
+            SELECT ms.current_version_id, ms.standard_code, ms.standard_name,
+                   ms.standard_description, ms.standard_type, ms.is_active,
+                   COALESCE(sv.version_number, 0) as version_number
             FROM mat_standards ms
-            JOIN standard_versions sv ON ms.current_version_id = sv.version_id
+            LEFT JOIN standard_versions sv ON ms.current_version_id = sv.version_id
             WHERE ms.mat_standard_id = %s AND ms.mat_id = %s
         """, (mat_standard_id, current_mat_id))
 
@@ -1360,20 +1362,33 @@ async def update_standard(
             connection.close()
             raise HTTPException(status_code=404, detail="Standard not found")
 
+        if not current['is_active']:
+            connection.close()
+            raise HTTPException(status_code=400, detail="Cannot update inactive standard")
+
         old_version_id = current['current_version_id']
         standard_code = current['standard_code']
-        new_version_num = current['version_number'] + 1
-        new_version_id = f"{mat_standard_id}-v{new_version_num}"
 
-        new_name = update_data.get('standard_name')
-        new_description = update_data.get('standard_description')
-        new_type = update_data.get('standard_type')
+        # Use existing values as defaults if not provided in update
+        old_name = current['standard_name']
+        old_description = current['standard_description']
+        old_type = current['standard_type']
+
+        new_name = update_data.get('standard_name', old_name)
+        new_description = update_data.get('standard_description', old_description)
+        new_type = update_data.get('standard_type', old_type)
         change_reason = update_data.get('change_reason', '')
 
-        # Close old version
-        cursor.execute("""
-            UPDATE standard_versions SET effective_to = NOW() WHERE version_id = %s
-        """, (old_version_id,))
+        # Determine new version number
+        current_version_num = current['version_number'] if current['version_number'] else 0
+        new_version_num = current_version_num + 1
+        new_version_id = f"{mat_standard_id}-v{new_version_num}"
+
+        # Close old version if it exists
+        if old_version_id:
+            cursor.execute("""
+                UPDATE standard_versions SET effective_to = NOW() WHERE version_id = %s
+            """, (old_version_id,))
 
         # Create new version
         cursor.execute("""
@@ -1385,21 +1400,13 @@ async def update_standard(
         """, (new_version_id, mat_standard_id, new_version_num, standard_code,
               new_name, new_description, new_type, old_version_id, current_user.user_id, change_reason))
 
-        # Update mat_standards - handle standard_type conditionally
-        if new_type:
-            cursor.execute("""
-                UPDATE mat_standards
-                SET standard_name = %s, standard_description = %s, standard_type = %s,
-                    current_version_id = %s, is_modified = TRUE, updated_at = NOW()
-                WHERE mat_standard_id = %s AND mat_id = %s
-            """, (new_name, new_description, new_type, new_version_id, mat_standard_id, current_mat_id))
-        else:
-            cursor.execute("""
-                UPDATE mat_standards
-                SET standard_name = %s, standard_description = %s,
-                    current_version_id = %s, is_modified = TRUE, updated_at = NOW()
-                WHERE mat_standard_id = %s AND mat_id = %s
-            """, (new_name, new_description, new_version_id, mat_standard_id, current_mat_id))
+        # Update mat_standards
+        cursor.execute("""
+            UPDATE mat_standards
+            SET standard_name = %s, standard_description = %s, standard_type = %s,
+                current_version_id = %s, is_modified = TRUE, updated_at = NOW()
+            WHERE mat_standard_id = %s AND mat_id = %s
+        """, (new_name, new_description, new_type, new_version_id, mat_standard_id, current_mat_id))
 
         # Log edit (store old/new as JSON)
         import json
