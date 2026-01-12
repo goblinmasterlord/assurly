@@ -32,7 +32,9 @@ import type {
   Aspect,
   School,
   Term,
-  Rating
+  Rating,
+  DeleteStandardResponse,
+  DeleteAspectResponse
 } from '@/types/assessment';
 
 // Enhanced service with caching, optimistic updates, and intelligent data management
@@ -252,12 +254,14 @@ export class EnhancedAssessmentService {
   /**
    * Delete standard
    */
-  async deleteStandard(matStandardId: string): Promise<void> {
-    await apiDeleteStandard(matStandardId);
+  async deleteStandard(matStandardId: string): Promise<DeleteStandardResponse> {
+    const result = await apiDeleteStandard(matStandardId);
     
     // Invalidate caches
     requestCache.invalidate('standards');
     requestCache.invalidate('aspects'); // Count might change
+    
+    return result;
   }
 
   /**
@@ -345,12 +349,14 @@ export class EnhancedAssessmentService {
   /**
    * Delete aspect
    */
-  async deleteAspect(matAspectId: string): Promise<void> {
-    await apiDeleteAspect(matAspectId);
+  async deleteAspect(matAspectId: string): Promise<DeleteAspectResponse> {
+    const result = await apiDeleteAspect(matAspectId);
     
     // Invalidate caches
     requestCache.invalidate('aspects');
     requestCache.invalidate('standards'); // Deleting aspect affects standards
+    
+    return result;
   }
 
   /**
