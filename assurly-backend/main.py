@@ -1440,81 +1440,99 @@ async def delete_standard(
     current_user: UserResponse = Depends(get_current_user)
 ):
     """
-    Soft delete a standard by marking inactive and freeing up the ID, code, and versions.
+    Delete (deactivate) a standard.
+    - Default standards: Simply set is_active = 0 (can be reinstated)
+    - Custom standards: Rename IDs and set is_active = 0 (archived permanently)
     """
     try:
         connection = get_db_connection()
         cursor = connection.cursor()
 
-        # Verify standard exists and belongs to user's MAT
+        # Get standard details
         check_query = """
-            SELECT mat_standard_id, standard_code FROM mat_standards
+            SELECT mat_standard_id, standard_code, is_custom
+            FROM mat_standards
             WHERE mat_standard_id = %s AND mat_id = %s AND is_active = 1
         """
         cursor.execute(check_query, (mat_standard_id, current_mat_id))
         row = cursor.fetchone()
-        
+
         if not row:
             connection.close()
             raise HTTPException(status_code=404, detail="Standard not found")
 
+        is_custom = row['is_custom']
         original_code = row['standard_code']
 
-        # Generate deleted suffixes
-        import time
-        timestamp = int(time.time())
-        short_suffix = str(timestamp)[-6:]
-        deleted_id = f"{mat_standard_id}-deleted-{timestamp}"
-        deleted_code = f"{original_code}-{short_suffix}"
-        
-        # STEP 1: Clear current_version_id on mat_standards first
-        cursor.execute("""
-            UPDATE mat_standards
-            SET current_version_id = NULL
-            WHERE mat_standard_id = %s
-        """, (mat_standard_id,))
+        if is_custom:
+            # CUSTOM STANDARD: Rename IDs to free them up (existing logic)
+            import time
+            timestamp = int(time.time())
+            short_suffix = str(timestamp)[-6:]
+            deleted_id = f"{mat_standard_id}-deleted-{timestamp}"
+            deleted_code = f"{original_code}-{short_suffix}"
 
-        # STEP 2: Clear all parent_version_id references (break the chain)
-        cursor.execute("""
-            UPDATE standard_versions
-            SET parent_version_id = NULL
-            WHERE mat_standard_id = %s
-        """, (mat_standard_id,))
-
-        # STEP 3: Now rename all version_ids (no FK dependencies now)
-        cursor.execute("""
-            SELECT version_id FROM standard_versions
-            WHERE mat_standard_id = %s
-        """, (mat_standard_id,))
-        versions = cursor.fetchall()
-        
-        for version in versions:
-            old_version_id = version['version_id']
-            new_version_id = f"{old_version_id}-deleted-{timestamp}"
+            # Clear current_version_id first
             cursor.execute("""
-                UPDATE standard_versions
-                SET version_id = %s
-                WHERE version_id = %s
-            """, (new_version_id, old_version_id))
+                UPDATE mat_standards SET current_version_id = NULL
+                WHERE mat_standard_id = %s
+            """, (mat_standard_id,))
 
-        # STEP 4: Update mat_standards
-        delete_query = """
-            UPDATE mat_standards
-            SET mat_standard_id = %s,
-                standard_code = %s,
-                is_active = 0,
-                updated_at = NOW()
-            WHERE mat_standard_id = %s AND mat_id = %s
-        """
-        cursor.execute(delete_query, (deleted_id, deleted_code, mat_standard_id, current_mat_id))
+            # Clear parent_version_id references
+            cursor.execute("""
+                UPDATE standard_versions SET parent_version_id = NULL
+                WHERE mat_standard_id = %s
+            """, (mat_standard_id,))
+
+            # Rename all version_ids
+            cursor.execute("""
+                SELECT version_id FROM standard_versions
+                WHERE mat_standard_id = %s
+            """, (mat_standard_id,))
+            versions = cursor.fetchall()
+
+            for version in versions:
+                old_version_id = version['version_id']
+                new_version_id = f"{old_version_id}-deleted-{timestamp}"
+                cursor.execute("""
+                    UPDATE standard_versions SET version_id = %s
+                    WHERE version_id = %s
+                """, (new_version_id, old_version_id))
+
+            # Rename and deactivate mat_standard
+            cursor.execute("""
+                UPDATE mat_standards
+                SET mat_standard_id = %s,
+                    standard_code = %s,
+                    is_active = 0,
+                    updated_at = NOW()
+                WHERE mat_standard_id = %s AND mat_id = %s
+            """, (deleted_id, deleted_code, mat_standard_id, current_mat_id))
+
+            result_message = "Custom standard archived"
+            archived_as = deleted_id
+
+        else:
+            # DEFAULT STANDARD: Simply deactivate (keep IDs intact for reinstatement)
+            cursor.execute("""
+                UPDATE mat_standards
+                SET is_active = 0,
+                    updated_at = NOW()
+                WHERE mat_standard_id = %s AND mat_id = %s
+            """, (mat_standard_id, current_mat_id))
+
+            result_message = "Default standard deactivated"
+            archived_as = None
 
         connection.commit()
         connection.close()
 
         return JSONResponse(content={
-            "message": "Standard deleted successfully",
+            "message": result_message,
             "mat_standard_id": mat_standard_id,
-            "archived_as": deleted_id
+            "is_custom": is_custom,
+            "archived_as": archived_as,
+            "can_reinstate": not is_custom
         }, status_code=200)
 
     except HTTPException:
@@ -1524,6 +1542,132 @@ async def delete_standard(
             connection.rollback()
             connection.close()
         raise HTTPException(status_code=500, detail=f"Failed to delete standard: {str(e)}")
+
+@app.post("/api/standards/{mat_standard_id}/reinstate", tags=["Standards"])
+async def reinstate_standard(
+    mat_standard_id: str,
+    current_mat_id: str = Depends(get_current_mat),
+    current_user: UserResponse = Depends(get_current_user)
+):
+    """
+    Reinstate a previously deactivated default standard.
+    Only works for default standards (is_custom = FALSE).
+    """
+    try:
+        connection = get_db_connection()
+        cursor = connection.cursor()
+
+        # Check if standard exists and is deactivated
+        check_query = """
+            SELECT mat_standard_id, is_custom, is_active
+            FROM mat_standards
+            WHERE mat_standard_id = %s AND mat_id = %s
+        """
+        cursor.execute(check_query, (mat_standard_id, current_mat_id))
+        row = cursor.fetchone()
+
+        if not row:
+            connection.close()
+            raise HTTPException(status_code=404, detail="Standard not found")
+
+        if row['is_active']:
+            connection.close()
+            raise HTTPException(status_code=400, detail="Standard is already active")
+
+        if row['is_custom']:
+            connection.close()
+            raise HTTPException(
+                status_code=400,
+                detail="Custom standards cannot be reinstated. Create a new standard instead."
+            )
+
+        # Reinstate the standard
+        cursor.execute("""
+            UPDATE mat_standards
+            SET is_active = 1,
+                updated_at = NOW()
+            WHERE mat_standard_id = %s AND mat_id = %s
+        """, (mat_standard_id, current_mat_id))
+
+        connection.commit()
+        connection.close()
+
+        return JSONResponse(content={
+            "message": "Standard reinstated successfully",
+            "mat_standard_id": mat_standard_id
+        }, status_code=200)
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        if connection:
+            connection.rollback()
+            connection.close()
+        raise HTTPException(status_code=500, detail=f"Failed to reinstate standard: {str(e)}")
+
+@app.get("/api/standards/inactive", response_model=List[MatStandardResponse], tags=["Standards"])
+async def get_inactive_standards(
+    current_mat_id: str = Depends(get_current_mat),
+    current_user: UserResponse = Depends(get_current_user)
+):
+    """
+    Get list of deactivated default standards that can be reinstated.
+    Does not include archived custom standards.
+    """
+    try:
+        connection = get_db_connection()
+        cursor = connection.cursor()
+
+        query = """
+            SELECT ms.mat_standard_id,
+                   ms.mat_id,
+                   ms.standard_code,
+                   ms.standard_name,
+                   ms.standard_description,
+                   ms.standard_type,
+                   ms.sort_order,
+                   ms.is_custom,
+                   ms.is_modified,
+                   ma.mat_aspect_id,
+                   ma.aspect_code,
+                   ma.aspect_name,
+                   sv.version_id as current_version_id,
+                   sv.version_number as current_version
+            FROM mat_standards ms
+            JOIN mat_aspects ma ON ms.mat_aspect_id = ma.mat_aspect_id
+            LEFT JOIN standard_versions sv ON ms.current_version_id = sv.version_id
+            WHERE ms.mat_id = %s
+              AND ms.is_active = FALSE
+              AND ms.is_custom = FALSE
+            ORDER BY ma.sort_order, ms.sort_order
+        """
+        cursor.execute(query, (current_mat_id,))
+        standards = cursor.fetchall()
+
+        # Map response to ensure version_number is properly set
+        mapped_standards = []
+        for std in standards:
+            mapped_std = dict(std)
+            if 'current_version' in mapped_std and mapped_std['current_version'] is not None:
+                version_val = mapped_std['current_version']
+                if isinstance(version_val, str):
+                    try:
+                        version_val = int(version_val)
+                    except (ValueError, TypeError):
+                        version_val = None
+                elif hasattr(version_val, '__int__'):
+                    version_val = int(version_val)
+                mapped_std['version_number'] = version_val
+                mapped_std['current_version'] = version_val
+            if 'current_version_id' in mapped_std and mapped_std['current_version_id']:
+                mapped_std['version_id'] = mapped_std['current_version_id']
+            mapped_standards.append(mapped_std)
+
+        connection.close()
+        return mapped_standards
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to fetch inactive standards: {str(e)}")
 
 # Version History Endpoint
 @app.get("/api/standards/{mat_standard_id}/versions", response_model=List[StandardVersionResponse], tags=["Standards"])
@@ -1874,35 +2018,38 @@ async def update_aspect(
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to update aspect: {str(e)}")
 
-@app.delete("/api/aspects/{mat_aspect_id}", status_code=status.HTTP_204_NO_CONTENT, tags=["Aspects"])
+@app.delete("/api/aspects/{mat_aspect_id}", tags=["Aspects"])
 async def delete_aspect(
     mat_aspect_id: str,
     current_mat_id: str = Depends(get_current_mat),
     current_user: UserResponse = Depends(get_current_user)
 ):
     """
-    Soft delete a MAT aspect (sets is_active = 0).
-    Enforces MAT isolation - can only delete aspects in user's MAT.
-    Requires authentication.
+    Delete (deactivate) an aspect and all its standards.
+    - Default aspects: Simply set is_active = 0 (can be reinstated)
+    - Custom aspects: Rename IDs and set is_active = 0 (archived permanently)
     """
     try:
         connection = get_db_connection()
         cursor = connection.cursor()
 
-        # Check if aspect exists and belongs to user's MAT
+        # Get aspect details
         check_query = """
-            SELECT mat_aspect_id FROM mat_aspects
+            SELECT mat_aspect_id, aspect_code, is_custom
+            FROM mat_aspects
             WHERE mat_aspect_id = %s AND mat_id = %s AND is_active = 1
         """
         cursor.execute(check_query, (mat_aspect_id, current_mat_id))
-        if not cursor.fetchone():
-            connection.close()
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"Aspect not found or access denied"
-            )
+        row = cursor.fetchone()
 
-        # Check if there are standards using this aspect
+        if not row:
+            connection.close()
+            raise HTTPException(status_code=404, detail="Aspect not found")
+
+        is_custom = row['is_custom']
+        aspect_code = row['aspect_code']
+
+        # Check if there are active standards using this aspect
         standards_query = """
             SELECT COUNT(*) as count FROM mat_standards
             WHERE mat_aspect_id = %s AND is_active = 1
@@ -1917,21 +2064,163 @@ async def delete_aspect(
                 detail=f"Cannot delete aspect because it has {result['count']} active standards. Delete the standards first."
             )
 
-        # Soft delete aspect
-        delete_query = """
-            UPDATE mat_aspects
-            SET is_active = 0, updated_at = NOW()
-            WHERE mat_aspect_id = %s
-        """
-        cursor.execute(delete_query, (mat_aspect_id,))
+        if is_custom:
+            # CUSTOM ASPECT: Rename IDs to free them up
+            import time
+            timestamp = int(time.time())
+            short_suffix = str(timestamp)[-6:]
+            deleted_id = f"{mat_aspect_id}-deleted-{timestamp}"
+            deleted_code = f"{aspect_code}-{short_suffix}"
 
+            # Rename and deactivate
+            cursor.execute("""
+                UPDATE mat_aspects
+                SET mat_aspect_id = %s,
+                    aspect_code = %s,
+                    is_active = 0,
+                    updated_at = NOW()
+                WHERE mat_aspect_id = %s AND mat_id = %s
+            """, (deleted_id, deleted_code, mat_aspect_id, current_mat_id))
+
+            result_message = "Custom aspect archived"
+            archived_as = deleted_id
+
+        else:
+            # DEFAULT ASPECT: Simply deactivate (keep IDs intact for reinstatement)
+            cursor.execute("""
+                UPDATE mat_aspects
+                SET is_active = 0,
+                    updated_at = NOW()
+                WHERE mat_aspect_id = %s AND mat_id = %s
+            """, (mat_aspect_id, current_mat_id))
+
+            result_message = "Default aspect deactivated"
+            archived_as = None
+
+        connection.commit()
         connection.close()
-        return None
+
+        return JSONResponse(content={
+            "message": result_message,
+            "mat_aspect_id": mat_aspect_id,
+            "is_custom": is_custom,
+            "archived_as": archived_as,
+            "can_reinstate": not is_custom
+        }, status_code=200)
 
     except HTTPException:
         raise
     except Exception as e:
+        if connection:
+            connection.rollback()
+            connection.close()
         raise HTTPException(status_code=500, detail=f"Failed to delete aspect: {str(e)}")
+
+@app.post("/api/aspects/{mat_aspect_id}/reinstate", tags=["Aspects"])
+async def reinstate_aspect(
+    mat_aspect_id: str,
+    current_mat_id: str = Depends(get_current_mat),
+    current_user: UserResponse = Depends(get_current_user)
+):
+    """
+    Reinstate a previously deactivated default aspect.
+    Only works for default aspects (is_custom = FALSE).
+    """
+    try:
+        connection = get_db_connection()
+        cursor = connection.cursor()
+
+        # Check if aspect exists and is deactivated
+        check_query = """
+            SELECT mat_aspect_id, is_custom, is_active
+            FROM mat_aspects
+            WHERE mat_aspect_id = %s AND mat_id = %s
+        """
+        cursor.execute(check_query, (mat_aspect_id, current_mat_id))
+        row = cursor.fetchone()
+
+        if not row:
+            connection.close()
+            raise HTTPException(status_code=404, detail="Aspect not found")
+
+        if row['is_active']:
+            connection.close()
+            raise HTTPException(status_code=400, detail="Aspect is already active")
+
+        if row['is_custom']:
+            connection.close()
+            raise HTTPException(
+                status_code=400,
+                detail="Custom aspects cannot be reinstated. Create a new aspect instead."
+            )
+
+        # Reinstate the aspect
+        cursor.execute("""
+            UPDATE mat_aspects
+            SET is_active = 1,
+                updated_at = NOW()
+            WHERE mat_aspect_id = %s AND mat_id = %s
+        """, (mat_aspect_id, current_mat_id))
+
+        connection.commit()
+        connection.close()
+
+        return JSONResponse(content={
+            "message": "Aspect reinstated successfully",
+            "mat_aspect_id": mat_aspect_id
+        }, status_code=200)
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        if connection:
+            connection.rollback()
+            connection.close()
+        raise HTTPException(status_code=500, detail=f"Failed to reinstate aspect: {str(e)}")
+
+@app.get("/api/aspects/inactive", response_model=List[MatAspectResponse], tags=["Aspects"])
+async def get_inactive_aspects(
+    current_mat_id: str = Depends(get_current_mat),
+    current_user: UserResponse = Depends(get_current_user)
+):
+    """
+    Get list of deactivated default aspects that can be reinstated.
+    Does not include archived custom aspects.
+    """
+    try:
+        connection = get_db_connection()
+        cursor = connection.cursor()
+
+        query = """
+            SELECT ma.mat_aspect_id,
+                   ma.mat_id,
+                   ma.aspect_code,
+                   ma.aspect_name,
+                   ma.aspect_description,
+                   ma.aspect_category,
+                   ma.sort_order,
+                   ma.is_custom,
+                   CASE WHEN ma.source_aspect_id IS NOT NULL AND
+                        (ma.aspect_name != COALESCE(da.aspect_name, '') OR
+                         ma.aspect_description != COALESCE(da.aspect_description, ''))
+                   THEN 1 ELSE 0 END as is_modified,
+                   (SELECT COUNT(*) FROM mat_standards ms
+                    WHERE ms.mat_aspect_id = ma.mat_aspect_id AND ms.is_active = TRUE) as standards_count
+            FROM mat_aspects ma
+            LEFT JOIN aspects da ON ma.source_aspect_id = da.aspect_id
+            WHERE ma.mat_id = %s
+              AND ma.is_active = FALSE
+              AND ma.is_custom = FALSE
+            ORDER BY ma.sort_order
+        """
+        cursor.execute(query, (current_mat_id,))
+        aspects = cursor.fetchall()
+
+        connection.close()
+        return aspects
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to fetch inactive aspects: {str(e)}")
 
 @app.get("/api/terms", tags=["Terms"])
 async def get_terms(academic_year: Optional[str] = None):
