@@ -97,21 +97,34 @@ export function useStandardsPersistence() {
         change_reason?: string;
     }) => {
         try {
-            console.log('[useStandardsPersistence] Updating standard:', standard);
+            console.log('[useStandardsPersistence] Updating standard:', {
+                mat_standard_id: standard.mat_standard_id,
+                standard_name: standard.standard_name,
+                has_standard_type: !!standard.standard_type,
+                change_reason: standard.change_reason
+            });
             
             // Validate mat_standard_id is present
             if (!standard.mat_standard_id) {
+                console.error('[useStandardsPersistence] Missing mat_standard_id!', standard);
                 throw new Error('Standard ID (mat_standard_id) is required for updating');
             }
             
+            const requestBody = {
+                standard_name: standard.standard_name,
+                standard_description: standard.standard_description,
+                ...(standard.standard_type && { standard_type: standard.standard_type }),
+                change_reason: standard.change_reason || 'Updated standard',
+            };
+            
+            console.log('[useStandardsPersistence] API call:', {
+                url: `/api/standards/${standard.mat_standard_id}`,
+                body: requestBody
+            });
+            
             await assessmentService.updateStandard(
                 standard.mat_standard_id,
-                {
-                    standard_name: standard.standard_name,
-                    standard_description: standard.standard_description,
-                    ...(standard.standard_type && { standard_type: standard.standard_type }),
-                    change_reason: standard.change_reason || 'Updated standard',
-                }
+                requestBody
             );
             
             // Reload standards to get updated version info

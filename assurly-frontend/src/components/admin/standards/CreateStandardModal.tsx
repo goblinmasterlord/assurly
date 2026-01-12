@@ -171,9 +171,19 @@ export function CreateStandardModal({ open, onOpenChange, onSave, standard, defa
         // Create a standard object from the form values (v3.0)
         const selectedAspect = aspects.find(a => a.mat_aspect_id === values.mat_aspect_id);
 
+        // CRITICAL: Preserve mat_standard_id from the original standard when editing
+        const matStandardId = standard?.mat_standard_id;
+
+        console.log('[CreateStandardModal] Submitting standard:', {
+            isEditing: !!standard,
+            mat_standard_id: matStandardId,
+            standard_code: values.standard_code,
+            standard_name: values.standard_name
+        });
+
         const standardData = {
             ...standard, // Keep existing fields if editing
-            mat_standard_id: standard?.mat_standard_id,
+            mat_standard_id: matStandardId, // Explicitly preserve the ID
             mat_aspect_id: values.mat_aspect_id,
             standard_code: values.standard_code,
             standard_name: values.standard_name,

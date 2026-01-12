@@ -173,6 +173,12 @@ export default function StandardsManagement() {
     };
 
     const handleEdit = (standard: Standard) => {
+        console.log('[StandardsManagement] Editing standard:', {
+            mat_standard_id: standard.mat_standard_id,
+            standard_code: standard.standard_code,
+            standard_name: standard.standard_name,
+            is_custom: standard.is_custom
+        });
         setEditingStandard(standard);
         setIsCreateModalOpen(true);
     };
@@ -190,17 +196,26 @@ export default function StandardsManagement() {
     const handleSaveStandard = async (standard: Standard) => {
         try {
             if (editingStandard) {
-                // Ensure we have mat_standard_id for the update
-                if (!standard.mat_standard_id && editingStandard.mat_standard_id) {
-                    standard.mat_standard_id = editingStandard.mat_standard_id;
-                }
+                // CRITICAL: Use editingStandard.mat_standard_id as the source of truth
+                const matStandardId = editingStandard.mat_standard_id || standard.mat_standard_id;
                 
-                if (!standard.mat_standard_id) {
-                    throw new Error('Standard ID is required for editing');
+                console.log('[StandardsManagement] Saving standard update:', {
+                    editingStandard_id: editingStandard.mat_standard_id,
+                    standard_id: standard.mat_standard_id,
+                    using_id: matStandardId,
+                    standard_name: standard.standard_name
+                });
+                
+                if (!matStandardId) {
+                    console.error('[StandardsManagement] No mat_standard_id found!', {
+                        editingStandard,
+                        standard
+                    });
+                    throw new Error('Standard ID is required for editing. Please refresh the page and try again.');
                 }
                 
                 await updateStandard({
-                    mat_standard_id: standard.mat_standard_id,
+                    mat_standard_id: matStandardId,
                     standard_name: standard.standard_name,
                     standard_description: standard.standard_description,
                     standard_type: standard.standard_type,
