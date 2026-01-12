@@ -366,6 +366,28 @@ export interface UpdateStandardResponse {
     previous_version_id: string;
 }
 
+export interface DeleteStandardResponse {
+    message: string;
+    mat_standard_id: string;
+    is_custom: boolean;
+    archived_as: string | null;
+    can_reinstate: boolean;
+}
+
+export interface DeleteAspectResponse {
+    message: string;
+    mat_aspect_id: string;
+    is_custom: boolean;
+    archived_as: string | null;
+    can_reinstate: boolean;
+}
+
+export interface ReinstateResponse {
+    message: string;
+    mat_standard_id?: string;
+    mat_aspect_id?: string;
+}
+
 // ============================================================================
 // Legacy Types (for backward compatibility during migration)
 // ============================================================================

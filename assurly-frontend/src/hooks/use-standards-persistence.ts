@@ -132,7 +132,7 @@ export function useStandardsPersistence() {
         try {
             console.log('[useStandardsPersistence] Deleting standard:', matStandardId);
             
-            await assessmentService.deleteStandard(matStandardId);
+            const result = await assessmentService.deleteStandard(matStandardId);
             
             // Update local state
             setStandards(prev => prev.filter(s => s.mat_standard_id !== matStandardId));
@@ -141,10 +141,19 @@ export function useStandardsPersistence() {
             const updatedAspects = await assessmentService.getAspects();
             setAspects(updatedAspects);
             
-            toast({
-                title: 'Standard deleted',
-                description: 'Successfully deleted standard',
-            });
+            if (result.can_reinstate) {
+                toast({
+                    title: 'Standard deactivated',
+                    description: 'Standard has been deactivated. You can reinstate it later from the inactive standards section.',
+                });
+            } else {
+                toast({
+                    title: 'Standard archived',
+                    description: 'Standard has been permanently archived.',
+                });
+            }
+            
+            return result;
         } catch (err) {
             console.error('[useStandardsPersistence] Failed to delete standard:', err);
             toast({
@@ -279,7 +288,7 @@ export function useStandardsPersistence() {
         try {
             console.log('[useStandardsPersistence] Deleting aspect:', matAspectId);
             
-            await assessmentService.deleteAspect(matAspectId);
+            const result = await assessmentService.deleteAspect(matAspectId);
             
             // Update local state
             setAspects(prev => prev.filter(a => a.mat_aspect_id !== matAspectId));
@@ -287,10 +296,19 @@ export function useStandardsPersistence() {
             // Also remove standards associated with this aspect
             setStandards(prev => prev.filter(s => s.mat_aspect_id !== matAspectId));
             
-            toast({
-                title: 'Aspect deleted',
-                description: 'Successfully deleted aspect',
-            });
+            if (result.can_reinstate) {
+                toast({
+                    title: 'Aspect deactivated',
+                    description: 'Aspect has been deactivated. You can reinstate it later from the inactive aspects section.',
+                });
+            } else {
+                toast({
+                    title: 'Aspect archived',
+                    description: 'Aspect has been permanently archived.',
+                });
+            }
+            
+            return result;
         } catch (err) {
             console.error('[useStandardsPersistence] Failed to delete aspect:', err);
             toast({

@@ -21,7 +21,10 @@ import type {
   AssessmentUpdate,
   AssessmentCreate,
   BulkUpdate,
-  StandardUpdate
+  StandardUpdate,
+  DeleteStandardResponse,
+  DeleteAspectResponse,
+  ReinstateResponse
 } from '@/types/assessment';
 
 // ============================================================================
@@ -240,14 +243,43 @@ export const createStandard = async (data: {
 
 /**
  * DELETE /api/standards/{mat_standard_id}
- * Delete a standard (soft delete)
+ * Delete a standard (deactivate default or archive custom)
  */
-export const deleteStandard = async (matStandardId: string): Promise<void> => {
+export const deleteStandard = async (matStandardId: string): Promise<DeleteStandardResponse> => {
   try {
-    await apiClient.delete(`/api/standards/${matStandardId}`);
+    const response = await apiClient.delete<DeleteStandardResponse>(`/api/standards/${matStandardId}`);
+    return response.data;
   } catch (error) {
     console.error(`Failed to delete standard ${matStandardId}:`, error);
     throw new Error('Failed to delete standard. Please try again.');
+  }
+};
+
+/**
+ * POST /api/standards/{mat_standard_id}/reinstate
+ * Reinstate a deactivated default standard
+ */
+export const reinstateStandard = async (matStandardId: string): Promise<ReinstateResponse> => {
+  try {
+    const response = await apiClient.post<ReinstateResponse>(`/api/standards/${matStandardId}/reinstate`);
+    return response.data;
+  } catch (error) {
+    console.error(`Failed to reinstate standard ${matStandardId}:`, error);
+    throw new Error('Failed to reinstate standard. Please try again.');
+  }
+};
+
+/**
+ * GET /api/standards/inactive
+ * Get all deactivated default standards
+ */
+export const getInactiveStandards = async (): Promise<Standard[]> => {
+  try {
+    const response = await apiClient.get<Standard[]>('/api/standards/inactive');
+    return response.data.map(transformStandard);
+  } catch (error) {
+    console.error('Failed to fetch inactive standards:', error);
+    throw new Error('Failed to load inactive standards. Please try again.');
   }
 };
 
@@ -351,14 +383,43 @@ export const updateAspect = async (
 
 /**
  * DELETE /api/aspects/{mat_aspect_id}
- * Delete an aspect (soft delete)
+ * Delete an aspect (deactivate default or archive custom)
  */
-export const deleteAspect = async (matAspectId: string): Promise<void> => {
+export const deleteAspect = async (matAspectId: string): Promise<DeleteAspectResponse> => {
   try {
-    await apiClient.delete(`/api/aspects/${matAspectId}`);
+    const response = await apiClient.delete<DeleteAspectResponse>(`/api/aspects/${matAspectId}`);
+    return response.data;
   } catch (error) {
     console.error(`Failed to delete aspect ${matAspectId}:`, error);
     throw new Error('Failed to delete aspect. Please try again.');
+  }
+};
+
+/**
+ * POST /api/aspects/{mat_aspect_id}/reinstate
+ * Reinstate a deactivated default aspect
+ */
+export const reinstateAspect = async (matAspectId: string): Promise<ReinstateResponse> => {
+  try {
+    const response = await apiClient.post<ReinstateResponse>(`/api/aspects/${matAspectId}/reinstate`);
+    return response.data;
+  } catch (error) {
+    console.error(`Failed to reinstate aspect ${matAspectId}:`, error);
+    throw new Error('Failed to reinstate aspect. Please try again.');
+  }
+};
+
+/**
+ * GET /api/aspects/inactive
+ * Get all deactivated default aspects
+ */
+export const getInactiveAspects = async (): Promise<Aspect[]> => {
+  try {
+    const response = await apiClient.get<Aspect[]>('/api/aspects/inactive');
+    return response.data.map(transformAspect);
+  } catch (error) {
+    console.error('Failed to fetch inactive aspects:', error);
+    throw new Error('Failed to load inactive aspects. Please try again.');
   }
 };
 

@@ -73,7 +73,7 @@ export default function StandardsManagement() {
     const [searchQuery, setSearchQuery] = useState('');
     const [aspectCategoryFilter, setAspectCategoryFilter] = useState<'all' | 'ofsted' | 'operational'>('all');
     const [standardTypeFilter, setStandardTypeFilter] = useState<'all' | 'assurance' | 'risk'>('all');
-    const [aspectSortBy, setAspectSortBy] = useState<'name' | 'category'>('name');
+    const [aspectSortBy, setAspectSortBy] = useState<'name' | 'category'>('category');
     const [aspectSortOrder, setAspectSortOrder] = useState<'asc' | 'desc'>('asc');
     const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
     const [isAspectModalOpen, setIsAspectModalOpen] = useState(false);
@@ -83,7 +83,7 @@ export default function StandardsManagement() {
     const [editingAspect, setEditingAspect] = useState<Aspect | undefined>(undefined);
     const [historyStandard, setHistoryStandard] = useState<Standard | null>(null);
     const [deleteModalOpen, setDeleteModalOpen] = useState(false);
-    const [itemToDelete, setItemToDelete] = useState<{ type: 'aspect' | 'standard', id: string, name: string } | null>(null);
+    const [itemToDelete, setItemToDelete] = useState<{ type: 'aspect' | 'standard', id: string, name: string, isCustom?: boolean } | null>(null);
 
     const sensors = useSensors(
         useSensor(PointerSensor),
@@ -244,7 +244,12 @@ export default function StandardsManagement() {
     const handleDeleteAspect = (id: string) => {
         const aspectToDelete = aspects.find(a => a.mat_aspect_id === id);
         if (aspectToDelete) {
-            setItemToDelete({ type: 'aspect', id, name: aspectToDelete.aspect_name });
+            setItemToDelete({ 
+                type: 'aspect', 
+                id, 
+                name: aspectToDelete.aspect_name,
+                isCustom: aspectToDelete.is_custom
+            });
             setDeleteModalOpen(true);
         }
     };
@@ -257,7 +262,12 @@ export default function StandardsManagement() {
     const handleDeleteStandard = (id: string) => {
         const standardToDelete = standards.find(s => s.mat_standard_id === id);
         if (standardToDelete) {
-            setItemToDelete({ type: 'standard', id, name: standardToDelete.standard_code });
+            setItemToDelete({ 
+                type: 'standard', 
+                id, 
+                name: standardToDelete.standard_code,
+                isCustom: standardToDelete.is_custom
+            });
             setDeleteModalOpen(true);
         }
     };
@@ -567,6 +577,8 @@ export default function StandardsManagement() {
                     ? 'Are you sure you want to delete this aspect? All associated standards will be hidden.'
                     : 'Are you sure you want to delete this standard? This action cannot be undone.'}
                 itemName={itemToDelete?.name}
+                isCustom={itemToDelete?.isCustom}
+                itemType={itemToDelete?.type}
             />
         </div>
     );
