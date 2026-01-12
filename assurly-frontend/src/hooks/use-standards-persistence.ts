@@ -99,6 +99,11 @@ export function useStandardsPersistence() {
         try {
             console.log('[useStandardsPersistence] Updating standard:', standard);
             
+            // Validate mat_standard_id is present
+            if (!standard.mat_standard_id) {
+                throw new Error('Standard ID (mat_standard_id) is required for updating');
+            }
+            
             await assessmentService.updateStandard(
                 standard.mat_standard_id,
                 {

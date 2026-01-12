@@ -36,6 +36,7 @@ import { CreateStandardModal } from '@/components/admin/standards/CreateStandard
 import { CreateAspectModal } from '@/components/admin/standards/CreateAspectModal';
 import { DeleteConfirmationModal } from '@/components/admin/standards/DeleteConfirmationModal';
 import { VersionHistoryModal } from '@/components/admin/standards/VersionHistoryModal';
+import { InactiveStandardsModal } from '@/components/admin/standards/InactiveStandardsModal';
 import {
     DndContext,
     closestCenter,
@@ -66,7 +67,8 @@ export default function StandardsManagement() {
         addAspect,
         updateAspect,
         deleteAspect,
-        isLoading
+        isLoading,
+        resetToDefaults
     } = useStandardsPersistence();
 
     const [selectedAspect, setSelectedAspect] = useState<Aspect | undefined>(undefined);
@@ -78,6 +80,7 @@ export default function StandardsManagement() {
     const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
     const [isAspectModalOpen, setIsAspectModalOpen] = useState(false);
     const [isHistoryModalOpen, setIsHistoryModalOpen] = useState(false);
+    const [isInactiveStandardsModalOpen, setIsInactiveStandardsModalOpen] = useState(false);
     const [isEditAspectDropdownOpen, setIsEditAspectDropdownOpen] = useState(false);
     const [editingStandard, setEditingStandard] = useState<Standard | undefined>(undefined);
     const [editingAspect, setEditingAspect] = useState<Aspect | undefined>(undefined);
@@ -187,7 +190,22 @@ export default function StandardsManagement() {
     const handleSaveStandard = async (standard: Standard) => {
         try {
             if (editingStandard) {
-                await updateStandard(standard);
+                // Ensure we have mat_standard_id for the update
+                if (!standard.mat_standard_id && editingStandard.mat_standard_id) {
+                    standard.mat_standard_id = editingStandard.mat_standard_id;
+                }
+                
+                if (!standard.mat_standard_id) {
+                    throw new Error('Standard ID is required for editing');
+                }
+                
+                await updateStandard({
+                    mat_standard_id: standard.mat_standard_id,
+                    standard_name: standard.standard_name,
+                    standard_description: standard.standard_description,
+                    standard_type: standard.standard_type,
+                    change_reason: (standard as any).change_reason || 'Updated standard',
+                });
             } else {
                 // Get all standards for this aspect to calculate next sort_order
                 const aspectStandards = standards.filter(s => 
@@ -359,9 +377,13 @@ export default function StandardsManagement() {
                             )}
                         </DropdownMenuContent>
                     </DropdownMenu>
-                    <Button variant="outline">
-                        <History className="mr-2 h-4 w-4" />
-                        Audit Log
+                    <Button 
+                        variant="outline" 
+                        size="icon"
+                        title="View Inactive Standards"
+                        onClick={() => setIsInactiveStandardsModalOpen(true)}
+                    >
+                        <History className="h-4 w-4" />
                     </Button>
                     <Button onClick={handleCreate}>
                         <Plus className="mr-2 h-4 w-4" />
@@ -579,6 +601,15 @@ export default function StandardsManagement() {
                 itemName={itemToDelete?.name}
                 isCustom={itemToDelete?.isCustom}
                 itemType={itemToDelete?.type}
+            />
+
+            <InactiveStandardsModal
+                open={isInactiveStandardsModalOpen}
+                onOpenChange={setIsInactiveStandardsModalOpen}
+                onReinstated={async () => {
+                    // Refresh standards and aspects list
+                    await resetToDefaults();
+                }}
             />
         </div>
     );
