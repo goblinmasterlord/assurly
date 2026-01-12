@@ -96,13 +96,30 @@ export default function StandardsManagement() {
     );
 
     // Update selected aspect if it was removed or if aspects changed initially
+    // Also update selected aspect with fresh data when aspects are reloaded
     useEffect(() => {
         if (aspects.length > 0 && !selectedAspect) {
             setSelectedAspect(aspects[0]);
-        } else if (selectedAspect && !aspects.find(a => a.mat_aspect_id === selectedAspect.mat_aspect_id)) {
-            setSelectedAspect(aspects[0]);
+        } else if (selectedAspect) {
+            const updatedAspect = aspects.find(a => a.mat_aspect_id === selectedAspect.mat_aspect_id);
+            if (updatedAspect) {
+                // Update selected aspect with fresh data to reflect any changes
+                // Only update if key fields changed to avoid unnecessary re-renders
+                const hasChanged = 
+                    updatedAspect.aspect_name !== selectedAspect.aspect_name ||
+                    updatedAspect.aspect_description !== selectedAspect.aspect_description ||
+                    updatedAspect.aspect_category !== selectedAspect.aspect_category;
+                
+                if (hasChanged) {
+                    setSelectedAspect(updatedAspect);
+                }
+            } else {
+                // Aspect was deleted, select first available
+                setSelectedAspect(aspects[0]);
+            }
         }
-    }, [aspects, selectedAspect]);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [aspects]); // Only depend on aspects to avoid loops, selectedAspect is checked inside
 
     if (isLoading) {
         return <div className="flex items-center justify-center h-screen">Loading...</div>;
@@ -251,6 +268,17 @@ export default function StandardsManagement() {
         try {
             if (editingAspect) {
                 await updateAspect(aspect);
+                // Update selected aspect if it was the one being edited
+                if (currentAspect.mat_aspect_id === aspect.mat_aspect_id) {
+                    // The hook will reload aspects, but we need to update the selected aspect
+                    // Wait a bit for the hook to finish reloading, then update selection
+                    setTimeout(() => {
+                        const updatedAspect = aspects.find(a => a.mat_aspect_id === aspect.mat_aspect_id);
+                        if (updatedAspect) {
+                            setSelectedAspect(updatedAspect);
+                        }
+                    }, 100);
+                }
             } else {
                 await addAspect(aspect);
             }

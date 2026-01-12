@@ -127,9 +127,13 @@ export function useStandardsPersistence() {
                 requestBody
             );
             
-            // Reload standards to get updated version info
-            const updatedStandards = await assessmentService.getStandards();
+            // Reload both standards and aspects to get updated data
+            const [updatedStandards, updatedAspects] = await Promise.all([
+                assessmentService.getStandards(),
+                assessmentService.getAspects()
+            ]);
             setStandards(updatedStandards);
+            setAspects(updatedAspects);
             
             toast({
                 title: 'Standard updated',
@@ -283,9 +287,13 @@ export function useStandardsPersistence() {
                 }
             );
             
-            // Reload aspects
-            const updatedAspects = await assessmentService.getAspects();
+            // Reload both aspects and standards (standards might have changed counts)
+            const [updatedAspects, updatedStandards] = await Promise.all([
+                assessmentService.getAspects(),
+                assessmentService.getStandards()
+            ]);
             setAspects(updatedAspects);
+            setStandards(updatedStandards);
             
             toast({
                 title: 'Aspect updated',

@@ -241,14 +241,16 @@ export class EnhancedAssessmentService {
     data: {
       standard_name: string;
       standard_description: string;
+      standard_type?: 'assurance' | 'risk';
       change_reason?: string;
     }
   ): Promise<void> {
     await apiUpdateStandard(matStandardId, data);
     
-    // Invalidate caches
+    // Invalidate all relevant caches to force fresh data
     requestCache.invalidate('standards');
     requestCache.invalidate('standard_detail', { id: matStandardId });
+    requestCache.invalidate('aspects'); // Standards count might have changed
   }
 
   /**
@@ -336,14 +338,16 @@ export class EnhancedAssessmentService {
     data: {
       aspect_name: string;
       aspect_description: string;
+      aspect_category?: 'ofsted' | 'operational';
       sort_order: number;
     }
   ): Promise<void> {
     await apiUpdateAspect(matAspectId, data);
     
-    // Invalidate caches
+    // Invalidate all relevant caches to force fresh data
     requestCache.invalidate('aspects');
     requestCache.invalidate('aspect_detail', { id: matAspectId });
+    requestCache.invalidate('standards'); // Aspect changes might affect standards display
   }
 
   /**
