@@ -398,12 +398,12 @@ export default function StandardsManagement() {
                                                 {count} standard{count !== 1 ? 's' : ''}
                                             </span>
                                             {aspect.aspect_category && (
-                                                <AspectCategoryBadge category={aspect.aspect_category} className="text-[10px] h-4 px-1 flex-shrink-0" />
+                                                <AspectCategoryBadge category={aspect.aspect_category} className="text-[10px] h-5 px-1.5 py-0.5 flex-shrink-0" />
                                             )}
                                             {aspect.is_custom ? (
-                                                <Badge variant="secondary" className="text-[10px] h-4 px-1 flex-shrink-0">Custom</Badge>
+                                                <Badge variant="secondary" className="text-[10px] h-5 px-1.5 py-0.5 flex-shrink-0">Custom</Badge>
                                             ) : (
-                                                <Badge variant="outline" className="text-[10px] h-4 px-1 text-muted-foreground flex-shrink-0">Default</Badge>
+                                                <Badge variant="outline" className="text-[10px] h-5 px-1.5 py-0.5 text-muted-foreground flex-shrink-0">Default</Badge>
                                             )}
                                         </div>
                                     </button>
