@@ -1,6 +1,8 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { assessmentService } from '@/services/enhanced-assessment-service';
-import type { Assessment, AssessmentCategory, AcademicTerm, AcademicYear, School, Standard, Rating } from '@/types/assessment';
+import { getAssessmentsByAspect } from '@/services/assessment-service';
+import { parseGroupId } from '@/lib/data-transformers';
+import type { Assessment, AssessmentCategory, AcademicTerm, AcademicYear, School, Standard, Rating, AssessmentByAspect } from '@/types/assessment';
 
 // Hook for managing assessments list
 export function useAssessments() {
@@ -66,6 +68,83 @@ export function useAssessments() {
   };
 }
 
+// Helper function to detect if an ID is a group_id (aspect-level) vs assessment_id (standard-level)
+function isGroupId(id: string): boolean {
+  try {
+    const parsed = parseGroupId(id);
+    // Valid aspect codes are typically 2-3 uppercase letters (EDU, HR, FIN, GOV, IT, IS, EST)
+    // Standard codes typically have numbers (ES1, HR2, etc.)
+    const aspectCodePattern = /^[A-Z]{2,3}$/;
+    return aspectCodePattern.test(parsed.aspectCode);
+  } catch {
+    return false;
+  }
+}
+
+// Transform AssessmentByAspect to Assessment format for compatibility
+function transformAssessmentByAspectToAssessment(data: AssessmentByAspect): Assessment {
+  return {
+    id: `${data.school_id}-${data.aspect_code}-${data.term_id}-${data.academic_year}`,
+    assessment_id: `${data.school_id}-${data.aspect_code}-${data.term_id}-${data.academic_year}`,
+    school_id: data.school_id,
+    school_name: data.school_name,
+    mat_aspect_id: data.mat_aspect_id,
+    aspect_code: data.aspect_code,
+    aspect_name: data.aspect_name,
+    unique_term_id: `${data.term_id}-${data.academic_year}`,
+    academic_year: data.academic_year,
+    rating: null,
+    evidence_comments: null,
+    status: data.status,
+    due_date: null,
+    assigned_to: null,
+    assigned_to_name: null,
+    submitted_at: null,
+    submitted_by: null,
+    submitted_by_name: null,
+    last_updated: new Date().toISOString(),
+    mat_standard_id: '',
+    standard_code: '',
+    standard_name: data.aspect_name,
+    standard_description: '',
+    version_id: '',
+    version_number: 1,
+    // Transform standards array for the detail page
+    // Include assessment_id from the API response - this is the correct ID to use
+    standards: data.standards.map(std => ({
+      id: std.mat_standard_id,
+      mat_standard_id: std.mat_standard_id,
+      standard_code: std.standard_code,
+      standard_name: std.standard_name,
+      standard_description: std.standard_description,
+      standard_type: std.standard_type,
+      sort_order: std.sort_order,
+      rating: std.rating,
+      evidence: std.evidence_comments || '',
+      code: std.standard_code,
+      title: std.standard_name,
+      description: std.standard_description,
+      // Store the assessment_id for submission - this is the key fix!
+      // Use type assertion since Standard interface doesn't include assessment_id
+      assessment_id: std.assessment_id,
+    } as Standard & { assessment_id?: string })),
+    // Backward compatibility fields
+    name: `${data.aspect_name} - ${data.school_name}`,
+    category: data.aspect_code.toLowerCase() as AssessmentCategory,
+    school: {
+      school_id: data.school_id,
+      school_name: data.school_name,
+      id: data.school_id,
+      name: data.school_name,
+    },
+    completedStandards: data.completed_standards,
+    totalStandards: data.total_standards,
+    lastUpdated: new Date().toISOString(),
+    dueDate: undefined,
+    assignedTo: [],
+  };
+}
+
 // Hook for managing a single assessment
 export function useAssessment(assessmentId: string | undefined) {
   const [assessment, setAssessment] = useState<Assessment | null>(null);
@@ -75,7 +154,7 @@ export function useAssessment(assessmentId: string | undefined) {
   const [isRefreshing, setIsRefreshing] = useState(false);
   const unsubscribeRef = useRef<(() => void) | null>(null);
 
-  // Load single assessment
+  // Load single assessment - handles both assessment_id and group_id
   const loadAssessment = useCallback(async (showLoading = true) => {
     if (!assessmentId) {
       setIsLoading(false);
@@ -88,8 +167,23 @@ export function useAssessment(assessmentId: string | undefined) {
       }
       setError(null);
       
-      const data = await assessmentService.getAssessmentById(assessmentId);
-      setAssessment(data);
+      // Check if this is a group_id (aspect-level) or assessment_id (standard-level)
+      if (isGroupId(assessmentId)) {
+        // Parse group_id and use by-aspect endpoint
+        const parsed = parseGroupId(assessmentId);
+        const uniqueTermId = `${parsed.termId}-${parsed.academicYear}`;
+        const aspectData = await getAssessmentsByAspect(
+          parsed.aspectCode,
+          parsed.schoolId,
+          uniqueTermId
+        );
+        const transformed = transformAssessmentByAspectToAssessment(aspectData);
+        setAssessment(transformed);
+      } else {
+        // Use standard assessment endpoint
+        const data = await assessmentService.getAssessmentById(assessmentId);
+        setAssessment(data);
+      }
     } catch (err: any) {
       const errorMessage = err.userMessage || err.message || 'Failed to load assessment';
       setError(errorMessage);
@@ -119,12 +213,44 @@ export function useAssessment(assessmentId: string | undefined) {
     setError(null);
 
     try {
-      // Transform to v4 format
-      const updates = standards.map(s => ({
-        assessment_id: s.standardId,
-        rating: s.rating,
-        evidence_comments: s.evidence
-      }));
+      // For aspect-based assessments, we need to get the actual assessment_id from each standard
+      // The standardId might be mat_standard_id, but we need the assessment_id from the API response
+      let updates;
+      
+      if (isGroupId(assessmentId) && assessment?.standards) {
+        // Map standard IDs to their assessment_ids from the API response
+        updates = standards.map(s => {
+          const standard = assessment.standards?.find(std => 
+            std.mat_standard_id === s.standardId || std.id === s.standardId
+          );
+          // Use the assessment_id from the API response - this is the correct ID
+          // If assessment_id is not available (new assessment), we'll need to construct it
+          // Format: {school_id}-{standard_code}-{term_id}-{academic_year}
+          // Type assertion needed since Standard type doesn't include assessment_id
+          const standardWithId = standard as (Standard & { assessment_id?: string }) | undefined;
+          let targetAssessmentId = standardWithId?.assessment_id;
+          
+          if (!targetAssessmentId && standard) {
+            // Construct assessment_id if not provided (for new assessments)
+            const parsed = parseGroupId(assessmentId);
+            targetAssessmentId = `${parsed.schoolId}-${standard.standard_code}-${parsed.termId}-${parsed.academicYear}`;
+          }
+          
+          return {
+            assessment_id: targetAssessmentId || s.standardId,
+            rating: s.rating,
+            evidence_comments: s.evidence
+          };
+        });
+      } else {
+        // For single standard assessments, use the standardId directly
+        updates = standards.map(s => ({
+          assessment_id: s.standardId,
+          rating: s.rating,
+          evidence_comments: s.evidence
+        }));
+      }
+      
       await assessmentService.bulkUpdateAssessments(updates);
       console.log('✅ Assessment submitted successfully');
     } catch (err: any) {
@@ -134,7 +260,7 @@ export function useAssessment(assessmentId: string | undefined) {
     } finally {
       setIsSaving(false);
     }
-  }, [assessmentId]);
+  }, [assessmentId, assessment]);
 
   // Subscribe to real-time updates
   useEffect(() => {
