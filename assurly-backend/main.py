@@ -719,26 +719,20 @@ async def get_assessments(
 ):
     """
     Get assessment summaries grouped by school, aspect, and term.
-
-    Query Parameters:
-    - school_id: Filter by school (e.g., "cedar-park-primary")
-    - aspect_code: Filter by aspect (e.g., "EDU", "HR")
-    - term_id: Filter by term (e.g., "T1", "T2")
-    - academic_year: Filter by year (e.g., "2024-25")
-    - status: Filter by status
     """
     try:
         connection = get_db_connection()
         cursor = connection.cursor()
 
         # Group assessments by school + aspect + term
+        # Use UPPER() on aspect_code to ensure consistent group_id format
         query = """
             SELECT
-                CONCAT(s.school_id, '-', ma.aspect_code, '-', a.unique_term_id) as group_id,
+                CONCAT(s.school_id, '-', UPPER(ma.aspect_code), '-', a.unique_term_id) as group_id,
                 s.school_id,
                 s.school_name,
                 ma.mat_aspect_id,
-                ma.aspect_code,
+                UPPER(ma.aspect_code) as aspect_code,
                 ma.aspect_name,
                 SUBSTRING(a.unique_term_id, 1, 2) as term_id,
                 a.academic_year,
@@ -764,7 +758,7 @@ async def get_assessments(
             params.append(school_id)
 
         if aspect_code:
-            query += " AND ma.aspect_code = %s"
+            query += " AND UPPER(ma.aspect_code) = UPPER(%s)"
             params.append(aspect_code)
 
         if term_id:
@@ -1347,13 +1341,11 @@ async def update_standard(
         connection = get_db_connection()
         cursor = connection.cursor()
 
-        # Get current version info
+        # Get current standard info
         cursor.execute("""
             SELECT ms.current_version_id, ms.standard_code, ms.standard_name,
-                   ms.standard_description, ms.standard_type, ms.is_active,
-                   COALESCE(sv.version_number, 0) as version_number
+                   ms.standard_description, ms.standard_type, ms.is_active
             FROM mat_standards ms
-            LEFT JOIN standard_versions sv ON ms.current_version_id = sv.version_id
             WHERE ms.mat_standard_id = %s AND ms.mat_id = %s
         """, (mat_standard_id, current_mat_id))
 
@@ -1379,9 +1371,14 @@ async def update_standard(
         new_type = update_data.get('standard_type', old_type)
         change_reason = update_data.get('change_reason', '')
 
-        # Determine new version number
-        current_version_num = current['version_number'] if current['version_number'] else 0
-        new_version_num = current_version_num + 1
+        # Get MAX version number from ALL versions (not just current)
+        cursor.execute("""
+            SELECT COALESCE(MAX(version_number), 0) as max_version
+            FROM standard_versions
+            WHERE mat_standard_id = %s
+        """, (mat_standard_id,))
+        max_version_row = cursor.fetchone()
+        new_version_num = max_version_row['max_version'] + 1
         new_version_id = f"{mat_standard_id}-v{new_version_num}"
 
         # Close old version if it exists
@@ -1854,15 +1851,16 @@ async def create_aspect(
 ):
     """
     Create a new MAT-specific aspect.
-    Can either create a custom aspect or copy from default aspects (copy-on-write).
-    Requires authentication.
     """
     try:
         connection = get_db_connection()
         cursor = connection.cursor()
 
-        # Generate new mat_aspect_id
-        mat_aspect_id = str(uuid.uuid4())
+        # Uppercase the aspect_code for consistency
+        aspect_code_upper = aspect.aspect_code.upper()
+
+        # Generate human-readable mat_aspect_id: {MAT}-{CODE}
+        mat_aspect_id = f"{current_mat_id}-{aspect_code_upper}"
 
         # If copying from source aspect, verify it exists
         if aspect.source_aspect_id:
@@ -1880,27 +1878,27 @@ async def create_aspect(
         # Check if aspect_code already exists for this MAT
         check_query = """
             SELECT mat_aspect_id FROM mat_aspects
-            WHERE mat_id = %s AND aspect_code = %s AND is_active = 1
+            WHERE mat_id = %s AND UPPER(aspect_code) = %s AND is_active = 1
         """
-        cursor.execute(check_query, (current_mat_id, aspect.aspect_code))
+        cursor.execute(check_query, (current_mat_id, aspect_code_upper))
         if cursor.fetchone():
             connection.close()
             raise HTTPException(
                 status_code=status.HTTP_409_CONFLICT,
-                detail=f"Aspect with code '{aspect.aspect_code}' already exists for your MAT"
+                detail=f"Aspect with code '{aspect_code_upper}' already exists for your MAT"
             )
 
-        # Insert new MAT aspect
+        # Insert new MAT aspect with uppercase code
         insert_query = """
             INSERT INTO mat_aspects
             (mat_aspect_id, mat_id, aspect_code, aspect_name, aspect_description,
-             aspect_category, sort_order, source_aspect_id, is_active, created_at, updated_at)
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, 1, NOW(), NOW())
+             aspect_category, sort_order, source_aspect_id, is_custom, is_active, created_at, updated_at)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, 1, 1, NOW(), NOW())
         """
         cursor.execute(insert_query, (
             mat_aspect_id,
             current_mat_id,
-            aspect.aspect_code,
+            aspect_code_upper,  # Store uppercase
             aspect.aspect_name,
             aspect.aspect_description,
             aspect.aspect_category,
@@ -1908,11 +1906,13 @@ async def create_aspect(
             aspect.source_aspect_id
         ))
 
+        connection.commit()
+
         # Fetch the created aspect
         fetch_query = """
-            SELECT mat_aspect_id, aspect_code, aspect_name, aspect_description,
-                   aspect_category, sort_order, mat_id, source_aspect_id,
-                   CASE WHEN source_aspect_id IS NULL THEN 1 ELSE 0 END as is_custom,
+            SELECT mat_aspect_id, mat_id, aspect_code, aspect_name, aspect_description,
+                   aspect_category, sort_order, source_aspect_id,
+                   is_custom,
                    0 as is_modified,
                    0 as standards_count
             FROM mat_aspects
