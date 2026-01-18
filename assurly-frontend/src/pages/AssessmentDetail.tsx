@@ -467,11 +467,28 @@ export function AssessmentDetailPage() {
         return;
       }
 
-      await submitAssessment(standards.map(s => ({
-        assessment_id: id!,
-        rating: s.rating,
-        evidence_comments: s.evidence
-      })));
+      // Use the assessment_id from each standard, not the group_id from URL
+      // The assessment.standards array contains the correct assessment_id for each standard
+      await submitAssessment(standards.map(s => {
+        const standard = assessment.standards?.find(std => 
+          std.mat_standard_id === s.standardId || std.id === s.standardId
+        );
+        // Get assessment_id from the standard (from API response) or construct it
+        const standardWithId = standard as (Standard & { assessment_id?: string }) | undefined;
+        let assessmentId = standardWithId?.assessment_id;
+        
+        // If assessment_id not available, construct it: school-standard-term-year
+        if (!assessmentId && standard && assessment) {
+          const termId = assessment.unique_term_id || id!.split('-').slice(-2).join('-');
+          assessmentId = `${assessment.school_id}-${standard.standard_code}-${termId}`;
+        }
+        
+        return {
+          assessment_id: assessmentId || s.standardId,
+          rating: s.rating,
+          evidence_comments: s.evidence
+        };
+      }));
       
       // Force refresh of assessments cache to ensure immediate updates
       await assessmentService.refreshAllData();
@@ -516,11 +533,28 @@ export function AssessmentDetailPage() {
         evidence: evidence[standardId] || '',
       }));
 
-      await submitAssessment(standards.map(s => ({
-        assessment_id: id!,
-        rating: s.rating,
-        evidence_comments: s.evidence
-      })));
+      // Use the assessment_id from each standard, not the group_id from URL
+      // The assessment.standards array contains the correct assessment_id for each standard
+      await submitAssessment(standards.map(s => {
+        const standard = assessment.standards?.find(std => 
+          std.mat_standard_id === s.standardId || std.id === s.standardId
+        );
+        // Get assessment_id from the standard (from API response) or construct it
+        const standardWithId = standard as (Standard & { assessment_id?: string }) | undefined;
+        let assessmentId = standardWithId?.assessment_id;
+        
+        // If assessment_id not available, construct it: school-standard-term-year
+        if (!assessmentId && standard && assessment) {
+          const termId = assessment.unique_term_id || id!.split('-').slice(-2).join('-');
+          assessmentId = `${assessment.school_id}-${standard.standard_code}-${termId}`;
+        }
+        
+        return {
+          assessment_id: assessmentId || s.standardId,
+          rating: s.rating,
+          evidence_comments: s.evidence
+        };
+      }));
       
       // Force refresh of assessments cache to ensure immediate updates
       await assessmentService.refreshAllData();
