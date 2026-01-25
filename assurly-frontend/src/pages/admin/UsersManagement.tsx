@@ -24,6 +24,7 @@ import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/contexts/AuthContext";
 import { getSchools } from "@/services/assessment-service";
+import { getUsers, createUser, deleteUser } from "@/services/users-service";
 import type { School, User } from "@/types/assessment";
 import { cn } from "@/lib/utils";
 import {
@@ -73,18 +74,7 @@ export default function UsersManagement() {
         setLoading(true);
         
         // Fetch users from API - include inactive if toggle is on
-        const usersUrl = showInactive ? "/api/users?include_inactive=true" : "/api/users";
-        const usersResponse = await fetch(usersUrl, {
-          headers: {
-            Authorization: `Bearer ${localStorage.getItem("token")}`,
-          },
-        });
-        
-        if (!usersResponse.ok) {
-          throw new Error("Failed to fetch users");
-        }
-        
-        const usersData = await usersResponse.json();
+        const usersData = await getUsers(showInactive);
         setUsers(usersData);
 
         // Fetch schools
@@ -126,27 +116,14 @@ export default function UsersManagement() {
 
     setSubmitting(true);
     try {
-      const response = await fetch("/api/users", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${localStorage.getItem("token")}`,
-        },
-        body: JSON.stringify({
-          email: newUser.email,
-          full_name: newUser.full_name,
-          role_title: newUser.role_title,
-          school_id: newUser.school_id || null,
-          mat_id: currentUser?.mat_id,
-        }),
+      const addedUser = await createUser({
+        email: newUser.email,
+        full_name: newUser.full_name,
+        role_title: newUser.role_title,
+        school_id: newUser.school_id || null,
+        mat_id: currentUser?.mat_id,
       });
 
-      if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.detail || "Failed to add user");
-      }
-
-      const addedUser = await response.json();
       setUsers([...users, addedUser]);
       
       toast({
@@ -174,17 +151,7 @@ export default function UsersManagement() {
 
     setSubmitting(true);
     try {
-      const response = await fetch(`/api/users/${selectedUser.user_id}`, {
-        method: "DELETE",
-        headers: {
-          Authorization: `Bearer ${localStorage.getItem("token")}`,
-        },
-      });
-
-      if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.detail || "Failed to deactivate user");
-      }
+      await deleteUser(selectedUser.user_id);
 
       // Update the user in the list to show as inactive
       setUsers(users.map(u => 
