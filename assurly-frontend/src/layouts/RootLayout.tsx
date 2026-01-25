@@ -1,9 +1,10 @@
 import { Link, Outlet, useLocation, useNavigate } from "react-router-dom";
 import { RoleSwitcher } from "@/components/RoleSwitcher";
+import { ProfileDropdown } from "@/components/ProfileDropdown";
 import { Button } from "@/components/ui/button";
 import { useUser } from "@/contexts/UserContext";
 import { useAuth } from "@/contexts/AuthContext";
-import { ClipboardList, LogIn, LogOut, User, BarChart3, FileDown } from "lucide-react";
+import { ClipboardList, LogIn, BarChart3, FileDown, Users } from "lucide-react";
 import { TopLoader } from "@/components/ui/top-loader";
 import { KeyboardHint } from "@/components/ui/keyboard-hint";
 import { useState, useEffect } from "react";
@@ -26,7 +27,7 @@ export function RootLayout() {
   // Redirect Department Heads away from restricted pages
   useEffect(() => {
     if (role === 'department-head' && user) {
-      const restrictedPaths = ['/app/analytics', '/app/export', '/app/standards-management'];
+      const restrictedPaths = ['/app/analytics', '/app/export', '/app/admin/standards', '/app/admin/users'];
       const isOnRestrictedPath = restrictedPaths.some(path => location.pathname.startsWith(path));
       
       if (isOnRestrictedPath) {
@@ -73,31 +74,25 @@ export function RootLayout() {
                       Standards
                     </Link>
                   </Button>
+                  <Button variant="link" size="sm" asChild>
+                    <Link to="/app/admin/users" className="flex items-center">
+                      <Users className="mr-1 h-4 w-4" />
+                      Users
+                    </Link>
+                  </Button>
                 </>
               )}
             </nav>
           </div>
           <div className="flex items-center space-x-4">
-            {/* User info and actions */}
+            {/* Role switcher for development */}
             {user && (
-              <div className="flex items-center space-x-3">
-                <div className="hidden md:flex items-center space-x-2 text-sm text-muted-foreground">
-                  <User className="h-4 w-4" />
-                  <span>{user.email}</span>
-                  <RoleSwitcher />
-                </div>
-                <Button
-                  size="sm"
-                  variant="outline"
-                  onClick={() => logout()}
-                  className="flex items-center gap-2"
-                >
-                  <LogOut className="h-4 w-4" />
-                  <span className="hidden md:inline">Sign out</span>
-                </Button>
+              <div className="hidden md:block">
+                <RoleSwitcher />
               </div>
             )}
 
+            {/* Data Management Portal Button */}
             <Button size="sm" asChild>
               <a
                 href="https://app.goconfigur.com"
@@ -109,6 +104,9 @@ export function RootLayout() {
                 <span className="hidden md:inline">Data Management Portal</span>
               </a>
             </Button>
+
+            {/* Profile Dropdown - rightmost */}
+            {user && <ProfileDropdown />}
           </div>
         </div >
       </header >

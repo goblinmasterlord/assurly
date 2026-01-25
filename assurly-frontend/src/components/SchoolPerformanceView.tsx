@@ -59,7 +59,7 @@ import {
   Loader2
 } from "lucide-react";
 import { AssessmentInvitationSheet } from "@/components/AssessmentInvitationSheet";
-import { MiniTrendChart, type TrendDataPoint } from "@/components/ui/mini-trend-chart";
+import { EnhancedTrendChart, type TrendDataPoint } from "@/components/ui/enhanced-trend-chart";
 import { 
   SchoolPerformanceTableSkeleton, 
   FilterBarSkeleton, 
@@ -276,12 +276,15 @@ export function SchoolPerformanceView({ assessments, refreshAssessments, isLoadi
       }
     });
     
-    // Convert to array and sort chronologically (not alphabetically)
+    // Convert to array and sort chronologically (newest first)
+    // Academic year order: Autumn (Sep-Dec) → Spring (Jan-Apr) → Summer (May-Aug)
+    // So within each year: Autumn T1, Spring T2, Summer T3
+    // But we want newest terms first overall
     const terms = Array.from(termSet).sort((a, b) => {
       const [termA, yearA] = a.split(" ");
       const [termB, yearB] = b.split(" ");
       
-      // First compare academic years (convert 2023-2024 format to numbers)
+      // First compare academic years (2025-2026 vs 2024-2025)
       const yearNumA = parseInt(yearA.split("-")[0]);
       const yearNumB = parseInt(yearB.split("-")[0]);
       
@@ -289,15 +292,16 @@ export function SchoolPerformanceView({ assessments, refreshAssessments, isLoadi
         return yearNumB - yearNumA; // Newest year first
       }
       
-      // If same year, sort by term with custom order: Autumn (newest), Summer, Spring
-      const termOrder = { "Autumn": 0, "Summer": 1, "Spring": 2 };
+      // Same academic year - sort by term chronologically within the year
+      // Autumn (Sept) = 1, Spring (Jan) = 2, Summer (May) = 3
+      // Within same year, Summer is most recent
+      const termOrder = { "Autumn": 1, "Spring": 2, "Summer": 3 };
       const termOrderA = termOrder[termA as keyof typeof termOrder] ?? 99;
       const termOrderB = termOrder[termB as keyof typeof termOrder] ?? 99;
 
-      return termOrderA - termOrderB; // Smaller means newer within same year
+      return termOrderB - termOrderA; // Higher = more recent within year
     });
     
-    // console.debug('Available terms (chronologically sorted):', terms);
     return terms;
   }, [assessments]);
 
@@ -1264,7 +1268,7 @@ export function SchoolPerformanceView({ assessments, refreshAssessments, isLoadi
                           if (dashTrendData.length >= 2) {
                             return (
                               <div className="flex items-center justify-center gap-1">
-                                <MiniTrendChart data={dashTrendData} width={80} height={28} />
+                                <EnhancedTrendChart data={dashTrendData} width={80} height={28} />
                                 <div className="flex items-center gap-0.5 text-xs">
                                   {dashTrendData[dashTrendData.length - 1].overallScore > dashTrendData[0].overallScore ? (
                                     <ArrowUp className="h-3 w-3 text-emerald-600" />
@@ -1295,7 +1299,7 @@ export function SchoolPerformanceView({ assessments, refreshAssessments, isLoadi
 
                           return (
                             <div className="flex items-center justify-center gap-1">
-                              <MiniTrendChart data={trendData} width={80} height={28} />
+                              <EnhancedTrendChart data={trendData} width={80} height={28} />
                               <div className="flex items-center gap-0.5 text-xs">
                                 {trendData[trendData.length - 1].overallScore > trendData[0].overallScore ? (
                                   <ArrowUp className="h-3 w-3 text-emerald-600" />
@@ -1438,7 +1442,7 @@ export function SchoolPerformanceView({ assessments, refreshAssessments, isLoadi
                                             if (trendData.length >= 2) {
                                               return (
                                                 <div className="flex items-center justify-center">
-                                                  <MiniTrendChart data={trendData} width={80} height={24} />
+                                                  <EnhancedTrendChart data={trendData} width={80} height={24} />
                                                 </div>
                                               );
                                             }

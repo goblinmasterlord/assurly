@@ -239,7 +239,9 @@ export function AssessmentInvitationSheet({ open, onOpenChange, onSuccess }: Ass
         
         // Sort terms in descending order (newest first)
         // Academic year format: 2025-26, 2024-25, etc.
-        // Term IDs: T1 (Autumn), T2 (Spring), T3 (Summer)
+        // Term IDs: T1 (Autumn - starts Sept), T2 (Spring - starts Jan), T3 (Summer - starts May)
+        // Within each academic year: Autumn is first, then Spring, then Summer (chronological)
+        // But we want to show newest terms first, so: Summer 2025-26, Spring 2025-26, Autumn 2025-26, Summer 2024-25...
         const sortedTerms = [...termsData].sort((a, b) => {
           // First compare academic years
           const yearA = parseInt(a.academic_year.split('-')[0]);
@@ -249,12 +251,12 @@ export function AssessmentInvitationSheet({ open, onOpenChange, onSuccess }: Ass
             return yearB - yearA; // Newest year first
           }
           
-          // Same academic year - order by term position in the year
-          // T3 (Summer) is latest, then T2 (Spring), then T1 (Autumn)
+          // Same academic year - we want to show them in reverse chronological order
+          // Summer (T3) is most recent, then Spring (T2), then Autumn (T1)
           const termOrderA = parseInt(a.term_id.substring(1)); // Extract number from T1, T2, T3
           const termOrderB = parseInt(b.term_id.substring(1));
           
-          return termOrderB - termOrderA; // Higher number = later in year, so newest first
+          return termOrderB - termOrderA; // Higher number = later in year = more recent
         });
         
         setTerms(sortedTerms);

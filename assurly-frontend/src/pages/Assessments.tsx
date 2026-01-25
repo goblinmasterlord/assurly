@@ -203,8 +203,7 @@ export function AssessmentsPage() {
       }
       
       // Same academic year - order by term position in the year
-      // Autumn (Sept) = 1, Spring (Jan) = 2, Summer (May) = 3
-      // Higher number = later in year, so reverse for newest first
+      // Summer (May) is most recent, then Spring (Jan), then Autumn (Sept)
       const termOrder = { "Autumn": 1, "Spring": 2, "Summer": 3 };
       const termOrderA = termOrder[termA as keyof typeof termOrder] ?? 99;
       const termOrderB = termOrder[termB as keyof typeof termOrder] ?? 99;
