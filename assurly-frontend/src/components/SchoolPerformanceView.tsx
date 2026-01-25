@@ -26,7 +26,6 @@ import {
 } from "@/components/ui/tooltip";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { MultiSelect, type MultiSelectOption } from "@/components/ui/multi-select";
-import { TermStepper } from "@/components/ui/term-stepper";
 import {
   Collapsible,
   CollapsibleContent,
@@ -68,6 +67,7 @@ import {
   InlineRefreshSkeleton 
 } from "@/components/ui/skeleton-loaders";
 import { getAspectDisplayName, calculateSchoolStatus, getStatusColor, getStatusIcon } from "@/lib/assessment-utils";
+import { getStatusLabel } from "@/utils/assessment";
 import { FilterBar } from "@/components/ui/filter-bar";
 import { getSchools, getAspects } from "@/services/assessment-service";
 import { getSchoolsDashboard } from "@/services/dashboard-service";
@@ -90,7 +90,8 @@ type HistoricalData = {
   categoryScores: Map<AssessmentCategory, number>;
 }
 
-const TERM_STORAGE_KEY = "assurly_selected_term_mat_admin";
+// NOTE: MAT admin dashboard should default to the latest term each time the
+// assessments list refreshes, to keep the view pinned to "latest" by default.
 
 const TERM_NAME_TO_ID: Record<string, string> = {
   Autumn: "T1",
@@ -139,10 +140,7 @@ export function SchoolPerformanceView({ assessments, refreshAssessments, isLoadi
   });
   const [invitationSheetOpen, setInvitationSheetOpen] = useState(false);
   const [expandedSchools, setExpandedSchools] = useState<Set<string>>(new Set());
-  const [selectedTerm, setSelectedTerm] = useState<string>(() => {
-    // Initialize from localStorage
-    return localStorage.getItem(TERM_STORAGE_KEY) || "";
-  });
+  const [selectedTerm, setSelectedTerm] = useState<string>("");
   const [sortConfig, setSortConfig] = useState<{ key: string; direction: SortDirection }>({
     key: "",
     direction: null
@@ -157,6 +155,18 @@ export function SchoolPerformanceView({ assessments, refreshAssessments, isLoadi
   const inlineLoading = useInlineLoading();
   const isPrimaryLoading = isLoading || (dashboardLoading && !schoolsDashboard);
   const isUpdating = isRefreshing || (dashboardLoading && !!schoolsDashboard);
+
+  const formatStatus = useCallback((status: string): string => {
+    // Accept DB formats: not_started / in_progress / completed
+    // Accept UI formats: Not Started / In Progress / Completed
+    const normalized = status
+      .toLowerCase()
+      .trim()
+      .replace(/\s+/g, "_")
+      .replace(/-/g, "_");
+
+    return getStatusLabel(normalized as any);
+  }, []);
 
   // Fetch schools and aspects from API
   useEffect(() => {
@@ -255,22 +265,19 @@ export function SchoolPerformanceView({ assessments, refreshAssessments, isLoadi
     return terms;
   }, [assessments]);
 
-  // Auto-select the first available term if none is selected or if saved term is no longer available
+  // Always keep selection on the latest term when the term set refreshes.
+  // Users can still change the dropdown, but any data refresh that changes the
+  // available term list will snap back to the latest.
   useEffect(() => {
     if (availableTerms.length > 0) {
-      if (!selectedTerm || !availableTerms.includes(selectedTerm)) {
-        const firstTerm = availableTerms[0];
-        // console.debug('Auto-selecting first available term:', firstTerm);
-        setSelectedTerm(firstTerm);
-        localStorage.setItem(TERM_STORAGE_KEY, firstTerm);
-      }
+      const firstTerm = availableTerms[0];
+      if (selectedTerm !== firstTerm) setSelectedTerm(firstTerm);
     }
-  }, [availableTerms, selectedTerm]);
+  }, [availableTerms]);
   
-  // Persist term selection
+  // Term selection (dropdown)
   const handleTermChange = (term: string) => {
     setSelectedTerm(term);
-    localStorage.setItem(TERM_STORAGE_KEY, term);
   };
 
   // Filter assessments by selected term
@@ -410,7 +417,7 @@ export function SchoolPerformanceView({ assessments, refreshAssessments, isLoadi
     } else if (score >= 1.5) {
       return "Needs Attention";
     } else {
-      return "Requires Intervention";
+      return "Requires Attention";
     }
   };
 
@@ -453,6 +460,37 @@ export function SchoolPerformanceView({ assessments, refreshAssessments, isLoadi
   });
 
   const uniqueSchools = [...new Set(filteredByTermAssessments.map(a => a.school?.id).filter(Boolean))];
+
+  // Map "category value" (e.g. education/hr/ld) to aspect metadata (name/category).
+  const categoryValueToAspect = useMemo(() => {
+    const categoryMap: Record<string, string> = {
+      EDU: "education",
+      HR: "hr",
+      FIN: "finance",
+      EST: "estates",
+      GOV: "governance",
+      IT: "it",
+      IS: "is",
+    };
+
+    const map = new Map<string, Aspect>();
+    aspects.forEach((aspect) => {
+      const aspectCode = aspect.aspect_code.toUpperCase();
+      const categoryValue = (categoryMap[aspectCode] || aspectCode.toLowerCase()).toLowerCase();
+      map.set(categoryValue, aspect);
+    });
+    return map;
+  }, [aspects]);
+
+  const formatAspectCategory = useCallback((category?: string) => {
+    if (!category) return "—";
+    const normalized = category.replace(/_/g, " ").toLowerCase();
+    return normalized
+      .split(" ")
+      .filter(Boolean)
+      .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
+      .join(" ");
+  }, []);
   const schoolOptions: MultiSelectOption[] = schools
     .filter(school => school.name && school.id)
     .map((school: School) => ({
@@ -832,12 +870,20 @@ export function SchoolPerformanceView({ assessments, refreshAssessments, isLoadi
             {isPrimaryLoading ? (
               <TermNavigationSkeleton />
             ) : (
-              <TermStepper
-                terms={availableTerms}
-                currentTerm={selectedTerm}
-                onTermChange={handleTermChange}
-                className="w-full md:w-auto"
-              />
+              <div className="flex items-center gap-2 w-full md:w-auto">
+                <Select value={selectedTerm} onValueChange={handleTermChange}>
+                  <SelectTrigger className="w-full md:w-[220px] h-10">
+                    <SelectValue placeholder="Select term" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {availableTerms.map((t) => (
+                      <SelectItem key={t} value={t}>
+                        {t}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
             )}
             <Button 
               onClick={() => setInvitationSheetOpen(true)}
@@ -896,7 +942,7 @@ export function SchoolPerformanceView({ assessments, refreshAssessments, isLoadi
             },
             {
               type: 'checkbox',
-              label: 'Intervention Required Only',
+              label: 'Requires attention only',
               value: criticalFilter,
               onChange: setCriticalFilter,
               id: 'critical-filter'
@@ -937,7 +983,7 @@ export function SchoolPerformanceView({ assessments, refreshAssessments, isLoadi
                     <TableHead className="text-center">SUBMITTED RATINGS</TableHead>
                     <TableHead className="text-center">OVERALL SCORE</TableHead>
                     <TableHead className="text-center">PREVIOUS 3 TERMS</TableHead>
-                    <TableHead className="text-center">INTERVENTION REQ</TableHead>
+                    <TableHead className="text-center">REQUIRES ATTENTION</TableHead>
                     <TableHead className="text-center">LAST UPDATED</TableHead>
                   </TableRow>
                 </TableHeader>
@@ -990,7 +1036,7 @@ export function SchoolPerformanceView({ assessments, refreshAssessments, isLoadi
                     currentSort={sortConfig}
                     onSort={handleSort}
                   >
-                    INTERVENTION REQUIRED
+                    REQUIRES ATTENTION
                   </SortableTableHead>
                   <SortableTableHead 
                     className="text-center"
@@ -1054,7 +1100,7 @@ export function SchoolPerformanceView({ assessments, refreshAssessments, isLoadi
                         <Badge variant="outline" className={getStatusColor(school.status)}>
                           <div className="flex items-center gap-1">
                             {getStatusIcon(school.status)}
-                            <span className="text-xs font-medium">{school.status}</span>
+                            <span className="text-xs font-medium">{formatStatus(school.status)}</span>
                           </div>
                         </Badge>
                       </TableCell>
@@ -1188,13 +1234,17 @@ export function SchoolPerformanceView({ assessments, refreshAssessments, isLoadi
                                     <TableHead className="text-center">STATUS</TableHead>
                                     <TableHead className="text-center">CURRENT SCORE</TableHead>
                                     <TableHead className="text-center">PREVIOUS 3 TERMS</TableHead>
-                                    <TableHead className="text-center">INTERVENTION REQUIRED</TableHead>
+                                    <TableHead className="text-center">REQUIRES ATTENTION</TableHead>
                                     <TableHead className="text-center">COMPLETION RATE</TableHead>
                                     <TableHead className="text-center pr-6">ACTIONS</TableHead>
                                   </TableRow>
                                 </TableHeader>
                                 <TableBody>
                                   {school.assessmentsByCategory.map((categoryData, catIndex) => {
+                                    const aspectMeta = categoryValueToAspect.get((categoryData.category || '').toLowerCase());
+                                    const aspectName = aspectMeta?.aspect_name || getAspectDisplayName(categoryData.category);
+                                    const aspectCategory = formatAspectCategory(aspectMeta?.aspect_category);
+
                                     return (
                                       <React.Fragment key={categoryData.category}>
                                         <TableRow 
@@ -1206,9 +1256,9 @@ export function SchoolPerformanceView({ assessments, refreshAssessments, isLoadi
                                             {getCategoryIcon(categoryData.category)}
                                           </div>
                                           <div className="min-w-0">
-                                            <p className="font-medium text-sm text-slate-900 leading-tight">{getAspectDisplayName(categoryData.category)}</p>
+                                            <p className="font-medium text-sm text-slate-900 leading-tight">{aspectName}</p>
                                             <p className="text-xs text-slate-500 mt-0.5">
-                                              {categoryData.assignedTo?.[0]?.name || "Unassigned"}
+                                              {aspectCategory}
                                             </p>
                                           </div>
                                         </div>
@@ -1218,7 +1268,7 @@ export function SchoolPerformanceView({ assessments, refreshAssessments, isLoadi
                                           variant="outline" 
                                           className={cn("text-xs font-medium", getStatusColor(categoryData.status))}
                                         >
-                                          {categoryData.status}
+                                          {formatStatus(categoryData.status)}
                                         </Badge>
                                       </TableCell>
                                       <TableCell className="text-center">
@@ -1303,7 +1353,7 @@ export function SchoolPerformanceView({ assessments, refreshAssessments, isLoadi
                                             </TooltipTrigger>
                                             <TooltipContent side="top" align="center" className="max-w-xs">
                                               <div className="space-y-2">
-                                                <p className="font-medium text-sm">Intervention Required</p>
+                                                <p className="font-medium text-sm">Requires attention</p>
                                                 <p className="text-xs leading-relaxed">
                                                   This aspect has an overall score of {categoryData.overallScore.toFixed(1)}, indicating that one or more standards are rated as inadequate and require immediate attention.
                                                 </p>

@@ -139,7 +139,7 @@ export function SchoolTableRowSkeleton({ delay = 0 }: { delay?: number }) {
         <SkeletonBox className="h-7 w-20 mx-auto rounded" />
       </TableCell>
       
-      {/* Intervention Required */}
+      {/* Requires attention */}
       <TableCell className="text-center">
         <BadgeSkeleton className="mx-auto" width="w-12" />
       </TableCell>
