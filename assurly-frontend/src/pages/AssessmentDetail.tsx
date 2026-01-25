@@ -585,7 +585,7 @@ export function AssessmentDetailPage() {
     if (!standard.id) return "incomplete";
     const rating = ratings[standard.id];
     
-    if (rating !== null) {
+    if (rating !== null && rating !== undefined) {
       return "complete";
     } else if (evidence[standard.id] && evidence[standard.id].length > 0) {
       return "partial";

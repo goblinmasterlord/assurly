@@ -682,7 +682,7 @@ export function AssessmentsPage() {
                               {getAspectDisplayName(assessment.category || '')}
                             </p>
                             <p className="text-xs text-slate-500 mt-0.5">
-                              {assessment.name || ''}
+                              {assessment.school?.name || ''}
                             </p>
                           </div>
                         </div>
