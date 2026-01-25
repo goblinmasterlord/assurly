@@ -71,7 +71,9 @@ import { getStatusLabel } from "@/utils/assessment";
 import { FilterBar } from "@/components/ui/filter-bar";
 import { getSchools, getAspects } from "@/services/assessment-service";
 import { getSchoolsDashboard } from "@/services/dashboard-service";
+import { assessmentService } from "@/services/enhanced-assessment-service";
 import type { Aspect } from "@/types/assessment";
+import type { AssessmentByAspect, Rating, AssessmentStatus } from "@/types/assessment";
 import { useOptimisticFilter } from "@/hooks/use-optimistic-filter";
 import { useInlineLoading } from "@/hooks/use-inline-loading";
 import { useLocalStorage } from "@/hooks/use-local-storage";
@@ -156,6 +158,18 @@ export function SchoolPerformanceView({ assessments, refreshAssessments, isLoadi
   const isPrimaryLoading = isLoading || (dashboardLoading && !schoolsDashboard);
   const isUpdating = isRefreshing || (dashboardLoading && !!schoolsDashboard);
 
+  type AspectRowMetrics = {
+    status: Extract<AssessmentStatus, "not_started" | "in_progress" | "completed">;
+    current_score: number | null;
+    previous_terms: Array<{ term_id: string; academic_year: string; avg_score: number | null }>;
+    intervention_required: number;
+    completed_standards: number;
+    total_standards: number;
+    last_updated: string | null;
+  };
+
+  const [aspectRowMetrics, setAspectRowMetrics] = useState<Record<string, AspectRowMetrics>>({});
+
   const formatStatus = useCallback((status: string): string => {
     // Accept DB formats: not_started / in_progress / completed
     // Accept UI formats: Not Started / In Progress / Completed
@@ -230,6 +244,28 @@ export function SchoolPerformanceView({ assessments, refreshAssessments, isLoadi
     const entries = schoolsDashboard?.schools?.map((s) => [s.school_id, s] as const) ?? [];
     return new Map<string, SchoolDashboardItem>(entries);
   }, [schoolsDashboard]);
+
+  const computeAvgScore = useCallback((data: AssessmentByAspect): number | null => {
+    const rated = data.standards.filter(s => s.rating !== null) as Array<{ rating: Exclude<Rating, null> }>;
+    if (rated.length === 0) return null;
+    const sum = rated.reduce((acc, s) => acc + (s.rating || 0), 0);
+    return Math.round((sum / rated.length) * 10) / 10;
+  }, []);
+
+  const computeInterventionRequired = useCallback((data: AssessmentByAspect): number => {
+    return data.standards.reduce((acc, s) => {
+      const r = s.rating;
+      return acc + (r === 1 || r === 2 ? 1 : 0);
+    }, 0);
+  }, []);
+
+  const computeLastUpdated = useCallback((data: AssessmentByAspect): string | null => {
+    const latest = data.standards
+      .map(s => s.last_updated)
+      .filter((d): d is string => typeof d === 'string' && d.length > 0)
+      .sort((a, b) => (new Date(b).getTime() || 0) - (new Date(a).getTime() || 0))[0];
+    return latest || null;
+  }, []);
 
   // Get available terms from assessments
   const availableTerms = useMemo(() => {
@@ -673,6 +709,74 @@ export function SchoolPerformanceView({ assessments, refreshAssessments, isLoadi
     });
   }, [schoolPerformanceFromAssessments, schoolsDashboard, dashboardBySchoolId]);
 
+  const prefetchAspectRowMetricsForSchool = useCallback(async (schoolId: string) => {
+    if (!selectedUniqueTermId) return;
+
+    const currentIndex = availableTerms.indexOf(selectedTerm);
+    const previousTermLabels = currentIndex >= 0 ? availableTerms.slice(currentIndex + 1, currentIndex + 4) : [];
+    const previousUniqueTerms = previousTermLabels
+      .map(termLabelToUniqueTermId)
+      .filter((t): t is string => !!t);
+
+    const school = schoolPerformanceData.find(s => (s.school?.id || s.school?.school_id) === schoolId);
+    const categories = school?.assessmentsByCategory ?? [];
+
+    await Promise.allSettled(categories.map(async (categoryData) => {
+      const aspectMeta = categoryValueToAspect.get((categoryData.category || '').toLowerCase());
+      const aspectCode = aspectMeta?.aspect_code;
+      if (!aspectCode) return;
+
+      const key = `${schoolId}:${aspectCode}:${selectedUniqueTermId}`;
+      if (aspectRowMetrics[key]) return;
+
+      const current = await assessmentService.getAssessmentsByAspect(aspectCode, schoolId, selectedUniqueTermId);
+      const current_score = computeAvgScore(current);
+      const intervention_required = computeInterventionRequired(current);
+      const last_updated = computeLastUpdated(current);
+
+      const previous_terms = await Promise.all(previousUniqueTerms.map(async (termId) => {
+        const resp = await assessmentService.getAssessmentsByAspect(aspectCode, schoolId, termId);
+        return {
+          term_id: resp.term_id,
+          academic_year: resp.academic_year,
+          avg_score: computeAvgScore(resp),
+        };
+      }));
+
+      setAspectRowMetrics(prev => ({
+        ...prev,
+        [key]: {
+          status: current.status as any,
+          current_score,
+          previous_terms,
+          intervention_required,
+          completed_standards: current.completed_standards,
+          total_standards: current.total_standards,
+          last_updated,
+        }
+      }));
+    }));
+  }, [
+    aspectRowMetrics,
+    availableTerms,
+    categoryValueToAspect,
+    computeAvgScore,
+    computeInterventionRequired,
+    computeLastUpdated,
+    schoolPerformanceData,
+    selectedTerm,
+    selectedUniqueTermId,
+  ]);
+
+  // If term changes while a school is expanded, refresh aspect rows for that term
+  useEffect(() => {
+    if (!selectedUniqueTermId) return;
+    if (expandedSchools.size === 0) return;
+    expandedSchools.forEach((schoolId) => {
+      void prefetchAspectRowMetricsForSchool(schoolId);
+    });
+  }, [expandedSchools, prefetchAspectRowMetricsForSchool, selectedUniqueTermId]);
+
   const handleSort = (key: string) => {
     setSortConfig(prev => ({
       key,
@@ -842,6 +946,10 @@ export function SchoolPerformanceView({ assessments, refreshAssessments, isLoadi
         newExpanded.add(schoolId);
       }
       setExpandedSchools(newExpanded);
+      if (!expandedSchools.has(schoolId)) {
+        // When expanding, fetch aspect-level metrics so rows match the school summary
+        await prefetchAspectRowMetricsForSchool(schoolId);
+      }
       // Simulate loading delay for smooth animation
       await new Promise(resolve => setTimeout(resolve, 200));
     });
@@ -1244,6 +1352,11 @@ export function SchoolPerformanceView({ assessments, refreshAssessments, isLoadi
                                     const aspectMeta = categoryValueToAspect.get((categoryData.category || '').toLowerCase());
                                     const aspectName = aspectMeta?.aspect_name || getAspectDisplayName(categoryData.category);
                                     const aspectCategory = formatAspectCategory(aspectMeta?.aspect_category);
+                                    const aspectCode = aspectMeta?.aspect_code;
+                                    const metricKey = (schoolId && aspectCode && selectedUniqueTermId)
+                                      ? `${schoolId}:${aspectCode}:${selectedUniqueTermId}`
+                                      : "";
+                                    const metrics = metricKey ? aspectRowMetrics[metricKey] : undefined;
 
                                     return (
                                       <React.Fragment key={categoryData.category}>
@@ -1266,51 +1379,66 @@ export function SchoolPerformanceView({ assessments, refreshAssessments, isLoadi
                                       <TableCell className="text-center">
                                         <Badge 
                                           variant="outline" 
-                                          className={cn("text-xs font-medium", getStatusColor(categoryData.status))}
+                                          className={cn("text-xs font-medium", getStatusColor((metrics?.status as any) || categoryData.status))}
                                         >
-                                          {formatStatus(categoryData.status)}
+                                          {formatStatus((metrics?.status as any) || categoryData.status)}
                                         </Badge>
                                       </TableCell>
                                       <TableCell className="text-center">
-                                        {categoryData.overallScore > 0 ? (
-                                              <div className="flex items-center justify-center space-x-1">
-                                          <Badge variant="outline" className={getScoreBadgeColor(categoryData.overallScore)}>
-                                            {categoryData.overallScore.toFixed(1)}
-                                          </Badge>
-                                                {/* Category change indicator */}
-                                                {school.changesByCategory && school.changesByCategory.has(categoryData.category) && (() => {
-                                                  const previousScore = school.changesByCategory.get(categoryData.category);
-                                                  if (!previousScore || previousScore === 0) return null;
-                                                  const change = calculateChange(categoryData.overallScore, previousScore);
-                                                  if (!change) return null;
-                                                  return (
-                                                    <Tooltip>
-                                                      <TooltipTrigger asChild>
-                                                        <div className={cn(
-                                                          "flex items-center space-x-1 px-1 py-0.5 rounded text-xs font-medium",
-                                                          change.type === "positive" && "bg-emerald-50 text-emerald-700",
-                                                          change.type === "negative" && "bg-rose-50 text-rose-700"
-                                                        )}>
-                                                          {change.icon}
-                                                            <span className="text-xs">{change.value.toFixed(1)}</span>
-                                                        </div>
-                                                      </TooltipTrigger>
-                                                      <TooltipContent>
-                                                        <p>
-                                                          {change.type === "positive" ? "Improved" : "Declined"} from previous term
-                                                          ({change.value.toFixed(1)} points)
-                                                        </p>
-                                                      </TooltipContent>
-                                                    </Tooltip>
-                                                  );
-                                                })()}
-                                              </div>
-                                            ) : (
-                                          <span className="text-slate-400 text-sm">—</span>
-                                        )}
+                                        {(() => {
+                                          const score = metrics?.current_score ?? categoryData.overallScore ?? 0;
+                                          if (!score || score <= 0) return <span className="text-slate-400 text-sm">—</span>;
+
+                                          const previousScore = metrics?.previous_terms?.[0]?.avg_score ?? null;
+                                          const change = previousScore ? calculateChange(score, previousScore) : null;
+
+                                          return (
+                                            <div className="flex items-center justify-center space-x-1">
+                                              <Badge variant="outline" className={getScoreBadgeColor(score)}>
+                                                {score.toFixed(1)}
+                                              </Badge>
+                                              {change && (
+                                                <Tooltip>
+                                                  <TooltipTrigger asChild>
+                                                    <div className={cn(
+                                                      "flex items-center space-x-1 px-1 py-0.5 rounded text-xs font-medium",
+                                                      change.type === "positive" && "bg-emerald-50 text-emerald-700",
+                                                      change.type === "negative" && "bg-rose-50 text-rose-700"
+                                                    )}>
+                                                      {change.icon}
+                                                      <span className="text-xs">{change.value.toFixed(1)}</span>
+                                                    </div>
+                                                  </TooltipTrigger>
+                                                  <TooltipContent>
+                                                    <p>
+                                                      {change.type === "positive" ? "Improved" : "Declined"} from previous term
+                                                      ({change.value.toFixed(1)} points)
+                                                    </p>
+                                                  </TooltipContent>
+                                                </Tooltip>
+                                              )}
+                                            </div>
+                                          );
+                                        })()}
                                       </TableCell>
                                       <TableCell className="text-center">
                                         {(() => {
+                                          // Prefer aspect-level previous terms derived from by-aspect endpoint
+                                          if (metrics?.previous_terms?.length) {
+                                            const trendData: TrendDataPoint[] = metrics.previous_terms
+                                              .slice(0, 3)
+                                              .reverse()
+                                              .map(t => ({ overallScore: t.avg_score ?? 0, term: t.term_id, academicYear: t.academic_year }))
+                                              .filter(d => d.overallScore > 0);
+                                            if (trendData.length >= 2) {
+                                              return (
+                                                <div className="flex items-center justify-center">
+                                                  <MiniTrendChart data={trendData} width={80} height={24} />
+                                                </div>
+                                              );
+                                            }
+                                          }
+
                                           const historicalData = historicalTermsData.get(school.school?.id || '') || [];
                                           const categoryHistoricalData = historicalData
                                             .map(termData => ({
@@ -1340,7 +1468,17 @@ export function SchoolPerformanceView({ assessments, refreshAssessments, isLoadi
                                         })()}
                                       </TableCell>
                                       <TableCell className="text-center">
-                                        {categoryData.overallScore && categoryData.overallScore <= 1.5 && categoryData.status === 'completed' ? (
+                                        {typeof metrics?.intervention_required === 'number' ? (
+                                          metrics.intervention_required > 0 ? (
+                                            <Badge variant="outline" className="bg-rose-50 text-rose-700 border-rose-200">
+                                              {metrics.intervention_required}
+                                            </Badge>
+                                          ) : (
+                                            <Badge variant="outline" className="bg-emerald-50 text-emerald-700 border-emerald-200">
+                                              0
+                                            </Badge>
+                                          )
+                                        ) : categoryData.overallScore && categoryData.overallScore <= 1.5 && categoryData.status === 'completed' ? (
                                           <Tooltip>
                                             <TooltipTrigger asChild>
                                               <Badge 
@@ -1367,10 +1505,14 @@ export function SchoolPerformanceView({ assessments, refreshAssessments, isLoadi
                                       <TableCell className="text-center">
                                         <div className="flex items-center justify-center gap-2">
                                           <span className="text-sm font-semibold text-slate-700 tabular-nums">
-                                            {categoryData.completedStandards}/{categoryData.totalStandards}
+                                            {(metrics?.completed_standards ?? categoryData.completedStandards)}/{(metrics?.total_standards ?? categoryData.totalStandards)}
                                           </span>
                                           <AnimatedProgress 
-                                            value={(categoryData.completedStandards / categoryData.totalStandards) * 100} 
+                                            value={(() => {
+                                              const completed = metrics?.completed_standards ?? categoryData.completedStandards;
+                                              const total = metrics?.total_standards ?? categoryData.totalStandards;
+                                              return total > 0 ? (completed / total) * 100 : 0;
+                                            })()} 
                                             className="w-14 h-2"
                                             delay={catIndex * 60 + 200}
                                           />

@@ -116,6 +116,8 @@ export interface Assessment {
     submitted_by: string | null;
     submitted_by_name: string | null;
     last_updated: string;
+    updated_by?: string | null;
+    updated_by_name?: string | null;
     // Legacy fields for backward compatibility
     name?: string;
     category?: AssessmentCategory;
@@ -158,6 +160,13 @@ export interface AssessmentStandard {
     version_id: string;
     version_number: number;
     status: AssessmentStatus;
+    due_date?: string | null;
+    assigned_to?: string | null;
+    assigned_to_name?: string | null;
+    submitted_at?: string | null;
+    last_updated?: string | null;
+    updated_by?: string | null;
+    updated_by_name?: string | null;
 }
 
 export interface AssessmentUpdate {

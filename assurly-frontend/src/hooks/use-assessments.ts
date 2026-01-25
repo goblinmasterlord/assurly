@@ -83,6 +83,12 @@ function isGroupId(id: string): boolean {
 
 // Transform AssessmentByAspect to Assessment format for compatibility
 function transformAssessmentByAspectToAssessment(data: AssessmentByAspect): Assessment {
+  const lastUpdatedFromStandards =
+    data.standards
+      .map(s => s.last_updated)
+      .filter((d): d is string => typeof d === 'string' && d.length > 0)
+      .sort((a, b) => (new Date(b).getTime() || 0) - (new Date(a).getTime() || 0))[0] || null;
+
   return {
     id: `${data.school_id}-${data.aspect_code}-${data.term_id}-${data.academic_year}`,
     assessment_id: `${data.school_id}-${data.aspect_code}-${data.term_id}-${data.academic_year}`,
@@ -102,7 +108,7 @@ function transformAssessmentByAspectToAssessment(data: AssessmentByAspect): Asse
     submitted_at: null,
     submitted_by: null,
     submitted_by_name: null,
-    last_updated: new Date().toISOString(),
+    last_updated: lastUpdatedFromStandards || new Date().toISOString(),
     mat_standard_id: '',
     standard_code: '',
     standard_name: data.aspect_name,
@@ -127,7 +133,12 @@ function transformAssessmentByAspectToAssessment(data: AssessmentByAspect): Asse
       // Store the assessment_id for submission - this is the key fix!
       // Use type assertion since Standard interface doesn't include assessment_id
       assessment_id: std.assessment_id,
-    } as Standard & { assessment_id?: string })),
+      // Extra API fields used by the assessment detail table
+      last_updated: std.last_updated || null,
+      assigned_to_name: std.assigned_to_name || null,
+      updated_by: std.updated_by || null,
+      updated_by_name: std.updated_by_name || null,
+    } as Standard & { assessment_id?: string; last_updated?: string | null; assigned_to_name?: string | null; updated_by?: string | null; updated_by_name?: string | null })),
     // Backward compatibility fields
     name: `${data.aspect_name} - ${data.school_name}`,
     category: data.aspect_code.toLowerCase() as AssessmentCategory,
@@ -139,7 +150,7 @@ function transformAssessmentByAspectToAssessment(data: AssessmentByAspect): Asse
     },
     completedStandards: data.completed_standards,
     totalStandards: data.total_standards,
-    lastUpdated: new Date().toISOString(),
+    lastUpdated: lastUpdatedFromStandards || new Date().toISOString(),
     dueDate: undefined,
     assignedTo: [],
   };

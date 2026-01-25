@@ -30,7 +30,7 @@ import {
 import { useUser } from "@/contexts/UserContext";
 import { submitAssessment } from "@/services/assessment-service"; // Keep submit function
 import { useAssessment } from "@/hooks/use-assessments"; // Optimized assessment fetching
-import { isOverdue } from "@/utils/assessment";
+import { getStatusLabel, isOverdue } from "@/utils/assessment";
 import {
   AlertCircle,
   AlertTriangle,
@@ -110,6 +110,15 @@ export function AssessmentDetailPage() {
   const navigate = useNavigate();
   const { role } = useUser();
   const { toast } = useToast();
+  
+  const formatStatus = useCallback((status: string): string => {
+    const normalized = status
+      .toLowerCase()
+      .trim()
+      .replace(/\s+/g, "_")
+      .replace(/-/g, "_");
+    return getStatusLabel(normalized as any);
+  }, []);
   
   // Check for admin view mode from URL params
   const searchParams = new URLSearchParams(window.location.search);
@@ -697,7 +706,7 @@ export function AssessmentDetailPage() {
                   isOverdue(assessment) && "bg-red-100 text-red-700 border-red-200"
                 )}
               >
-                {assessment.status}
+                {formatStatus(assessment.status)}
               </Badge>
               
               <div className="flex items-center gap-2">
@@ -1369,7 +1378,31 @@ export function AssessmentDetailPage() {
                   <div>
                     <p className="text-xs text-slate-500 font-medium">Status</p>
                     <p className="text-sm font-semibold text-slate-900">
-                      {assessment.status}
+                      {formatStatus(assessment.status)}
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex items-center space-x-3">
+                  <div className="h-10 w-10 rounded-lg bg-slate-100 flex items-center justify-center">
+                    <User className="h-4 w-4 text-slate-700" />
+                  </div>
+                  <div>
+                    <p className="text-xs text-slate-500 font-medium">Updated by</p>
+                    <p className="text-sm font-semibold text-slate-900">
+                      {(() => {
+                        const a: any = assessment as any;
+                        if (a.updated_by_name) return a.updated_by_name;
+                        if (assessment.submitted_by_name) return assessment.submitted_by_name;
+                        if (assessment.assigned_to_name) return assessment.assigned_to_name;
+
+                        // For aspect-level view, derive from the most recently updated standard if possible
+                        const standardsWithMeta = (assessment.standards || []) as Array<Standard & { assigned_to_name?: string; last_updated?: string | null }>;
+                        const latest = standardsWithMeta
+                          .filter(s => !!s.last_updated)
+                          .sort((x, y) => (new Date(y.last_updated as string).getTime() || 0) - (new Date(x.last_updated as string).getTime() || 0))[0];
+                        return latest?.assigned_to_name || a.updated_by || "—";
+                      })()}
                     </p>
                   </div>
                 </div>
@@ -1388,11 +1421,13 @@ export function AssessmentDetailPage() {
                   <TableHead className="w-20 text-center font-semibold text-slate-600">Status</TableHead>
                   <TableHead className="w-80 font-semibold text-slate-600">Comments</TableHead>
                   <TableHead className="w-20 font-semibold text-slate-600">Files</TableHead>
+                  <TableHead className="w-36 font-semibold text-slate-600">Updated by</TableHead>
                   <TableHead className="w-24 text-right font-semibold text-slate-600">Updated</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {getSortedStandards(assessment.standards).map((standard, index) => (
+                  // Standard objects may carry extra API fields in aspect view
                   <TableRow 
                     key={standard.id} 
                     className="border-slate-200/60 hover:bg-slate-50/50 transition-colors"
@@ -1455,16 +1490,29 @@ export function AssessmentDetailPage() {
                     
                     <TableCell className="text-center">
                       <span className="text-sm text-slate-500">
-                        {Math.floor(Math.random() * 3)}
+                        {standard.id ? (attachments[standard.id]?.length || 0) : 0}
+                      </span>
+                    </TableCell>
+
+                    <TableCell>
+                      <span className="text-sm text-slate-600">
+                        {(() => {
+                          const s: any = standard as any;
+                          return s.updated_by_name || s.assigned_to_name || "—";
+                        })()}
                       </span>
                     </TableCell>
                     
                     <TableCell className="text-right">
                       <span className="text-sm text-slate-500">
-                        {standard.rating ? new Date().toLocaleDateString('en-GB', { 
-                          day: 'numeric', 
-                          month: 'short' 
-                        }) : '—'}
+                        {(() => {
+                          const s: any = standard as any;
+                          const ts = s.last_updated || s.updated_at || s.updatedAt;
+                          if (!ts) return '—';
+                          const date = new Date(ts);
+                          if (Number.isNaN(date.getTime())) return '—';
+                          return date.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
+                        })()}
                       </span>
                     </TableCell>
                   </TableRow>
