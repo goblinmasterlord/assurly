@@ -696,6 +696,8 @@ export function SchoolPerformanceView({ assessments, refreshAssessments, isLoadi
       const dash = dashboardBySchoolId.get(schoolId);
       if (!dash) return school;
 
+      // The previous_terms[0] is the term immediately before the selected term
+      // This is used for the trend indicator comparison
       const previousOverallScore = dash.previous_terms?.[0]?.avg_score ?? school.previousOverallScore;
 
       return {
@@ -1251,10 +1253,11 @@ export function SchoolPerformanceView({ assessments, refreshAssessments, isLoadi
                       <TableCell className="text-center">
                         {(() => {
                           // Prefer backend-provided previous terms (bulk dashboard endpoint)
+                          // These are already the 3 terms BEFORE the selected term
                           const previousTerms = dashboardItem?.previous_terms ?? [];
                           const dashTrendData: TrendDataPoint[] = previousTerms
-                            .slice(0, 3)
-                            .reverse() // oldest -> newest
+                            .slice(0, 3) // Take up to 3 previous terms
+                            .reverse() // Reverse to show oldest -> newest (left to right)
                             .map(t => ({ overallScore: t.avg_score ?? 0, term: t.term_id, academicYear: t.academic_year }))
                             .filter(d => d.overallScore > 0);
 
@@ -1282,8 +1285,8 @@ export function SchoolPerformanceView({ assessments, refreshAssessments, isLoadi
                           }
 
                           const trendData: TrendDataPoint[] = historicalData
-                            .slice(0, 3)
-                            .reverse()
+                            .slice(0, 3) // Take up to 3 previous terms
+                            .reverse() // Reverse to show oldest -> newest (left to right)
                             .filter(d => d.overallScore > 0);
 
                           if (trendData.length < 2) {
@@ -1389,6 +1392,7 @@ export function SchoolPerformanceView({ assessments, refreshAssessments, isLoadi
                                           const score = metrics?.current_score ?? categoryData.overallScore ?? 0;
                                           if (!score || score <= 0) return <span className="text-slate-400 text-sm">—</span>;
 
+                                          // Use the first previous term (immediately before selected term) for comparison
                                           const previousScore = metrics?.previous_terms?.[0]?.avg_score ?? null;
                                           const change = previousScore ? calculateChange(score, previousScore) : null;
 
@@ -1424,10 +1428,11 @@ export function SchoolPerformanceView({ assessments, refreshAssessments, isLoadi
                                       <TableCell className="text-center">
                                         {(() => {
                                           // Prefer aspect-level previous terms derived from by-aspect endpoint
+                                          // These are already the 3 terms BEFORE the selected term
                                           if (metrics?.previous_terms?.length) {
                                             const trendData: TrendDataPoint[] = metrics.previous_terms
-                                              .slice(0, 3)
-                                              .reverse()
+                                              .slice(0, 3) // Take up to 3 previous terms
+                                              .reverse() // Reverse to show oldest -> newest (left to right)
                                               .map(t => ({ overallScore: t.avg_score ?? 0, term: t.term_id, academicYear: t.academic_year }))
                                               .filter(d => d.overallScore > 0);
                                             if (trendData.length >= 2) {
@@ -1439,6 +1444,7 @@ export function SchoolPerformanceView({ assessments, refreshAssessments, isLoadi
                                             }
                                           }
 
+                                          // Fallback to client-calculated historical data
                                           const historicalData = historicalTermsData.get(school.school?.id || '') || [];
                                           const categoryHistoricalData = historicalData
                                             .map(termData => ({
@@ -1451,9 +1457,11 @@ export function SchoolPerformanceView({ assessments, refreshAssessments, isLoadi
                                             return <span className="text-sm text-slate-400">—</span>;
                                           }
                                           
-                                          // Prepare trend data for previous 3 terms only (chronological order: oldest to newest)
-                                          // Take the most recent 3 terms and reverse to show oldest first
-                                          const trendData: TrendDataPoint[] = categoryHistoricalData.slice(0, 3).reverse().filter(d => d.overallScore > 0);
+                                          // Take up to 3 previous terms and reverse to show oldest -> newest (left to right)
+                                          const trendData: TrendDataPoint[] = categoryHistoricalData
+                                            .slice(0, 3) // Take up to 3 previous terms
+                                            .reverse() // Reverse to show oldest -> newest (left to right)
+                                            .filter(d => d.overallScore > 0);
                                           
                                           if (trendData.length < 2) {
                                             return <span className="text-sm text-slate-400">—</span>;

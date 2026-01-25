@@ -236,10 +236,32 @@ export function AssessmentInvitationSheet({ open, onOpenChange, onSuccess }: Ass
       setTermsLoading(true);
       try {
         const termsData = await getTerms();
-        setTerms(termsData);
-        // Set default to current term if available, otherwise first term
-        if (termsData.length > 0) {
-          const currentTerm = termsData.find(t => t.is_current) || termsData[0];
+        
+        // Sort terms in descending order (newest first)
+        // Academic year format: 2025-26, 2024-25, etc.
+        // Term IDs: T1 (Autumn), T2 (Spring), T3 (Summer)
+        const sortedTerms = [...termsData].sort((a, b) => {
+          // First compare academic years
+          const yearA = parseInt(a.academic_year.split('-')[0]);
+          const yearB = parseInt(b.academic_year.split('-')[0]);
+          
+          if (yearA !== yearB) {
+            return yearB - yearA; // Newest year first
+          }
+          
+          // Same academic year - order by term position in the year
+          // T3 (Summer) is latest, then T2 (Spring), then T1 (Autumn)
+          const termOrderA = parseInt(a.term_id.substring(1)); // Extract number from T1, T2, T3
+          const termOrderB = parseInt(b.term_id.substring(1));
+          
+          return termOrderB - termOrderA; // Higher number = later in year, so newest first
+        });
+        
+        setTerms(sortedTerms);
+        
+        // Set default to current term if available, otherwise first term (which is now the newest)
+        if (sortedTerms.length > 0) {
+          const currentTerm = sortedTerms.find(t => t.is_current) || sortedTerms[0];
           setSelectedTermId(currentTerm.unique_term_id);
         }
       } catch (error) {
@@ -327,7 +349,7 @@ export function AssessmentInvitationSheet({ open, onOpenChange, onSuccess }: Ass
       setSelectedSchools([]);
       setDueDate(undefined);
       setSearchTerm("");
-      // Reset term to current term if available
+      // Reset term to current term if available (terms are already sorted in descending order)
       if (terms.length > 0) {
         const currentTerm = terms.find(t => t.is_current) || terms[0];
         setSelectedTermId(currentTerm.unique_term_id);
