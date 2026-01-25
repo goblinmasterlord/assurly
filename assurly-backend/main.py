@@ -1189,6 +1189,148 @@ async def get_standard(
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to fetch standard: {str(e)}")
 
+@app.get("/api/dashboard/schools", tags=["Dashboard"])
+async def get_schools_dashboard(
+    current_mat_id: str = Depends(get_current_mat),
+    current_user: UserResponse = Depends(get_current_user),
+    term_id: Optional[str] = Query(None, description="Current term (e.g., T2-2025-26). If not provided, uses most recent.")
+):
+    """
+    Get school assessment overview for dashboard.
+    Returns summary statistics per school including current scores, trends, and intervention flags.
+    """
+    try:
+        connection = get_db_connection()
+        cursor = connection.cursor()
+
+        # If no term specified, get the most recent term with assessments
+        if not term_id:
+            cursor.execute("""
+                SELECT a.unique_term_id
+                FROM assessments a
+                JOIN schools s ON a.school_id = s.school_id
+                WHERE s.mat_id = %s
+                ORDER BY a.academic_year DESC, 
+                    FIELD(SUBSTRING(a.unique_term_id, 1, 2), 'T3', 'T2', 'T1') DESC
+                LIMIT 1
+            """, (current_mat_id,))
+            row = cursor.fetchone()
+            if row:
+                term_id = row['unique_term_id']
+            else:
+                connection.close()
+                return JSONResponse(content=[], status_code=200)
+
+        # Get current term's academic year for finding previous terms
+        current_academic_year = term_id.split('-', 1)[1] if '-' in term_id else None
+        current_term_num = term_id.split('-')[0] if '-' in term_id else None
+
+        # Main query: Get per-school summary for current term
+        query = """
+            SELECT 
+                s.school_id,
+                s.school_name,
+                
+                -- Status calculation
+                CASE
+                    WHEN COUNT(CASE WHEN a.rating IS NULL THEN 1 END) = COUNT(*) THEN 'not_started'
+                    WHEN COUNT(CASE WHEN a.rating IS NOT NULL THEN 1 END) = COUNT(*) THEN 'completed'
+                    ELSE 'in_progress'
+                END as status,
+                
+                -- Current score (average rating, NULL if no ratings)
+                ROUND(AVG(a.rating), 2) as current_score,
+                
+                -- Intervention required (count of ratings 1 or 2)
+                COUNT(CASE WHEN a.rating IN (1, 2) THEN 1 END) as intervention_required,
+                
+                -- Completion rate
+                COUNT(CASE WHEN a.rating IS NOT NULL THEN 1 END) as completed_standards,
+                COUNT(*) as total_standards,
+                
+                -- Last updated
+                MAX(a.last_updated) as last_updated
+                
+            FROM schools s
+            LEFT JOIN assessments a ON s.school_id = a.school_id 
+                AND a.unique_term_id = %s
+            WHERE s.mat_id = %s 
+                AND s.is_active = 1
+                AND s.is_central_office = 0
+            GROUP BY s.school_id, s.school_name
+            ORDER BY s.school_name
+        """
+        cursor.execute(query, (term_id, current_mat_id))
+        schools = cursor.fetchall()
+
+        # Get previous 3 terms' average scores per school
+        previous_terms_query = """
+            SELECT 
+                a.school_id,
+                a.unique_term_id,
+                a.academic_year,
+                ROUND(AVG(a.rating), 2) as avg_score
+            FROM assessments a
+            JOIN schools s ON a.school_id = s.school_id
+            WHERE s.mat_id = %s
+                AND a.unique_term_id != %s
+                AND a.rating IS NOT NULL
+            GROUP BY a.school_id, a.unique_term_id, a.academic_year
+            ORDER BY a.academic_year DESC, 
+                FIELD(SUBSTRING(a.unique_term_id, 1, 2), 'T3', 'T2', 'T1')
+        """
+        cursor.execute(previous_terms_query, (current_mat_id, term_id))
+        previous_data = cursor.fetchall()
+
+        # Organize previous terms by school (limit to 3 most recent per school)
+        school_trends = {}
+        for row in previous_data:
+            school_id = row['school_id']
+            if school_id not in school_trends:
+                school_trends[school_id] = []
+            if len(school_trends[school_id]) < 3:
+                school_trends[school_id].append({
+                    'term_id': row['unique_term_id'],
+                    'academic_year': row['academic_year'],
+                    'avg_score': float(row['avg_score']) if row['avg_score'] else None
+                })
+
+        # Build response
+        result = []
+        for school in schools:
+            school_id = school['school_id']
+            
+            # Format last_updated
+            last_updated = None
+            if school['last_updated']:
+                if isinstance(school['last_updated'], datetime):
+                    last_updated = school['last_updated'].strftime('%Y-%m-%dT%H:%M:%SZ')
+                else:
+                    last_updated = str(school['last_updated'])
+
+            result.append({
+                'school_id': school_id,
+                'school_name': school['school_name'],
+                'current_term': term_id,
+                'status': school['status'],
+                'current_score': float(school['current_score']) if school['current_score'] else None,
+                'previous_terms': school_trends.get(school_id, []),
+                'intervention_required': school['intervention_required'] or 0,
+                'completed_standards': school['completed_standards'] or 0,
+                'total_standards': school['total_standards'] or 0,
+                'completion_rate': f"{school['completed_standards'] or 0}/{school['total_standards'] or 0}",
+                'last_updated': last_updated
+            })
+
+        connection.close()
+        return JSONResponse(content={
+            'current_term': term_id,
+            'schools': result
+        }, status_code=200)
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
 @app.post("/api/standards", response_model=MatStandardResponse, status_code=status.HTTP_201_CREATED, tags=["Standards"])
 async def create_standard(
     standard: MatStandardCreate,
