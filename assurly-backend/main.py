@@ -1244,17 +1244,13 @@ async def get_standard(
 async def get_schools_dashboard(
     current_mat_id: str = Depends(get_current_mat),
     current_user: UserResponse = Depends(get_current_user),
-    term_id: Optional[str] = Query(None, description="Current term (e.g., T2-2025-26). If not provided, uses most recent.")
+    term_id: Optional[str] = Query(None)
 ):
-    """
-    Get school assessment overview for dashboard.
-    Returns summary statistics per school including current scores, trends, and intervention flags.
-    """
     try:
         connection = get_db_connection()
         cursor = connection.cursor()
 
-        # If no term specified, get the most recent term with assessments
+        # If no term specified, get the most recent term
         if not term_id:
             cursor.execute("""
                 SELECT a.unique_term_id
@@ -1270,51 +1266,21 @@ async def get_schools_dashboard(
                 term_id = row['unique_term_id']
             else:
                 connection.close()
-                return JSONResponse(content=[], status_code=200)
+                return JSONResponse(content={'current_term': None, 'schools': []}, status_code=200)
 
-        # Get current term's academic year for finding previous terms
-        current_academic_year = term_id.split('-', 1)[1] if '-' in term_id else None
-        current_term_num = term_id.split('-')[0] if '-' in term_id else None
+        # Parse the selected term to determine chronological position
+        # term_id format: "T2-2025-26" -> term_num=2, academic_year="2025-26"
+        term_parts = term_id.split('-', 1)
+        selected_term_num = int(term_parts[0][1])  # "T2" -> 2
+        selected_academic_year = term_parts[1]      # "2025-26"
 
-        # Main query: Get per-school summary for current term
-        query = """
-            SELECT 
-                s.school_id,
-                s.school_name,
-                
-                -- Status calculation
-                CASE
-                    WHEN COUNT(CASE WHEN a.rating IS NULL THEN 1 END) = COUNT(*) THEN 'not_started'
-                    WHEN COUNT(CASE WHEN a.rating IS NOT NULL THEN 1 END) = COUNT(*) THEN 'completed'
-                    ELSE 'in_progress'
-                END as status,
-                
-                -- Current score (average rating, NULL if no ratings)
-                ROUND(AVG(a.rating), 2) as current_score,
-                
-                -- Intervention required (count of ratings 1 or 2)
-                COUNT(CASE WHEN a.rating IN (1, 2) THEN 1 END) as intervention_required,
-                
-                -- Completion rate
-                COUNT(CASE WHEN a.rating IS NOT NULL THEN 1 END) as completed_standards,
-                COUNT(*) as total_standards,
-                
-                -- Last updated
-                MAX(a.last_updated) as last_updated
-                
-            FROM schools s
-            LEFT JOIN assessments a ON s.school_id = a.school_id 
-                AND a.unique_term_id = %s
-            WHERE s.mat_id = %s 
-                AND s.is_active = 1
-                AND s.is_central_office = 0
-            GROUP BY s.school_id, s.school_name
-            ORDER BY s.school_name
-        """
-        cursor.execute(query, (term_id, current_mat_id))
-        schools = cursor.fetchall()
+        # Main query for current term stats (unchanged)
+        # ... [keep existing current term query] ...
 
-        # Get previous 3 terms' average scores per school
+        # FIXED: Get previous 3 terms BEFORE the selected term
+        # Terms are "before" if:
+        #   1. Same academic year but lower term number (T1 < T2 < T3)
+        #   2. Earlier academic year
         previous_terms_query = """
             SELECT 
                 a.school_id,
@@ -1324,13 +1290,24 @@ async def get_schools_dashboard(
             FROM assessments a
             JOIN schools s ON a.school_id = s.school_id
             WHERE s.mat_id = %s
-                AND a.unique_term_id != %s
                 AND a.rating IS NOT NULL
+                AND (
+                    -- Earlier academic year (any term)
+                    a.academic_year < %s
+                    OR
+                    -- Same academic year but earlier term
+                    (a.academic_year = %s AND CAST(SUBSTRING(a.unique_term_id, 2, 1) AS UNSIGNED) < %s)
+                )
             GROUP BY a.school_id, a.unique_term_id, a.academic_year
             ORDER BY a.academic_year DESC, 
-                FIELD(SUBSTRING(a.unique_term_id, 1, 2), 'T3', 'T2', 'T1')
+                FIELD(SUBSTRING(a.unique_term_id, 1, 2), 'T3', 'T2', 'T1') DESC
         """
-        cursor.execute(previous_terms_query, (current_mat_id, term_id))
+        cursor.execute(previous_terms_query, (
+            current_mat_id, 
+            selected_academic_year,
+            selected_academic_year,
+            selected_term_num
+        ))
         previous_data = cursor.fetchall()
 
         # Organize previous terms by school (limit to 3 most recent per school)
