@@ -1474,7 +1474,7 @@ export function SchoolPerformanceView({ assessments, refreshAssessments, isLoadi
                                           // Simple value sequence with mini chart
                                           return (
                                             <div className="flex items-center justify-center">
-                                              <MiniTrendChart data={trendData} width={80} height={24} />
+                                              <EnhancedTrendChart data={trendData} width={80} height={24} />
                                             </div>
                                           );
                                         })()}

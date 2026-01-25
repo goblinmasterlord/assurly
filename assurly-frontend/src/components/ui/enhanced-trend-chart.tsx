@@ -1,4 +1,4 @@
-import { LineChart, Line, ResponsiveContainer, Tooltip, TooltipProps } from "recharts";
+import { LineChart, Line, ResponsiveContainer, Tooltip } from "recharts";
 import { cn } from "@/lib/utils";
 
 export interface TrendDataPoint {
@@ -16,9 +16,9 @@ interface EnhancedTrendChartProps {
 }
 
 // Custom tooltip component for better UX
-const CustomTooltip = ({ active, payload }: TooltipProps<number, string>) => {
+const CustomTooltip = ({ active, payload }: any) => {
   if (active && payload && payload.length) {
-    const data = payload[0].payload;
+    const data = payload[0].payload as { score: number; label?: string };
     const score = data.score;
     const label = data.label || `Score: ${score.toFixed(1)}`;
     

@@ -19,13 +19,13 @@ export function ProfileDropdown() {
   if (!user) return null;
   
   // Generate initials from full name or email
-  const getInitials = (name?: string, email?: string): string => {
-    if (name) {
-      const parts = name.trim().split(' ');
+  const getInitials = (fullName?: string, email?: string): string => {
+    if (fullName) {
+      const parts = fullName.trim().split(' ');
       if (parts.length >= 2) {
         return `${parts[0][0]}${parts[parts.length - 1][0]}`.toUpperCase();
       }
-      return name.substring(0, 2).toUpperCase();
+      return fullName.substring(0, 2).toUpperCase();
     }
     if (email) {
       return email.substring(0, 2).toUpperCase();
@@ -33,7 +33,7 @@ export function ProfileDropdown() {
     return "U";
   };
 
-  const initials = getInitials(user.full_name || user.name, user.email);
+  const initials = getInitials(user.full_name, user.email);
   
   return (
     <DropdownMenu>
@@ -53,7 +53,7 @@ export function ProfileDropdown() {
         <DropdownMenuLabel className="font-normal">
           <div className="flex flex-col space-y-1">
             <p className="text-sm font-medium leading-none">
-              {user.full_name || user.name || "User"}
+              {user.full_name || "User"}
             </p>
             <p className="text-xs leading-none text-muted-foreground">
               {user.email}
