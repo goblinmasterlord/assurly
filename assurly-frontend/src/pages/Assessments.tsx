@@ -23,7 +23,7 @@ import { useUser } from "@/contexts/UserContext";
 import { useAssessments } from "@/hooks/use-assessments";
 import { getSchools, getAspects } from "@/services/assessment-service";
 import type { School, Aspect } from "@/types/assessment";
-import { isOverdue } from "@/utils/assessment";
+import { isOverdue, getStatusLabel } from "@/utils/assessment";
 import { 
   AlertTriangle,
   Calendar, 
@@ -688,9 +688,9 @@ export function AssessmentsPage() {
                         </div>
                       </TableCell>
                       <TableCell className="text-center">
-                        <Badge variant="outline" className={cn("gap-1.5 font-medium text-xs", getStatusColor(assessment.status))}>
-                          {getStatusIcon(assessment.status)}
-                          {assessment.status}
+                        <Badge variant="outline" className={cn("gap-1.5 font-medium text-xs", getStatusColor(getStatusLabel(assessment.status)))}>
+                          {getStatusIcon(getStatusLabel(assessment.status))}
+                          {getStatusLabel(assessment.status)}
                         </Badge>
                       </TableCell>
                       <TableCell className="text-center">

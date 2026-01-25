@@ -20,12 +20,10 @@ const CustomTooltip = ({ active, payload }: any) => {
   if (active && payload && payload.length) {
     const data = payload[0].payload as { score: number; label?: string };
     const score = data.score;
-    const label = data.label || `Score: ${score.toFixed(1)}`;
     
     return (
       <div className="bg-slate-900 text-white px-2 py-1 rounded text-xs shadow-lg border border-slate-700">
-        <p className="font-medium">{label}</p>
-        <p className="text-slate-300">Score: {score.toFixed(1)}</p>
+        <p className="font-medium">{score.toFixed(1)}</p>
       </div>
     );
   }

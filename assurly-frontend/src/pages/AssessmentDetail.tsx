@@ -616,7 +616,7 @@ export function AssessmentDetailPage() {
       case "partial":
         return <AlertCircle className="h-5 w-5 text-amber-500" />;
       case "incomplete":
-        return <XCircle className="h-5 w-5 text-slate-300" />;
+        return <CheckCircle className="h-5 w-5 text-slate-300" />; // Grey checkmark for not rated
       default:
         return null;
     }
