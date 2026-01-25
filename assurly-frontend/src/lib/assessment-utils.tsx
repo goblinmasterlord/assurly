@@ -192,9 +192,12 @@ export const getCategoryIcon = (category: string) => {
 
 /**
  * Maps aspect category codes to their full display names
- * Updated to match v4 API exactly
+ * Updated to match v4 API exactly and handle case-insensitively
  */
 export const getAspectDisplayName = (category: string): string => {
+  // Normalize to uppercase for comparison
+  const normalized = category.toUpperCase();
+  
   const aspectMap: Record<string, string> = {
     // v4 API aspect codes (uppercase)
     "EDU": "Education",
@@ -204,22 +207,27 @@ export const getAspectDisplayName = (category: string): string => {
     "HR": "Human Resources",
     "IS": "Information Standards",
     "IT": "IT",
+    "LD": "Leadership",           // Leadership aspect
+    "SAFE": "Safeguarding",       // Safeguarding aspect
+    "FAITH": "Faith",             // Faith aspect
     
     // Display name variations (case-insensitive support)
-    "Education": "Education",
-    "Estates": "Estates",
-    "Finance": "Finance", 
-    "Governance": "Governance",
-    "Human Resources": "Human Resources",
-    "Information Standards": "Information Standards",
+    "EDUCATION": "Education",
+    "ESTATES": "Estates",
+    "FINANCE": "Finance", 
+    "GOVERNANCE": "Governance",
+    "HUMAN RESOURCES": "Human Resources",
+    "INFORMATION STANDARDS": "Information Standards",
+    "LEADERSHIP": "Leadership",
+    "SAFEGUARDING": "Safeguarding",
     
     // Legacy support for existing data
-    "Finance & Procurement": "Finance",
-    "IT & Information Services": "IT",
-    "IT (Digital Aspects)": "Information Standards",
+    "FINANCE & PROCUREMENT": "Finance",
+    "IT & INFORMATION SERVICES": "IT",
+    "IT (DIGITAL ASPECTS)": "Information Standards",
   };
   
-  return aspectMap[category] || category;
+  return aspectMap[normalized] || category;
 };
 
 /**

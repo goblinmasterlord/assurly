@@ -122,7 +122,7 @@ export function AssessmentDetailPage() {
   
   // Check for admin view mode from URL params
   const searchParams = new URLSearchParams(window.location.search);
-  const isAdminView = searchParams.get('view') === 'admin' || role === 'mat-admin';
+  const isAdminView = searchParams.get('view') === 'admin' && role === 'mat-admin';
   
   // 🚀 OPTIMIZED: Using enhanced assessment hook with caching and automatic refresh
       const { 
@@ -623,8 +623,8 @@ export function AssessmentDetailPage() {
   };
 
   const isCompleted = progressPercentage === 100;
-  const canSubmit = isCompleted && role === "department-head" && (assessment.status !== "completed" || isEditMode);
-  const canEdit = role === "department-head" && (assessment.status !== "completed" || isEditMode);
+  const canSubmit = isCompleted && (role === "department-head" || role === "mat-admin") && (assessment.status !== "completed" || isEditMode);
+  const canEdit = (role === "department-head" || role === "mat-admin") && (assessment.status !== "completed" || isEditMode);
   
   return (
     <div className="container max-w-7xl py-6 md:py-10">
@@ -639,6 +639,23 @@ export function AssessmentDetailPage() {
         </Button>
         
         <div className="flex items-center gap-4">
+          {/* Edit Ratings Button for MAT Admins in Admin View */}
+          {role === "mat-admin" && isAdminView && (
+            <Button
+              variant="default"
+              size="sm"
+              onClick={() => {
+                // Switch to Department Head view by removing ?view=admin
+                const newUrl = window.location.pathname;
+                navigate(newUrl);
+              }}
+              className="gap-2"
+            >
+              <span className="text-xs">✏️</span>
+              Edit Ratings
+            </Button>
+          )}
+          
           {/* Related assessments dropdown for department heads */}
           {role === "department-head" && relatedAssessments.length > 0 && (
             <div className="flex items-center">
@@ -788,8 +805,8 @@ export function AssessmentDetailPage() {
         </div>
       </div>
       
-      {/* Only show assessment form for department heads and non-admin view */}
-      {role === "department-head" && !isAdminView && assessment.standards && (
+      {/* Only show assessment form for department heads and mat admins in non-admin view */}
+      {(role === "department-head" || role === "mat-admin") && !isAdminView && assessment.standards && (
         <div className="grid grid-cols-1 md:grid-cols-12 gap-6">
           {/* Standards List - Sidebar */}
           <Card className="md:col-span-4 lg:col-span-3 h-fit">
@@ -1137,7 +1154,7 @@ export function AssessmentDetailPage() {
                   </div>
                 </CardContent>
                 
-                {role === "department-head" && (assessment.status !== "completed" || isEditMode) && (
+                {(role === "department-head" || role === "mat-admin") && (assessment.status !== "completed" || isEditMode) && (
                   <div className="pb-24">
                     {/* Add padding to account for sticky bottom bar */}
                   </div>
@@ -1148,8 +1165,8 @@ export function AssessmentDetailPage() {
         </div>
       )}
       
-      {/* Sticky Bottom Navigation Bar for Department Heads */}
-      {role === "department-head" && (assessment.status !== "completed" || isEditMode) && !isAdminView && (
+      {/* Sticky Bottom Navigation Bar for Department Heads and MAT Admins */}
+      {(role === "department-head" || role === "mat-admin") && (assessment.status !== "completed" || isEditMode) && !isAdminView && (
         <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-slate-200/60 shadow-lg z-50">
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
             <div className="flex items-center justify-between py-4">
