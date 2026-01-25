@@ -2,7 +2,7 @@ from fastapi import FastAPI, HTTPException, Query, Depends, status, Request
 from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
-from pydantic import BaseModel, EmailStr
+from pydantic import BaseModel, EmailStr, validator
 from typing import List, Optional
 import pymysql
 import os
@@ -345,6 +345,43 @@ class UserAspectAssignmentResponse(BaseModel):
     notify_on_due_date: bool
 
 # ================================
+# USER MANAGEMENT MODELS
+# ================================
+
+class CreateUserRequest(BaseModel):
+    email: EmailStr
+    full_name: str
+    role_title: str
+    school_id: Optional[str] = None
+
+    @validator('role_title')
+    def validate_role(cls, v):
+        allowed_roles = ['MAT Administrator', 'Department Head', 'School Leader']
+        if v not in allowed_roles:
+            raise ValueError(f"role_title must be one of: {', '.join(allowed_roles)}")
+        return v
+
+    @validator('full_name')
+    def validate_name(cls, v):
+        if not v or len(v.strip()) < 2:
+            raise ValueError("full_name must be at least 2 characters")
+        return v.strip()
+
+class UpdateUserRequest(BaseModel):
+    full_name: Optional[str] = None
+    role_title: Optional[str] = None
+    school_id: Optional[str] = None
+
+    @validator('role_title')
+    def validate_role(cls, v):
+        if v is None:
+            return v
+        allowed_roles = ['MAT Administrator', 'Department Head', 'School Leader']
+        if v not in allowed_roles:
+            raise ValueError(f"role_title must be one of: {', '.join(allowed_roles)}")
+        return v
+
+# ================================
 # LEGACY MODELS (Phase 4 - To Be Removed)
 # These support old endpoints during migration
 # ================================
@@ -480,6 +517,20 @@ async def get_current_school(current_user: UserResponse = Depends(get_current_us
     Returns None for MAT-wide access users.
     """
     return current_user.school_id
+
+async def verify_mat_admin(
+    current_user: UserResponse = Depends(get_current_user)
+) -> UserResponse:
+    """
+    Dependency to verify user is MAT Administrator.
+    Use this for endpoints that require admin privileges.
+    """
+    if current_user.role_title != "MAT Administrator":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only MAT Administrators can perform this action"
+        )
+    return current_user
 
 # ================================
 # YOUR EXISTING HELPER FUNCTIONS (unchanged)
@@ -2417,50 +2468,367 @@ async def get_users(
     current_mat_id: str = Depends(get_current_mat),
     current_user: UserResponse = Depends(get_current_user),
     school_id: Optional[str] = Query(None),
-    role_title: Optional[str] = Query(None)
+    role_title: Optional[str] = Query(None),
+    include_inactive: bool = Query(False, description="Include deleted/inactive users")
 ):
     """
-    Get list of users in the authenticated user's MAT.
-    Enforces MAT isolation - users can only see other users in their own MAT.
-    Optionally filtered by school and role.
+    Get list of users within the MAT.
+    Enforces MAT isolation - only returns users in the authenticated user's MAT.
+    Optionally filtered by school, role, and active status.
     Requires authentication.
     """
     try:
         connection = get_db_connection()
         cursor = connection.cursor()
 
-        # MAT isolation: only return users from the same MAT
         query = """
-            SELECT user_id, full_name as name, email, role_title, school_id, mat_id, is_active
-            FROM users
-            WHERE mat_id = %s AND is_active = 1
+            SELECT
+                u.user_id,
+                u.email,
+                u.full_name,
+                u.role_title,
+                u.school_id,
+                s.school_name,
+                u.mat_id,
+                u.is_active,
+                u.last_login,
+                u.created_at
+            FROM users u
+            LEFT JOIN schools s ON u.school_id = s.school_id
+            WHERE u.mat_id = %s
         """
         params = [current_mat_id]
 
-        # Optional school filter (must be within user's MAT)
+        if not include_inactive:
+            query += " AND u.is_active = 1"
+
         if school_id:
-            query += " AND school_id = %s"
+            query += " AND u.school_id = %s"
             params.append(school_id)
 
-        # Optional role filter
         if role_title:
-            query += " AND role_title = %s"
+            query += " AND u.role_title = %s"
             params.append(role_title)
 
-        query += " ORDER BY full_name"
+        query += " ORDER BY u.full_name"
 
         cursor.execute(query, params)
         users = cursor.fetchall()
 
-        # Add permissions (simplified for now)
+        # Process datetime fields
+        processed_users = []
         for user in users:
-            user['permissions'] = ["complete_assessments", "view_school_data"]
+            processed_user = dict(user)
+            if processed_user.get('last_login'):
+                processed_user['last_login'] = processed_user['last_login'].strftime('%Y-%m-%dT%H:%M:%SZ')
+            if processed_user.get('created_at'):
+                processed_user['created_at'] = processed_user['created_at'].strftime('%Y-%m-%dT%H:%M:%SZ')
+            processed_users.append(processed_user)
 
         connection.close()
-        return JSONResponse(content=users, status_code=200)
+        return JSONResponse(content=processed_users, status_code=200)
 
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/api/users", tags=["Users"], status_code=status.HTTP_201_CREATED)
+async def create_user(
+    user_data: CreateUserRequest,
+    current_mat_id: str = Depends(get_current_mat),
+    current_user: UserResponse = Depends(verify_mat_admin)
+):
+    """
+    Create a new user within the MAT.
+
+    - Only MAT Administrators can create users
+    - Enforces MAT isolation
+    - Validates email uniqueness within MAT
+    """
+    connection = None
+    try:
+        connection = get_db_connection()
+        cursor = connection.cursor()
+
+        # Check if email already exists in this MAT
+        check_query = """
+            SELECT user_id FROM users
+            WHERE email = %s AND mat_id = %s AND is_active = 1
+        """
+        cursor.execute(check_query, (user_data.email, current_mat_id))
+        existing = cursor.fetchone()
+
+        if existing:
+            connection.close()
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"A user with email '{user_data.email}' already exists in your MAT"
+            )
+
+        # If school_id provided, verify it belongs to the MAT
+        if user_data.school_id:
+            school_query = """
+                SELECT school_id FROM schools
+                WHERE school_id = %s AND mat_id = %s AND is_active = 1
+            """
+            cursor.execute(school_query, (user_data.school_id, current_mat_id))
+            school = cursor.fetchone()
+
+            if not school:
+                connection.close()
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=f"School '{user_data.school_id}' not found in your MAT"
+                )
+
+        # Generate user_id
+        user_id = f"user{uuid.uuid4().hex[:8]}"
+
+        # Insert new user
+        insert_query = """
+            INSERT INTO users
+            (user_id, email, full_name, role_title, school_id, mat_id, is_active, created_at)
+            VALUES (%s, %s, %s, %s, %s, %s, 1, NOW())
+        """
+        cursor.execute(insert_query, (
+            user_id,
+            user_data.email,
+            user_data.full_name,
+            user_data.role_title,
+            user_data.school_id,
+            current_mat_id
+        ))
+
+        connection.commit()
+
+        # Fetch the created user
+        fetch_query = """
+            SELECT
+                u.user_id,
+                u.email,
+                u.full_name,
+                u.role_title,
+                u.school_id,
+                s.school_name,
+                u.mat_id,
+                u.is_active,
+                u.created_at
+            FROM users u
+            LEFT JOIN schools s ON u.school_id = s.school_id
+            WHERE u.user_id = %s
+        """
+        cursor.execute(fetch_query, (user_id,))
+        created_user = cursor.fetchone()
+
+        connection.close()
+
+        # Process datetime
+        result = dict(created_user)
+        if result.get('created_at'):
+            result['created_at'] = result['created_at'].strftime('%Y-%m-%dT%H:%M:%SZ')
+
+        return JSONResponse(content=result, status_code=201)
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        if connection:
+            connection.rollback()
+            connection.close()
+        raise HTTPException(status_code=500, detail=f"Failed to create user: {str(e)}")
+
+@app.delete("/api/users/{user_id}", tags=["Users"])
+async def delete_user(
+    user_id: str,
+    current_mat_id: str = Depends(get_current_mat),
+    current_user: UserResponse = Depends(verify_mat_admin)
+):
+    """
+    Soft delete a user (set is_active = false).
+
+    - Only MAT Administrators can delete users
+    - Cannot delete your own account
+    - Enforces MAT isolation
+    - Preserves user data for audit trail
+    """
+    connection = None
+    try:
+        # Prevent self-deletion
+        if user_id == current_user.user_id:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="You cannot delete your own account"
+            )
+
+        connection = get_db_connection()
+        cursor = connection.cursor()
+
+        # Verify user exists and belongs to same MAT
+        check_query = """
+            SELECT user_id, email, full_name, is_active
+            FROM users
+            WHERE user_id = %s AND mat_id = %s
+        """
+        cursor.execute(check_query, (user_id, current_mat_id))
+        user = cursor.fetchone()
+
+        if not user:
+            connection.close()
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="User not found"
+            )
+
+        if not user['is_active']:
+            connection.close()
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="User is already deleted"
+            )
+
+        # Soft delete: set is_active = false and record deleted_at
+        delete_query = """
+            UPDATE users
+            SET is_active = 0, deleted_at = NOW()
+            WHERE user_id = %s AND mat_id = %s
+        """
+        cursor.execute(delete_query, (user_id, current_mat_id))
+
+        connection.commit()
+        connection.close()
+
+        return JSONResponse(content={
+            "message": "User successfully deleted",
+            "user_id": user_id,
+            "email": user['email'],
+            "full_name": user['full_name'],
+            "deleted_at": datetime.now().strftime('%Y-%m-%dT%H:%M:%SZ')
+        }, status_code=200)
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        if connection:
+            connection.rollback()
+            connection.close()
+        raise HTTPException(status_code=500, detail=f"Failed to delete user: {str(e)}")
+
+@app.put("/api/users/{user_id}", tags=["Users"])
+async def update_user(
+    user_id: str,
+    user_data: UpdateUserRequest,
+    current_mat_id: str = Depends(get_current_mat),
+    current_user: UserResponse = Depends(verify_mat_admin)
+):
+    """
+    Update a user's details.
+
+    - Only MAT Administrators can update users
+    - Enforces MAT isolation
+    - Cannot change email (use separate endpoint if needed)
+    """
+    connection = None
+    try:
+        connection = get_db_connection()
+        cursor = connection.cursor()
+
+        # Verify user exists and belongs to same MAT
+        check_query = """
+            SELECT user_id FROM users
+            WHERE user_id = %s AND mat_id = %s AND is_active = 1
+        """
+        cursor.execute(check_query, (user_id, current_mat_id))
+        user = cursor.fetchone()
+
+        if not user:
+            connection.close()
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="User not found"
+            )
+
+        # If school_id provided, verify it belongs to the MAT
+        if user_data.school_id:
+            school_query = """
+                SELECT school_id FROM schools
+                WHERE school_id = %s AND mat_id = %s AND is_active = 1
+            """
+            cursor.execute(school_query, (user_data.school_id, current_mat_id))
+            school = cursor.fetchone()
+
+            if not school:
+                connection.close()
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=f"School '{user_data.school_id}' not found in your MAT"
+                )
+
+        # Build update query dynamically
+        updates = []
+        params = []
+
+        if user_data.full_name:
+            updates.append("full_name = %s")
+            params.append(user_data.full_name)
+
+        if user_data.role_title:
+            updates.append("role_title = %s")
+            params.append(user_data.role_title)
+
+        if user_data.school_id is not None:  # Allow setting to NULL
+            updates.append("school_id = %s")
+            params.append(user_data.school_id if user_data.school_id else None)
+
+        if not updates:
+            connection.close()
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="No fields to update"
+            )
+
+        updates.append("updated_at = NOW()")
+        params.extend([user_id, current_mat_id])
+
+        update_query = f"""
+            UPDATE users
+            SET {', '.join(updates)}
+            WHERE user_id = %s AND mat_id = %s
+        """
+        cursor.execute(update_query, params)
+
+        connection.commit()
+
+        # Fetch updated user
+        fetch_query = """
+            SELECT
+                u.user_id,
+                u.email,
+                u.full_name,
+                u.role_title,
+                u.school_id,
+                s.school_name,
+                u.mat_id,
+                u.is_active
+            FROM users u
+            LEFT JOIN schools s ON u.school_id = s.school_id
+            WHERE u.user_id = %s
+        """
+        cursor.execute(fetch_query, (user_id,))
+        updated_user = cursor.fetchone()
+
+        connection.close()
+
+        return JSONResponse(content={
+            "message": "User updated successfully",
+            "user": dict(updated_user)
+        }, status_code=200)
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        if connection:
+            connection.rollback()
+            connection.close()
+        raise HTTPException(status_code=500, detail=f"Failed to update user: {str(e)}")
 
 @app.get("/api/users/me", tags=["Users"])
 async def get_current_user_context(
