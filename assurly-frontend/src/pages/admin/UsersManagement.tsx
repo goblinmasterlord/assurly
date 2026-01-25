@@ -52,6 +52,7 @@ export default function UsersManagement() {
   const [schools, setSchools] = useState<School[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
+  const [showInactive, setShowInactive] = useState(false);
   const [addUserOpen, setAddUserOpen] = useState(false);
   const [deleteUserOpen, setDeleteUserOpen] = useState(false);
   const [selectedUser, setSelectedUser] = useState<User | null>(null);
@@ -71,8 +72,9 @@ export default function UsersManagement() {
       try {
         setLoading(true);
         
-        // Fetch users from API
-        const usersResponse = await fetch("/api/users", {
+        // Fetch users from API - include inactive if toggle is on
+        const usersUrl = showInactive ? "/api/users?include_inactive=true" : "/api/users";
+        const usersResponse = await fetch(usersUrl, {
           headers: {
             Authorization: `Bearer ${localStorage.getItem("token")}`,
           },
@@ -101,7 +103,7 @@ export default function UsersManagement() {
     };
 
     fetchData();
-  }, [toast]);
+  }, [toast, showInactive]);
 
   // Filter users based on search
   const filteredUsers = users.filter(
@@ -124,7 +126,6 @@ export default function UsersManagement() {
 
     setSubmitting(true);
     try {
-      // TODO: Backend endpoint needed - POST /api/users
       const response = await fetch("/api/users", {
         method: "POST",
         headers: {
@@ -167,13 +168,12 @@ export default function UsersManagement() {
     }
   };
 
-  // Handle delete user
+  // Handle delete user (soft delete)
   const handleDeleteUser = async () => {
     if (!selectedUser) return;
 
     setSubmitting(true);
     try {
-      // TODO: Backend endpoint needed - DELETE /api/users/{user_id}
       const response = await fetch(`/api/users/${selectedUser.user_id}`, {
         method: "DELETE",
         headers: {
@@ -183,23 +183,28 @@ export default function UsersManagement() {
 
       if (!response.ok) {
         const error = await response.json();
-        throw new Error(error.detail || "Failed to delete user");
+        throw new Error(error.detail || "Failed to deactivate user");
       }
 
-      setUsers(users.filter((u) => u.user_id !== selectedUser.user_id));
+      // Update the user in the list to show as inactive
+      setUsers(users.map(u => 
+        u.user_id === selectedUser.user_id 
+          ? { ...u, is_active: false }
+          : u
+      ));
       
       toast({
-        title: "User deleted successfully",
-        description: `${selectedUser.full_name || selectedUser.email} has been removed from the system.`,
+        title: "User deactivated successfully",
+        description: `${selectedUser.full_name || selectedUser.email} has been deactivated.`,
       });
 
       setDeleteUserOpen(false);
       setSelectedUser(null);
     } catch (error: any) {
-      console.error("Error deleting user:", error);
+      console.error("Error deactivating user:", error);
       toast({
-        title: "Error deleting user",
-        description: error.message || "Failed to delete user. Please try again.",
+        title: "Error deactivating user",
+        description: error.message || "Failed to deactivate user. Please try again.",
         variant: "destructive",
       });
     } finally {
@@ -244,14 +249,28 @@ export default function UsersManagement() {
       {/* Search and Filters */}
       <Card className="mb-6">
         <CardContent className="pt-6">
-          <div className="relative">
-            <Search className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
-            <Input
-              placeholder="Search by name, email, or role..."
-              className="pl-9"
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-            />
+          <div className="flex items-center gap-4">
+            <div className="relative flex-1">
+              <Search className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
+              <Input
+                placeholder="Search by name, email, or role..."
+                className="pl-9"
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+              />
+            </div>
+            <div className="flex items-center gap-2">
+              <input
+                type="checkbox"
+                id="showInactive"
+                checked={showInactive}
+                onChange={(e) => setShowInactive(e.target.checked)}
+                className="h-4 w-4 rounded border-slate-300 text-primary focus:ring-primary"
+              />
+              <Label htmlFor="showInactive" className="text-sm font-normal cursor-pointer">
+                Show inactive users
+              </Label>
+            </div>
           </div>
         </CardContent>
       </Card>
@@ -361,8 +380,9 @@ export default function UsersManagement() {
                           setSelectedUser(user);
                           setDeleteUserOpen(true);
                         }}
-                        disabled={user.user_id === currentUser?.user_id}
-                        className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                        disabled={user.user_id === currentUser?.user_id || !user.is_active}
+                        className="text-red-600 hover:text-red-700 hover:bg-red-50 disabled:opacity-50"
+                        title={!user.is_active ? "User is already inactive" : user.user_id === currentUser?.user_id ? "Cannot deactivate yourself" : "Deactivate user"}
                       >
                         <Trash2 className="h-4 w-4" />
                       </Button>
@@ -458,11 +478,11 @@ export default function UsersManagement() {
       <AlertDialog open={deleteUserOpen} onOpenChange={setDeleteUserOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Are you sure?</AlertDialogTitle>
+            <AlertDialogTitle>Deactivate User?</AlertDialogTitle>
             <AlertDialogDescription>
-              This will permanently delete{" "}
-              <span className="font-semibold">{selectedUser?.full_name || selectedUser?.email}</span> from the system.
-              This action cannot be undone.
+              This will deactivate{" "}
+              <span className="font-semibold">{selectedUser?.full_name || selectedUser?.email}</span> and revoke their access to the system.
+              They will no longer be able to log in or access any data. You can reactivate them later if needed.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -475,10 +495,10 @@ export default function UsersManagement() {
               {submitting ? (
                 <>
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Deleting...
+                  Deactivating...
                 </>
               ) : (
-                "Delete User"
+                "Deactivate User"
               )}
             </AlertDialogAction>
           </AlertDialogFooter>
