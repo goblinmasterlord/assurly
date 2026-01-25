@@ -163,6 +163,12 @@ function getUserFriendlyErrorMessage(error: AxiosError): string {
   
   const status = error.response.status;
   const statusText = error.response.statusText;
+  const endpoint = error.config?.url || '';
+  
+  // Special handling for magic link authentication errors
+  if (endpoint.includes('/auth/request-magic-link') && (status === 401 || status === 403)) {
+    return "We don't have a user registered with this email address. If you should have access to the platform, please contact your organisation administrator.";
+  }
   
   switch (status) {
     case 400:

@@ -77,8 +77,8 @@ export default function UsersManagement() {
         const usersData = await getUsers(showInactive);
         setUsers(usersData);
 
-        // Fetch schools
-        const schoolsData = await getSchools();
+        // Fetch schools (including central team)
+        const schoolsData = await getSchools(true);
         setSchools(schoolsData);
       } catch (error) {
         console.error("Error fetching data:", error);
@@ -105,7 +105,7 @@ export default function UsersManagement() {
 
   // Handle add user
   const handleAddUser = async () => {
-    if (!newUser.email || !newUser.full_name || !newUser.role_title) {
+    if (!newUser.email || !newUser.full_name || !newUser.role_title || !newUser.school_id) {
       toast({
         title: "Missing information",
         description: "Please fill in all required fields.",
@@ -120,7 +120,7 @@ export default function UsersManagement() {
         email: newUser.email,
         full_name: newUser.full_name,
         role_title: newUser.role_title,
-        school_id: newUser.school_id || null,
+        school_id: newUser.school_id,
         mat_id: currentUser?.mat_id,
       });
 
@@ -407,22 +407,22 @@ export default function UsersManagement() {
               </Select>
             </div>
             <div className="space-y-2">
-              <Label htmlFor="school">School (Optional)</Label>
-              <Select value={newUser.school_id || undefined} onValueChange={(value) => setNewUser({ ...newUser, school_id: value === "none" ? "" : value })}>
+              <Label htmlFor="school">School / Team *</Label>
+              <Select value={newUser.school_id} onValueChange={(value) => setNewUser({ ...newUser, school_id: value })}>
                 <SelectTrigger id="school">
-                  <SelectValue placeholder="No School" />
+                  <SelectValue placeholder="Select a school or team" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="none">No School</SelectItem>
-                  {schools.map((school) => {
-                    const schoolId = school.school_id || school.id;
-                    if (!schoolId) return null;
-                    return (
-                      <SelectItem key={schoolId} value={schoolId}>
-                        {school.school_name || school.name}
-                      </SelectItem>
-                    );
-                  })}
+                  {schools
+                    .filter(school => (school.school_id || school.id)) // Only schools with valid IDs
+                    .map((school) => {
+                      const schoolId = school.school_id || school.id;
+                      return (
+                        <SelectItem key={schoolId} value={schoolId!}>
+                          {school.school_name || school.name}
+                        </SelectItem>
+                      );
+                    })}
                 </SelectContent>
               </Select>
             </div>
