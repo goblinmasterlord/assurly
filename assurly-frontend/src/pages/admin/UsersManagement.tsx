@@ -408,17 +408,21 @@ export default function UsersManagement() {
             </div>
             <div className="space-y-2">
               <Label htmlFor="school">School (Optional)</Label>
-              <Select value={newUser.school_id} onValueChange={(value) => setNewUser({ ...newUser, school_id: value })}>
+              <Select value={newUser.school_id || undefined} onValueChange={(value) => setNewUser({ ...newUser, school_id: value === "none" ? "" : value })}>
                 <SelectTrigger id="school">
-                  <SelectValue placeholder="Select a school" />
+                  <SelectValue placeholder="No School" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">No School</SelectItem>
-                  {schools.map((school) => (
-                    <SelectItem key={school.school_id || school.id} value={school.school_id || school.id || ""}>
-                      {school.school_name || school.name}
-                    </SelectItem>
-                  ))}
+                  <SelectItem value="none">No School</SelectItem>
+                  {schools.map((school) => {
+                    const schoolId = school.school_id || school.id;
+                    if (!schoolId) return null;
+                    return (
+                      <SelectItem key={schoolId} value={schoolId}>
+                        {school.school_name || school.name}
+                      </SelectItem>
+                    );
+                  })}
                 </SelectContent>
               </Select>
             </div>
