@@ -37,6 +37,7 @@ import { AnimatedProgress } from "@/components/ui/animated-progress";
 import { AnimatedNumber } from "@/components/ui/animated-number";
 import { SortableTableHead, type SortDirection } from "@/components/ui/sortable-table-head";
 import type { Assessment, AssessmentCategory, SchoolPerformance, AcademicTerm, School } from "@/types/assessment";
+import type { SchoolsDashboardResponse, SchoolDashboardItem } from "@/types/dashboard";
 import { cn } from "@/lib/utils";
 import { 
   AlertTriangle, 
@@ -69,6 +70,7 @@ import {
 import { getAspectDisplayName, calculateSchoolStatus, getStatusColor, getStatusIcon } from "@/lib/assessment-utils";
 import { FilterBar } from "@/components/ui/filter-bar";
 import { getSchools, getAspects } from "@/services/assessment-service";
+import { getSchoolsDashboard } from "@/services/dashboard-service";
 import type { Aspect } from "@/types/assessment";
 import { useOptimisticFilter } from "@/hooks/use-optimistic-filter";
 import { useInlineLoading } from "@/hooks/use-inline-loading";
@@ -89,6 +91,31 @@ type HistoricalData = {
 }
 
 const TERM_STORAGE_KEY = "assurly_selected_term_mat_admin";
+
+const TERM_NAME_TO_ID: Record<string, string> = {
+  Autumn: "T1",
+  Spring: "T2",
+  Summer: "T3",
+};
+
+function compressAcademicYear(year: string): string {
+  // Accept either short (2025-26) or long (2025-2026)
+  if (/^\d{4}-\d{2}$/.test(year)) return year;
+  const match = year.match(/^(\d{4})-(\d{4})$/);
+  if (!match) return year;
+  return `${match[1]}-${match[2].slice(-2)}`;
+}
+
+function termLabelToUniqueTermId(termLabel: string): string | undefined {
+  // UI stores terms like: "Autumn 2025-2026"
+  if (!termLabel) return undefined;
+  const [termName, academicYearLong] = termLabel.split(" ");
+  if (!termName || !academicYearLong) return undefined;
+  const termId = TERM_NAME_TO_ID[termName];
+  if (!termId) return undefined;
+  const academicYear = compressAcademicYear(academicYearLong);
+  return `${termId}-${academicYear}`;
+}
 
 export function SchoolPerformanceView({ assessments, refreshAssessments, isLoading = false, isRefreshing = false }: SchoolPerformanceViewProps) {
   
@@ -124,7 +151,12 @@ export function SchoolPerformanceView({ assessments, refreshAssessments, isLoadi
   const [schoolsLoading, setSchoolsLoading] = useState(true);
   const [aspects, setAspects] = useState<Aspect[]>([]);
   const [aspectsLoading, setAspectsLoading] = useState(true);
+  const [schoolsDashboard, setSchoolsDashboard] = useState<SchoolsDashboardResponse | null>(null);
+  const [dashboardLoading, setDashboardLoading] = useState(false);
+  const [dashboardError, setDashboardError] = useState<string | null>(null);
   const inlineLoading = useInlineLoading();
+  const isPrimaryLoading = isLoading || (dashboardLoading && !schoolsDashboard);
+  const isUpdating = isRefreshing || (dashboardLoading && !!schoolsDashboard);
 
   // Fetch schools and aspects from API
   useEffect(() => {
@@ -156,6 +188,38 @@ export function SchoolPerformanceView({ assessments, refreshAssessments, isLoadi
     
     fetchData();
   }, []);
+
+  // Fetch schools dashboard summary (bulk dashboard endpoint)
+  const selectedUniqueTermId = useMemo(() => termLabelToUniqueTermId(selectedTerm), [selectedTerm]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const loadDashboard = async () => {
+      setDashboardLoading(true);
+      setDashboardError(null);
+      try {
+        const data = await getSchoolsDashboard(selectedUniqueTermId);
+        if (!cancelled) setSchoolsDashboard(data);
+      } catch (err: any) {
+        console.error("Failed to load schools dashboard:", err);
+        const message = err?.userMessage || err?.message || "Failed to load dashboard data";
+        if (!cancelled) setDashboardError(message);
+      } finally {
+        if (!cancelled) setDashboardLoading(false);
+      }
+    };
+
+    loadDashboard();
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedUniqueTermId]);
+
+  const dashboardBySchoolId = useMemo(() => {
+    const entries = schoolsDashboard?.schools?.map((s) => [s.school_id, s] as const) ?? [];
+    return new Map<string, SchoolDashboardItem>(entries);
+  }, [schoolsDashboard]);
 
   // Get available terms from assessments
   const availableTerms = useMemo(() => {
@@ -442,8 +506,8 @@ export function SchoolPerformanceView({ assessments, refreshAssessments, isLoadi
     });
   }, []);
 
-  // Group assessments by school and calculate performance metrics
-  const schoolPerformanceData = useMemo(() => {
+  // Group assessments by school and calculate performance metrics (detail/expansion uses grouped assessments)
+  const schoolPerformanceFromAssessments = useMemo(() => {
     const schoolMap = new Map<string, SchoolPerformance & { previousOverallScore?: number; changesByCategory?: Map<string, any>; aspectsWithInterventionRequired?: Set<string> }>();
 
     // Process current term assessments
@@ -548,6 +612,28 @@ export function SchoolPerformanceView({ assessments, refreshAssessments, isLoadi
 
     return Array.from(schoolMap.values());
   }, [filteredByTermAssessments, previousTermAssessments]);
+
+  // Overlay dashboard summary fields (scores/trends/interventions/completion) when available
+  const schoolPerformanceData = useMemo(() => {
+    if (!schoolsDashboard) return schoolPerformanceFromAssessments;
+
+    return schoolPerformanceFromAssessments.map((school) => {
+      const schoolId = school.school?.id || school.school?.school_id || school.school?.code || '';
+      const dash = dashboardBySchoolId.get(schoolId);
+      if (!dash) return school;
+
+      const previousOverallScore = dash.previous_terms?.[0]?.avg_score ?? school.previousOverallScore;
+
+      return {
+        ...school,
+        status: dash.status,
+        overallScore: dash.current_score ?? 0,
+        previousOverallScore: previousOverallScore ?? undefined,
+        criticalStandardsTotal: dash.intervention_required,
+        lastUpdated: dash.last_updated || school.lastUpdated,
+      };
+    });
+  }, [schoolPerformanceFromAssessments, schoolsDashboard, dashboardBySchoolId]);
 
   const handleSort = (key: string) => {
     setSortConfig(prev => ({
@@ -736,9 +822,14 @@ export function SchoolPerformanceView({ assessments, refreshAssessments, isLoadi
             <p className="text-muted-foreground">
               Monitor assessment progress and performance across all schools in your trust
             </p>
+            {dashboardError && (
+              <p className="mt-1 text-sm text-amber-700">
+                Dashboard summary unavailable (showing fallback data): {dashboardError}
+              </p>
+            )}
           </div>
           <div className="flex flex-col space-y-2 md:flex-row md:space-y-0 md:space-x-3">
-            {isLoading ? (
+            {isPrimaryLoading ? (
               <TermNavigationSkeleton />
             ) : (
               <TermStepper
@@ -751,7 +842,7 @@ export function SchoolPerformanceView({ assessments, refreshAssessments, isLoadi
             <Button 
               onClick={() => setInvitationSheetOpen(true)}
               className="w-full md:w-auto"
-              disabled={isLoading}
+              disabled={isPrimaryLoading}
             >
               <CheckCircle2 className="mr-2 h-4 w-4" />
               Request Rating
@@ -760,7 +851,7 @@ export function SchoolPerformanceView({ assessments, refreshAssessments, isLoadi
         </div>
 
         {/* Enhanced Filters */}
-        {isLoading ? (
+        {isPrimaryLoading ? (
           <FilterBarSkeleton />
         ) : (
           <FilterBar
@@ -817,11 +908,11 @@ export function SchoolPerformanceView({ assessments, refreshAssessments, isLoadi
       {/* Schools Table */}
       <Card className="relative">
         {/* Loading overlay when refreshing */}
-        {isRefreshing && !isLoading && (
+        {isUpdating && !isPrimaryLoading && (
           <div className="absolute inset-0 bg-white/70 backdrop-blur-sm z-10 flex items-center justify-center rounded-lg">
             <div className="flex items-center gap-2 bg-white px-4 py-2 rounded-lg shadow-sm border">
               <Loader2 className="h-4 w-4 animate-spin text-slate-600" />
-              <span className="text-sm text-slate-600">Updating assessments...</span>
+              <span className="text-sm text-slate-600">Updating dashboard...</span>
             </div>
           </div>
         )}
@@ -836,7 +927,7 @@ export function SchoolPerformanceView({ assessments, refreshAssessments, isLoadi
           </CardDescription>
         </CardHeader>
         <CardContent className="p-0">
-          {isLoading ? (
+          {isPrimaryLoading ? (
             <div className="p-6">
               <Table>
                 <TableHeader>
@@ -921,16 +1012,21 @@ export function SchoolPerformanceView({ assessments, refreshAssessments, isLoadi
               </TableHeader>
               <TableBody>
                 {filteredSchoolData.map((school, index) => {
-                const isExpanded = expandedSchools.has(school.school?.id || '');
-                const completedCount = school.assessmentsByCategory.filter(cat => cat.status === "completed").length;
-                const totalCount = school.assessmentsByCategory.length;
+                const schoolId = school.school?.id || school.school?.school_id || '';
+                const dashboardItem = schoolId ? dashboardBySchoolId.get(schoolId) : undefined;
+                const isExpanded = expandedSchools.has(schoolId);
+
+                // Completion rate: prefer backend dashboard (standards-level), fallback to aspects-level
+                const completedCount = dashboardItem?.completed_standards ?? school.assessmentsByCategory.filter(cat => cat.status === "completed").length;
+                const totalCount = dashboardItem?.total_standards ?? school.assessmentsByCategory.length;
+                const completionPercent = totalCount > 0 ? (completedCount / totalCount) * 100 : 0;
 
                 return (
-                  <React.Fragment key={school.school?.id || index}>
+                  <React.Fragment key={schoolId || index}>
                     <TableRow 
                       className="cursor-pointer hover:bg-slate-50 transition-colors duration-200 animate-in fade-in-0 slide-in-from-bottom-1"
                       style={{ animationDelay: `${index * 80}ms`, animationFillMode: 'both' }}
-                      onClick={() => toggleSchoolExpansion(school.school?.id || '')}
+                      onClick={() => toggleSchoolExpansion(schoolId)}
                     >
                       <TableCell className="w-12 px-2">
                         <Button variant="ghost" size="sm" className="h-6 w-6 p-0 mx-auto">
@@ -1000,20 +1096,46 @@ export function SchoolPerformanceView({ assessments, refreshAssessments, isLoadi
                       </TableCell>
                       <TableCell className="text-center">
                         {(() => {
-                          const historicalData = historicalTermsData.get(school.school?.id || '') || [];
+                          // Prefer backend-provided previous terms (bulk dashboard endpoint)
+                          const previousTerms = dashboardItem?.previous_terms ?? [];
+                          const dashTrendData: TrendDataPoint[] = previousTerms
+                            .slice(0, 3)
+                            .reverse() // oldest -> newest
+                            .map(t => ({ overallScore: t.avg_score ?? 0, term: t.term_id, academicYear: t.academic_year }))
+                            .filter(d => d.overallScore > 0);
+
+                          if (dashTrendData.length >= 2) {
+                            return (
+                              <div className="flex items-center justify-center gap-1">
+                                <MiniTrendChart data={dashTrendData} width={80} height={28} />
+                                <div className="flex items-center gap-0.5 text-xs">
+                                  {dashTrendData[dashTrendData.length - 1].overallScore > dashTrendData[0].overallScore ? (
+                                    <ArrowUp className="h-3 w-3 text-emerald-600" />
+                                  ) : dashTrendData[dashTrendData.length - 1].overallScore < dashTrendData[0].overallScore ? (
+                                    <ArrowDown className="h-3 w-3 text-rose-600" />
+                                  ) : (
+                                    <span className="text-slate-400">—</span>
+                                  )}
+                                </div>
+                              </div>
+                            );
+                          }
+
+                          // Fallback to client-calculated historical data (if needed)
+                          const historicalData = historicalTermsData.get(schoolId) || [];
                           if (historicalData.length === 0) {
                             return <span className="text-sm text-slate-400">—</span>;
                           }
-                          
-                          // Prepare trend data for previous 3 terms only (chronological order: oldest to newest)
-                          // Take the most recent 3 terms and reverse to show oldest first
-                          const trendData: TrendDataPoint[] = historicalData.slice(0, 3).reverse().filter(d => d.overallScore > 0);
-                          
+
+                          const trendData: TrendDataPoint[] = historicalData
+                            .slice(0, 3)
+                            .reverse()
+                            .filter(d => d.overallScore > 0);
+
                           if (trendData.length < 2) {
                             return <span className="text-sm text-slate-400">—</span>;
                           }
-                          
-                          // For better clarity, show values directly with trend indicator
+
                           return (
                             <div className="flex items-center justify-center gap-1">
                               <MiniTrendChart data={trendData} width={80} height={28} />
@@ -1044,7 +1166,7 @@ export function SchoolPerformanceView({ assessments, refreshAssessments, isLoadi
                       <TableCell className="text-center">
                         <div className="flex items-center justify-center gap-2">
                           <span className="text-sm font-semibold text-slate-700 tabular-nums">{completedCount}/{totalCount}</span>
-                          <AnimatedProgress value={(completedCount / totalCount) * 100} className="w-16 h-2" delay={index * 80 + 200} />
+                          <AnimatedProgress value={completionPercent} className="w-16 h-2" delay={index * 80 + 200} />
                         </div>
                       </TableCell>
                       <TableCell className="text-center text-sm text-slate-600">
