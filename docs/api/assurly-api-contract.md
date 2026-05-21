@@ -299,7 +299,7 @@ Authorization: Bearer <token>
 
 | Param | Type | Default | Notes |
 |---|---|---|---|
-| `aspect_category` | string | — | Optional. `"ofsted"` or `"operational"`. |
+| `aspect_category` | string | — | Optional. `"strategic"` or `"operational"`. |
 
 **Response 200:**
 
@@ -311,7 +311,7 @@ Authorization: Bearer <token>
     "aspect_code": "EDU",
     "aspect_name": "Education",
     "aspect_description": "Education quality and curriculum standards",
-    "aspect_category": "ofsted",
+    "aspect_category": "strategic",
     "sort_order": 1,
     "is_custom": 0,
     "is_modified": 0,
@@ -327,7 +327,7 @@ Authorization: Bearer <token>
 | `aspect_code` | string | no | Uppercased. |
 | `aspect_name` | string | no | |
 | `aspect_description` | string | yes | |
-| `aspect_category` | string | no | `"ofsted"` or `"operational"`. |
+| `aspect_category` | string | no | `"strategic"` or `"operational"`. |
 | `sort_order` | integer | no | |
 | `is_custom` | integer (0/1) | no | `1` = created from scratch by the MAT. |
 | `is_modified` | integer (0/1) | no | `1` = MAT has edited since adoption. |
@@ -366,7 +366,7 @@ Authorization: Bearer <token>
   "aspect_code": "SAF",
   "aspect_name": "Safeguarding",
   "aspect_description": "Child protection and safeguarding standards",
-  "aspect_category": "ofsted",
+  "aspect_category": "strategic",
   "sort_order": 7,
   "source_aspect_id": null
 }
@@ -1674,7 +1674,7 @@ Authorization: Bearer <token>
 |---|---|---|---|
 | `school_id` | string | — | Optional filter. |
 | `aspect_code` | string | — | Optional filter. |
-| `aspect_category` | string | — | `"ofsted"` or `"operational"`. |
+| `aspect_category` | string | — | `"strategic"` or `"operational"`. |
 | `standard_type` | string | — | `"assurance"` or `"risk"`. |
 | `from_term` | string | — | Start `unique_term_id`, e.g. `T1-2023-24`. |
 | `to_term` | string | — | End `unique_term_id`. |
@@ -1776,3 +1776,4 @@ Admin/cron utility. No auth required (security concern). Not called by the front
 | Version | Date | Change |
 |---|---|---|
 | v1 | 2026-04-27 | Initial contract. Documents all live endpoints from `main.py`, target state for REQ-002/003/004/005 with `🚧 In-flight` tags, deprecated endpoints, and known backend issues. |
+| v1.1 | 2026-05-21 | Renamed `aspect_category` enum value `"ofsted"` → `"strategic"` wherever it appears as a request body field, response field, or query param (List Aspects, Create Aspect, Update Aspect, Analytics Trends) and in JSON examples. Allowed values are now `"operational"` / `"strategic"`. |

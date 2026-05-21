@@ -242,7 +242,7 @@ Platform-level (default) aspects. Read-only templates used during MAT onboarding
 | `aspect_code` | `varchar(20)` | NOT NULL | — | **UNIQUE**. Same as `aspect_id` today. |
 | `aspect_name` | `varchar(255)` | NOT NULL | — | |
 | `aspect_description` | `text` | NULL | — | |
-| `aspect_category` | `enum('ofsted', 'operational')` | NULL | `'operational'` | |
+| `aspect_category` | `enum('operational', 'strategic')` | NULL | `'operational'` | |
 | `sort_order` | `int` | NULL | `0` | |
 | `created_at` | `timestamp` | NULL | `CURRENT_TIMESTAMP` | |
 
@@ -287,7 +287,7 @@ A MAT's working copy of aspects. Populated from `aspects` at onboarding; the MAT
 | `aspect_code` | `varchar(20)` | NOT NULL | — | The MAT's code for this aspect. May differ from `source_aspect_id`. |
 | `aspect_name` | `varchar(255)` | NOT NULL | — | |
 | `aspect_description` | `text` | NULL | — | |
-| `aspect_category` | `enum('ofsted', 'operational')` | NULL | `'operational'` | |
+| `aspect_category` | `enum('operational', 'strategic')` | NULL | `'operational'` | |
 | `sort_order` | `int` | NULL | `0` | |
 | `is_custom` | `tinyint(1)` | NULL | `0` | `1` = created from scratch by the MAT; `0` = adopted default. |
 | `is_modified` | `tinyint(1)` | NULL | `0` | `1` = MAT has edited fields since adoption. Purely informational. |
@@ -746,3 +746,4 @@ ORDER BY tc.TABLE_NAME, tc.CONSTRAINT_NAME;
 | 2026-04-20 | §20.1, §20.3: Dropped duplicate FK `standards_ibfk_1` (had dangerous `ON DELETE CASCADE`) and redundant uniqueness constraint `users.unique_email_per_mat`. |
 | 2026-04-20 | §15, §16: Issue #4 marked resolved. Live re-verification showed 0 orphaned `version_id`s — earlier "29 orphans" finding was an artefact of a stale January 2026 JSON export. Live FK prevents the issue. |
 | 2026-04-20 | §5, §15, §16, §20.1: Fixed issue #3 (`assessments.updated_by` narrowed to `char(36)`, FK `fk_assessments_updated_by` added) and issue #6 (`healing-secondary-academy.school_type` → `'secondary'`). Full `school_type` enum documented. **All six originally-flagged issues now closed.** |
+| 2026-05-21 | §8, §10: Renamed `aspect_category` enum value `'ofsted'` → `'strategic'` on both `aspects` and `mat_aspects`. Enum is now `enum('operational', 'strategic')`; default unchanged (`'operational'`). DB migration applied manually; backend code and API contract brought into alignment. |

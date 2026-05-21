@@ -255,21 +255,21 @@ class MatAspectBase(BaseModel):
     aspect_code: str
     aspect_name: str
     aspect_description: Optional[str] = None
-    aspect_category: str = 'operational'  # 'ofsted' or 'operational'
+    aspect_category: str = 'operational'  # 'strategic' or 'operational'
     sort_order: int = 0
 
 class MatAspectCreate(BaseModel):
     aspect_code: str
     aspect_name: str
     aspect_description: Optional[str] = None
-    aspect_category: str = 'operational'  # 'ofsted' or 'operational'
+    aspect_category: str = 'operational'  # 'strategic' or 'operational'
     sort_order: int = 0
     source_aspect_id: Optional[str] = None  # If copying from default
 
 class MatAspectUpdate(BaseModel):
     aspect_name: Optional[str] = None
     aspect_description: Optional[str] = None
-    aspect_category: Optional[str] = None  # 'ofsted' or 'operational'
+    aspect_category: Optional[str] = None  # 'strategic' or 'operational'
     sort_order: Optional[int] = None
 
 class MatAspectResponse(MatAspectBase):
@@ -1912,7 +1912,7 @@ async def get_aspects(
 ):
     """
     Get list of MAT-specific aspects with standard counts.
-    Optionally filtered by aspect_category ('ofsted' or 'operational').
+    Optionally filtered by aspect_category ('strategic' or 'operational').
     Returns aspects for the authenticated user's MAT, including both default and custom aspects.
     Requires authentication.
     """
@@ -3428,7 +3428,7 @@ async def get_trends(
     Query Parameters:
     - school_id (optional): Filter to single school
     - aspect_code (optional): Filter to single aspect
-    - aspect_category (optional): Filter by 'ofsted' or 'operational'
+    - aspect_category (optional): Filter by 'strategic' or 'operational'
     - standard_type (optional): Filter by 'assurance' or 'risk'
     - from_term (optional): Start term, e.g., T1-2023-24
     - to_term (optional): End term, e.g., T1-2025-26
