@@ -3,7 +3,7 @@ from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from pydantic import BaseModel, EmailStr, validator
-from typing import List, Optional
+from typing import List, Literal, Optional
 import pymysql
 import os
 from datetime import datetime, date
@@ -1244,23 +1244,30 @@ async def get_standard(
 async def get_schools_dashboard(
     current_mat_id: str = Depends(get_current_mat),
     current_user: UserResponse = Depends(get_current_user),
-    term_id: Optional[str] = Query(None)
+    term_id: Optional[str] = Query(None),
+    view: Literal["school", "trust"] = Query("school")
 ):
     try:
         connection = get_db_connection()
         cursor = connection.cursor()
 
-        # If no term specified, get the most recent term
+        # view -> is_central_office filter (REQ-005). "school" excludes central
+        # office rows; "trust" returns only the central office row.
+        is_central_office_flag = 0 if view == "school" else 1
+
+        # If no term specified, pick the most recent term that has assessments
+        # for the chosen view (school vs trust).
         if not term_id:
             cursor.execute("""
                 SELECT a.unique_term_id
                 FROM assessments a
                 JOIN schools s ON a.school_id = s.school_id
                 WHERE s.mat_id = %s
-                ORDER BY a.academic_year DESC, 
+                  AND s.is_central_office = %s
+                ORDER BY a.academic_year DESC,
                     FIELD(SUBSTRING(a.unique_term_id, 1, 2), 'T3', 'T2', 'T1') DESC
                 LIMIT 1
-            """, (current_mat_id,))
+            """, (current_mat_id, is_central_office_flag))
             row = cursor.fetchone()
             if row:
                 term_id = row['unique_term_id']
@@ -1268,21 +1275,105 @@ async def get_schools_dashboard(
                 connection.close()
                 return JSONResponse(content={'current_term': None, 'schools': []}, status_code=200)
 
-        # Parse the selected term to determine chronological position
+        # Parse the selected term to determine chronological position.
         # term_id format: "T2-2025-26" -> term_num=2, academic_year="2025-26"
         term_parts = term_id.split('-', 1)
-        selected_term_num = int(term_parts[0][1])  # "T2" -> 2
-        selected_academic_year = term_parts[1]      # "2025-26"
+        selected_term_num = int(term_parts[0][1])
+        selected_academic_year = term_parts[1]
 
-        # Main query for current term stats (unchanged)
-        # ... [keep existing current term query] ...
+        # Polarity is applied via mat_standards.standard_type:
+        #   assurance -> higher rating is better; low rating (<=2) needs action
+        #   risk      -> higher rating is worse;  high rating (>=3) needs action
+        # current_score normalises both onto a unified "higher is better" scale
+        # so trust- and school-level averages are directly comparable.
+        # Soft-deleted standards are excluded via mat_standards.is_active and
+        # the '-deleted-' archive-rename marker.
+        current_query = """
+            SELECT
+                s.school_id,
+                s.school_name,
+                s.school_type,
+                s.is_central_office,
 
-        # FIXED: Get previous 3 terms BEFORE the selected term
-        # Terms are "before" if:
-        #   1. Same academic year but lower term number (T1 < T2 < T3)
-        #   2. Earlier academic year
+                CASE
+                    WHEN COUNT(ms.mat_standard_id) = 0 THEN 'not_started'
+                    WHEN COUNT(CASE WHEN ms.mat_standard_id IS NOT NULL AND a.rating IS NOT NULL THEN 1 END) = 0 THEN 'not_started'
+                    WHEN COUNT(CASE WHEN ms.mat_standard_id IS NOT NULL AND a.rating IS NOT NULL THEN 1 END) = COUNT(ms.mat_standard_id) THEN 'completed'
+                    ELSE 'in_progress'
+                END AS status,
+
+                ROUND(AVG(CASE
+                    WHEN ms.mat_standard_id IS NULL THEN NULL
+                    WHEN ms.standard_type = 'risk' THEN (5 - a.rating)
+                    ELSE a.rating
+                END), 2) AS current_score,
+
+                SUM(CASE
+                    WHEN ms.mat_standard_id IS NULL THEN 0
+                    WHEN ms.standard_type = 'assurance' AND a.rating <= 2 THEN 1
+                    WHEN ms.standard_type = 'risk'      AND a.rating >= 3 THEN 1
+                    ELSE 0
+                END) AS intervention_required,
+
+                COUNT(CASE WHEN ms.mat_standard_id IS NOT NULL AND a.rating IS NOT NULL THEN 1 END) AS completed_standards,
+                COUNT(ms.mat_standard_id) AS total_standards,
+
+                MAX(CASE WHEN ms.mat_standard_id IS NOT NULL THEN a.last_updated END) AS last_updated,
+
+                (SELECT a2.actions
+                   FROM assessments a2
+                   JOIN mat_standards ms2 ON ms2.mat_standard_id = a2.mat_standard_id
+                   WHERE a2.school_id = s.school_id
+                     AND a2.unique_term_id = %s
+                     AND a2.actions IS NOT NULL
+                     AND a2.actions <> ''
+                     AND ms2.is_active = 1
+                     AND ms2.mat_standard_id NOT LIKE %s
+                   ORDER BY a2.last_updated DESC
+                   LIMIT 1
+                ) AS actions,
+
+                COALESCE(ev.cnt, 0) AS evidence_count
+
+            FROM schools s
+            LEFT JOIN assessments a
+                ON a.school_id = s.school_id
+                AND a.unique_term_id = %s
+            LEFT JOIN mat_standards ms
+                ON ms.mat_standard_id = a.mat_standard_id
+                AND ms.is_active = 1
+                AND ms.mat_standard_id NOT LIKE %s
+            LEFT JOIN (
+                SELECT school_id, COUNT(*) AS cnt
+                FROM standard_evidence
+                WHERE mat_id = %s
+                  AND unique_term_id = %s
+                GROUP BY school_id
+            ) ev ON ev.school_id = s.school_id
+            WHERE s.mat_id = %s
+              AND s.is_active = 1
+              AND s.is_central_office = %s
+            GROUP BY s.school_id, s.school_name, s.school_type, s.is_central_office
+            ORDER BY s.school_name
+        """
+        deleted_pattern = '%-deleted-%'
+        cursor.execute(current_query, (
+            term_id,                  # actions subquery: term filter
+            deleted_pattern,          # actions subquery: archive-rename exclusion
+            term_id,                  # main JOIN: assessments term filter
+            deleted_pattern,          # main JOIN: archive-rename exclusion
+            current_mat_id,           # evidence subquery: MAT isolation
+            term_id,                  # evidence subquery: term filter
+            current_mat_id,           # WHERE: MAT isolation
+            is_central_office_flag,   # WHERE: trust/school view filter
+        ))
+        schools = cursor.fetchall()
+
+        # Previous 3 terms BEFORE the selected term, per school:
+        #   - earlier academic year (any term), OR
+        #   - same academic year but lower term number (T1 < T2 < T3).
         previous_terms_query = """
-            SELECT 
+            SELECT
                 a.school_id,
                 a.unique_term_id,
                 a.academic_year,
@@ -1292,25 +1383,23 @@ async def get_schools_dashboard(
             WHERE s.mat_id = %s
                 AND a.rating IS NOT NULL
                 AND (
-                    -- Earlier academic year (any term)
                     a.academic_year < %s
                     OR
-                    -- Same academic year but earlier term
                     (a.academic_year = %s AND CAST(SUBSTRING(a.unique_term_id, 2, 1) AS UNSIGNED) < %s)
                 )
             GROUP BY a.school_id, a.unique_term_id, a.academic_year
-            ORDER BY a.academic_year DESC, 
+            ORDER BY a.academic_year DESC,
                 FIELD(SUBSTRING(a.unique_term_id, 1, 2), 'T3', 'T2', 'T1') DESC
         """
         cursor.execute(previous_terms_query, (
-            current_mat_id, 
+            current_mat_id,
             selected_academic_year,
             selected_academic_year,
             selected_term_num
         ))
         previous_data = cursor.fetchall()
 
-        # Organize previous terms by school (limit to 3 most recent per school)
+        # Organise previous terms by school (limit to 3 most recent per school).
         school_trends = {}
         for row in previous_data:
             school_id = row['school_id']
@@ -1320,15 +1409,13 @@ async def get_schools_dashboard(
                 school_trends[school_id].append({
                     'term_id': row['unique_term_id'],
                     'academic_year': row['academic_year'],
-                    'avg_score': float(row['avg_score']) if row['avg_score'] else None
+                    'avg_score': float(row['avg_score']) if row['avg_score'] is not None else None
                 })
 
-        # Build response
         result = []
         for school in schools:
             school_id = school['school_id']
-            
-            # Format last_updated
+
             last_updated = None
             if school['last_updated']:
                 if isinstance(school['last_updated'], datetime):
@@ -1336,18 +1423,25 @@ async def get_schools_dashboard(
                 else:
                     last_updated = str(school['last_updated'])
 
+            completed = int(school['completed_standards'] or 0)
+            total = int(school['total_standards'] or 0)
+
             result.append({
                 'school_id': school_id,
                 'school_name': school['school_name'],
+                'school_type': school['school_type'],
+                'is_central_office': bool(school['is_central_office']),
                 'current_term': term_id,
                 'status': school['status'],
-                'current_score': float(school['current_score']) if school['current_score'] else None,
+                'current_score': float(school['current_score']) if school['current_score'] is not None else None,
                 'previous_terms': school_trends.get(school_id, []),
-                'intervention_required': school['intervention_required'] or 0,
-                'completed_standards': school['completed_standards'] or 0,
-                'total_standards': school['total_standards'] or 0,
-                'completion_rate': f"{school['completed_standards'] or 0}/{school['total_standards'] or 0}",
-                'last_updated': last_updated
+                'intervention_required': int(school['intervention_required'] or 0),
+                'completed_standards': completed,
+                'total_standards': total,
+                'completion_rate': f"{completed}/{total}",
+                'last_updated': last_updated,
+                'actions': school['actions'],
+                'evidence_count': int(school['evidence_count'] or 0),
             })
 
         connection.close()
