@@ -73,7 +73,7 @@ export default function StandardsManagement() {
 
     const [selectedAspect, setSelectedAspect] = useState<Aspect | undefined>(undefined);
     const [searchQuery, setSearchQuery] = useState('');
-    const [aspectCategoryFilter, setAspectCategoryFilter] = useState<'all' | 'ofsted' | 'operational'>('all');
+    const [aspectCategoryFilter, setAspectCategoryFilter] = useState<'all' | 'strategic' | 'operational'>('all');
     const [standardTypeFilter, setStandardTypeFilter] = useState<'all' | 'assurance' | 'risk'>('all');
     const [aspectSortBy, setAspectSortBy] = useState<'name' | 'category'>('category');
     const [aspectSortOrder, setAspectSortOrder] = useState<'asc' | 'desc'>('asc');
@@ -443,13 +443,13 @@ export default function StandardsManagement() {
                         <CardDescription>Select an area to manage</CardDescription>
                     </CardHeader>
                     <div className="px-4 pb-2 space-y-2">
-                        <Select value={aspectCategoryFilter} onValueChange={(value) => setAspectCategoryFilter(value as 'all' | 'ofsted' | 'operational')}>
+                        <Select value={aspectCategoryFilter} onValueChange={(value) => setAspectCategoryFilter(value as 'all' | 'strategic' | 'operational')}>
                             <SelectTrigger className="h-8 text-xs">
                                 <SelectValue placeholder="Filter by category" />
                             </SelectTrigger>
                             <SelectContent>
                                 <SelectItem value="all">All Categories</SelectItem>
-                                <SelectItem value="ofsted">Ofsted Only</SelectItem>
+                                <SelectItem value="strategic">Strategic Only</SelectItem>
                                 <SelectItem value="operational">Operational Only</SelectItem>
                             </SelectContent>
                         </Select>

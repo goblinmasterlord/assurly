@@ -6,7 +6,7 @@
 export type AssessmentStatus = 'not_started' | 'in_progress' | 'completed' | 'approved';
 export type Rating = 1 | 2 | 3 | 4 | 5 | null;
 export type StandardType = 'assurance' | 'risk';
-export type AspectCategory = 'ofsted' | 'operational';
+export type AspectCategory = 'strategic' | 'operational';
 export type SchoolType = 'primary' | 'secondary' | 'all_through' | 'special' | 'central';
 export type TrendDirection = 'improving' | 'declining' | 'stable' | 'no_data';
 
@@ -252,7 +252,7 @@ export interface Aspect {
     aspect_code: string;            // EDU
     aspect_name: string;
     aspect_description: string;
-    aspect_category?: AspectCategory; // 'ofsted' or 'operational'
+    aspect_category?: AspectCategory; // 'strategic' or 'operational'
     sort_order: number;
     is_custom: boolean;
     standards_count: number;

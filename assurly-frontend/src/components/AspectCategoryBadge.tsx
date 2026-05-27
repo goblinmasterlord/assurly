@@ -8,12 +8,12 @@ interface AspectCategoryBadgeProps {
 
 export function AspectCategoryBadge({ category, className }: AspectCategoryBadgeProps) {
     const styles = {
-        ofsted: 'bg-blue-100 text-blue-700 border-blue-300',
+        strategic: 'bg-blue-100 text-blue-700 border-blue-300',
         operational: 'bg-green-100 text-green-800 border-green-300'
     };
     
     const labels = {
-        ofsted: 'Ofsted',
+        strategic: 'Strategic',
         operational: 'Operational'
     };
     

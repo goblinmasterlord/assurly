@@ -338,7 +338,7 @@ export class EnhancedAssessmentService {
     data: {
       aspect_name: string;
       aspect_description: string;
-      aspect_category?: 'ofsted' | 'operational';
+      aspect_category?: 'strategic' | 'operational';
       sort_order: number;
     }
   ): Promise<void> {

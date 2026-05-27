@@ -233,7 +233,7 @@ export function useStandardsPersistence() {
         aspect_code: string;
         aspect_name: string;
         aspect_description: string;
-        aspect_category?: 'ofsted' | 'operational';
+        aspect_category?: 'strategic' | 'operational';
         sort_order: number;
     }) => {
         try {
@@ -271,7 +271,7 @@ export function useStandardsPersistence() {
         mat_aspect_id: string;
         aspect_name: string;
         aspect_description: string;
-        aspect_category?: 'ofsted' | 'operational';
+        aspect_category?: 'strategic' | 'operational';
         sort_order: number;
     }) => {
         try {

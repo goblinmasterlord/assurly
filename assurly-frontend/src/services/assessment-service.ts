@@ -308,7 +308,7 @@ export const reorderStandards = async (updates: Array<{
  * List all aspects for the MAT
  */
 export const getAspects = async (filters?: {
-  aspect_category?: 'ofsted' | 'operational';
+  aspect_category?: 'strategic' | 'operational';
 }): Promise<Aspect[]> => {
   try {
     const params = new URLSearchParams();
@@ -345,7 +345,7 @@ export const createAspect = async (data: {
   aspect_code: string;
   aspect_name: string;
   aspect_description: string;
-  aspect_category?: 'ofsted' | 'operational';
+  aspect_category?: 'strategic' | 'operational';
   sort_order: number;
 }): Promise<Aspect> => {
   try {
@@ -369,7 +369,7 @@ export const updateAspect = async (
   data: {
     aspect_name: string;
     aspect_description: string;
-    aspect_category?: 'ofsted' | 'operational';
+    aspect_category?: 'strategic' | 'operational';
     sort_order: number;
   }
 ): Promise<void> => {
@@ -480,7 +480,7 @@ export const getTerms = async (academicYear?: string): Promise<Term[]> => {
 export const getAnalyticsTrends = async (filters?: {
   school_id?: string;
   aspect_code?: string;
-  aspect_category?: 'ofsted' | 'operational';
+  aspect_category?: 'strategic' | 'operational';
   standard_type?: 'assurance' | 'risk';
   from_term?: string;
   to_term?: string;
