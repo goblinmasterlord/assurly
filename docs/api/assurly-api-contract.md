@@ -821,6 +821,8 @@ Returns assessment summaries grouped by (school, aspect, term).
     "group_id": "cedar-park-primary-EDU-T1-2025-26",
     "school_id": "cedar-park-primary",
     "school_name": "Cedar Park Primary",
+    "school_type": "primary",
+    "is_central_office": false,
     "mat_aspect_id": "HLT-EDU",
     "aspect_code": "EDU",
     "aspect_name": "Education",
@@ -840,6 +842,8 @@ Returns assessment summaries grouped by (school, aspect, term).
 | `group_id` | string | no | Composite: `<school_id>-<ASPECT_CODE>-<unique_term_id>`. |
 | `school_id` | string | no | |
 | `school_name` | string | no | |
+| `school_type` | string | no | `primary`, `secondary`, `all_through`, `special`, `central`. |
+| `is_central_office` | boolean | no | `true` for the MAT's central office row. Drives the Trust/School selector on the Assessments screen. |
 | `mat_aspect_id` | string | no | |
 | `aspect_code` | string | no | Uppercased. |
 | `aspect_name` | string | no | |
@@ -1777,3 +1781,4 @@ Admin/cron utility. No auth required (security concern). Not called by the front
 |---|---|---|
 | v1 | 2026-04-27 | Initial contract. Documents all live endpoints from `main.py`, target state for REQ-002/003/004/005 with `🚧 In-flight` tags, deprecated endpoints, and known backend issues. |
 | v1.1 | 2026-05-21 | Renamed `aspect_category` enum value `"ofsted"` → `"strategic"` wherever it appears as a request body field, response field, or query param (List Aspects, Create Aspect, Update Aspect, Analytics Trends) and in JSON examples. Allowed values are now `"operational"` / `"strategic"`. |
+| v1.2 | 2026-05-27 | `GET /api/assessments` response now includes `school_type` (string) and `is_central_office` (boolean) on each group row, sourced from the `schools` table. Restores the Trust/School selector on the Assessments screen. |

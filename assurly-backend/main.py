@@ -782,6 +782,8 @@ async def get_assessments(
                 CONCAT(s.school_id, '-', UPPER(ma.aspect_code), '-', a.unique_term_id) as group_id,
                 s.school_id,
                 s.school_name,
+                s.school_type,
+                s.is_central_office,
                 ma.mat_aspect_id,
                 UPPER(ma.aspect_code) as aspect_code,
                 ma.aspect_name,
@@ -821,8 +823,9 @@ async def get_assessments(
             params.append(academic_year)
 
         query += """
-            GROUP BY s.school_id, s.school_name, ma.mat_aspect_id, ma.aspect_code,
-                     ma.aspect_name, a.unique_term_id, a.academic_year
+            GROUP BY s.school_id, s.school_name, s.school_type, s.is_central_office,
+                     ma.mat_aspect_id, ma.aspect_code, ma.aspect_name,
+                     a.unique_term_id, a.academic_year
         """
 
         if status:
@@ -840,6 +843,9 @@ async def get_assessments(
         processed_rows = []
         for row in rows:
             processed_row = process_row_for_json(row)
+
+            # Coerce tinyint(1) to bool for API contract compliance.
+            processed_row['is_central_office'] = bool(row['is_central_office'])
 
             if processed_row.get('due_date'):
                 if isinstance(row['due_date'], (datetime, date)):
