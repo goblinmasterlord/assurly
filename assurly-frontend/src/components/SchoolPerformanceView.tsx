@@ -1180,11 +1180,17 @@ export function SchoolPerformanceView({ assessments, refreshAssessments, isLoadi
                 const completedCount = dashboardItem?.completed_standards ?? school.assessmentsByCategory.filter(cat => cat.status === "completed").length;
                 const totalCount = dashboardItem?.total_standards ?? school.assessmentsByCategory.length;
                 const completionPercent = totalCount > 0 ? (completedCount / totalCount) * 100 : 0;
+                const rowStatus = dashboardItem?.status ?? school.status;
+                const isEmptySchool =
+                  totalCount === 0 && rowStatus === 'not_started';
 
                 return (
                   <React.Fragment key={schoolId || index}>
                     <TableRow 
-                      className="cursor-pointer hover:bg-slate-50 transition-colors duration-200 animate-in fade-in-0 slide-in-from-bottom-1"
+                      className={cn(
+                        "cursor-pointer hover:bg-slate-50 transition-colors duration-200 animate-in fade-in-0 slide-in-from-bottom-1",
+                        isEmptySchool && "opacity-[0.55]"
+                      )}
                       style={{ animationDelay: `${index * 80}ms`, animationFillMode: 'both' }}
                       onClick={() => toggleSchoolExpansion(schoolId)}
                     >
@@ -1206,6 +1212,9 @@ export function SchoolPerformanceView({ assessments, refreshAssessments, isLoadi
                             <p className="font-medium text-sm text-slate-900 leading-tight">{school.school.name}</p>
                             {school.school.code && (
                               <p className="text-xs text-slate-500 mt-0.5">{school.school.code}</p>
+                            )}
+                            {isEmptySchool && (
+                              <p className="text-xs text-muted-foreground mt-0.5">No assessments yet</p>
                             )}
                           </div>
                         </div>
