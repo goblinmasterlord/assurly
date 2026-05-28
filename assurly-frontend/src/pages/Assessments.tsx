@@ -233,6 +233,25 @@ export function AssessmentsPage() {
       assessment.term === term && assessment.academicYear === academicYear
     );
   }, [assessments, selectedTerm, isMatAdmin]);
+
+  const schoolsWithoutRatingsCount = useMemo(() => {
+    if (isMatAdmin) return 0;
+    if (!selectedTerm) return 0;
+    if (schools.length === 0) return 0;
+
+    const schoolsWithRatings = new Set(
+      termFilteredAssessments
+        .map((a) => a.school?.id || a.school_id || '')
+        .filter(Boolean)
+    );
+
+    return schools.filter((s) => {
+      const id = s.id || s.school_id || '';
+      if (!id) return false;
+      if (s.is_central_office) return false;
+      return !schoolsWithRatings.has(id);
+    }).length;
+  }, [isMatAdmin, selectedTerm, schools, termFilteredAssessments]);
   
   // Show all schools from API - same as MAT admin view
   const schoolOptions: MultiSelectOption[] = schools
@@ -528,6 +547,11 @@ export function AssessmentsPage() {
               <p>You have {overdueCount} overdue and {inProgressCount} in-progress ratings.</p>
             )}
           </div>
+          {!isLoading && !schoolsLoading && schoolsWithoutRatingsCount > 0 && (
+            <p className="text-sm text-muted-foreground mt-2">
+              {schoolsWithoutRatingsCount} {schoolsWithoutRatingsCount === 1 ? 'school has' : 'schools have'} no ratings yet for this term.
+            </p>
+          )}
         </div>
         {/* Academic Term Stepper */}
         {isLoading ? (

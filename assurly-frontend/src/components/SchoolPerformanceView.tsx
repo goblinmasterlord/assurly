@@ -1244,11 +1244,8 @@ export function SchoolPerformanceView({ assessments, refreshAssessments, isLoadi
                           </div>
                           <div className="min-w-0">
                             <p className="font-medium text-sm text-slate-900 leading-tight">{school.school.name}</p>
-                            {school.school.code && (
+                            {!isEmptySchool && school.school.code && (
                               <p className="text-xs text-slate-500 mt-0.5">{school.school.code}</p>
-                            )}
-                            {isEmptySchool && (
-                              <p className="text-xs text-muted-foreground mt-0.5">No assessments yet</p>
                             )}
                           </div>
                         </div>
