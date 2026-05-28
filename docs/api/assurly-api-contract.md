@@ -243,11 +243,7 @@ Authorization: Bearer <token>
 
 **Auth:** required.
 
-**Query params:**
-
-| Param | Type | Default | Notes |
-|---|---|---|---|
-| `include_central` | boolean | `false` | If `true`, includes the MAT central office row in results. |
+Returns all active schools for the authenticated user's MAT, including the central office row. No query params.
 
 **Response 200:**
 
@@ -280,7 +276,7 @@ Authorization: Bearer <token>
 
 **Frontend notes:**
 - `is_central_office` and `is_active` are returned as integers (`0`/`1`), not booleans. Coerce to boolean in TypeScript if needed.
-- Default behaviour excludes central office. Pass `include_central=true` when the Trust view needs the central office row.
+- The central office row is always included — identify it by `is_central_office == 1` (or `school_type == 'central'`).
 
 ---
 
@@ -1782,3 +1778,4 @@ Admin/cron utility. No auth required (security concern). Not called by the front
 | v1 | 2026-04-27 | Initial contract. Documents all live endpoints from `main.py`, target state for REQ-002/003/004/005 with `🚧 In-flight` tags, deprecated endpoints, and known backend issues. |
 | v1.1 | 2026-05-21 | Renamed `aspect_category` enum value `"ofsted"` → `"strategic"` wherever it appears as a request body field, response field, or query param (List Aspects, Create Aspect, Update Aspect, Analytics Trends) and in JSON examples. Allowed values are now `"operational"` / `"strategic"`. |
 | v1.2 | 2026-05-27 | `GET /api/assessments` response now includes `school_type` (string) and `is_central_office` (boolean) on each group row, sourced from the `schools` table. Restores the Trust/School selector on the Assessments screen. |
+| v1.3 | 2026-05-28 | `GET /api/schools` now returns the central office row by default. Removed the `include_central` query param and the `AND is_central_office = FALSE` default filter — the endpoint always returns all active schools for the MAT. Callers that previously passed `include_central=true` will see no change in behaviour. |

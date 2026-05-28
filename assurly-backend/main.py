@@ -1006,7 +1006,6 @@ async def create_assessments(
 
 @app.get("/api/schools", tags=["Schools"])
 async def get_schools(
-    include_central: bool = False,
     current_mat_id: str = Depends(get_current_mat),
     current_user: UserResponse = Depends(get_current_user)
 ):
@@ -1014,25 +1013,20 @@ async def get_schools(
     Get list of schools for the authenticated user's MAT.
     Enforces MAT isolation - users can only see schools in their own MAT.
     Requires authentication.
-
-    Query Parameters:
-    - include_central: If True, includes central office in results (default: False)
     """
     try:
         connection = get_db_connection()
         cursor = connection.cursor()
 
-        # MAT isolation: only return schools belonging to user's MAT
+        # MAT isolation: only return schools belonging to user's MAT.
+        # All active schools are returned, central office included — the
+        # Trust/School selector needs the full set to bind its options.
         query = """
             SELECT school_id, school_name, school_type, is_central_office, is_active
             FROM schools
             WHERE mat_id = %s AND is_active = TRUE
+            ORDER BY school_name
         """
-
-        if not include_central:
-            query += " AND is_central_office = FALSE"
-
-        query += " ORDER BY school_name"
 
         cursor.execute(query, (current_mat_id,))
         schools = cursor.fetchall()
