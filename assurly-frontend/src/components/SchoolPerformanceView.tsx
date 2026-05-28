@@ -18,6 +18,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   Tooltip,
   TooltipContent,
@@ -708,6 +709,7 @@ export function SchoolPerformanceView({ assessments, refreshAssessments, isLoadi
     return schoolsDashboard.schools.map((dash) => {
       const existing = bySchoolId.get(dash.school_id);
       const schoolFromApi = schools.find((s) => s.id === dash.school_id || s.school_id === dash.school_id);
+      const dashAny = dash as any;
 
       // The previous_terms[0] is the term immediately before the selected term
       const previousOverallScore = dash.previous_terms?.[0]?.avg_score ?? existing?.previousOverallScore;
@@ -719,6 +721,8 @@ export function SchoolPerformanceView({ assessments, refreshAssessments, isLoadi
           id: dash.school_id,
           name: dash.school_name,
           code: dash.school_id,
+          school_type: dashAny.school_type,
+          is_central_office: !!dashAny.is_central_office || dashAny.school_type === "central",
         },
         overallScore: dash.current_score ?? 0,
         previousOverallScore: previousOverallScore ?? undefined,
@@ -1008,7 +1012,7 @@ export function SchoolPerformanceView({ assessments, refreshAssessments, isLoadi
             ) : (
               <div className="flex items-center gap-2 w-full md:w-auto">
                 {centralOfficeSchool && (
-                  <Select
+                  <Tabs
                     value={orgScope}
                     onValueChange={(v) => {
                       const next = v as "school" | "trust";
@@ -1023,14 +1027,11 @@ export function SchoolPerformanceView({ assessments, refreshAssessments, isLoadi
                       }
                     }}
                   >
-                    <SelectTrigger className="w-[170px] h-10">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="school">Schools</SelectItem>
-                      <SelectItem value="trust">Central Team</SelectItem>
-                    </SelectContent>
-                  </Select>
+                    <TabsList className="h-10">
+                      <TabsTrigger value="school">Schools</TabsTrigger>
+                      <TabsTrigger value="trust">Central Team</TabsTrigger>
+                    </TabsList>
+                  </Tabs>
                 )}
                 <Select value={selectedTerm} onValueChange={handleTermChange}>
                   <SelectTrigger className="w-full md:w-[220px] h-10">
