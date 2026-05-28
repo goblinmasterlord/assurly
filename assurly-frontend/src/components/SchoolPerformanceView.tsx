@@ -151,6 +151,7 @@ export function SchoolPerformanceView({ assessments, refreshAssessments, isLoadi
   const [schoolsLoading, setSchoolsLoading] = useState(true);
   const [aspects, setAspects] = useState<Aspect[]>([]);
   const [aspectsLoading, setAspectsLoading] = useState(true);
+  const [orgScope, setOrgScope] = useState<"school" | "trust">("school");
   const [schoolsDashboard, setSchoolsDashboard] = useState<SchoolsDashboardResponse | null>(null);
   const [dashboardLoading, setDashboardLoading] = useState(false);
   const [dashboardError, setDashboardError] = useState<string | null>(null);
@@ -532,11 +533,14 @@ export function SchoolPerformanceView({ assessments, refreshAssessments, isLoadi
       .join(" ");
   }, []);
   const schoolOptions: MultiSelectOption[] = schools
+    .filter(s => orgScope === "trust" ? !!s.is_central_office : !s.is_central_office)
     .filter(school => school.name && school.id)
     .map((school: School) => ({
       label: school.name!,
       value: school.id!
     }));
+
+  const centralOfficeSchool = useMemo(() => schools.find((s) => !!s.is_central_office), [schools]);
 
   // Optimistic filter update handlers
   const updateFilter = useCallback((filterType: keyof typeof filters, value: string[]) => {
@@ -695,25 +699,38 @@ export function SchoolPerformanceView({ assessments, refreshAssessments, isLoadi
   const schoolPerformanceData = useMemo(() => {
     if (!schoolsDashboard) return schoolPerformanceFromAssessments;
 
-    return schoolPerformanceFromAssessments.map((school) => {
-      const schoolId = school.school?.id || school.school?.school_id || school.school?.code || '';
-      const dash = dashboardBySchoolId.get(schoolId);
-      if (!dash) return school;
+    const bySchoolId = new Map<string, (typeof schoolPerformanceFromAssessments)[number]>();
+    schoolPerformanceFromAssessments.forEach((sp) => {
+      const id = sp.school?.id || sp.school?.school_id || sp.school?.code || '';
+      if (id) bySchoolId.set(id, sp);
+    });
+
+    return schoolsDashboard.schools.map((dash) => {
+      const existing = bySchoolId.get(dash.school_id);
+      const schoolFromApi = schools.find((s) => s.id === dash.school_id || s.school_id === dash.school_id);
 
       // The previous_terms[0] is the term immediately before the selected term
-      // This is used for the trend indicator comparison
-      const previousOverallScore = dash.previous_terms?.[0]?.avg_score ?? school.previousOverallScore;
+      const previousOverallScore = dash.previous_terms?.[0]?.avg_score ?? existing?.previousOverallScore;
 
       return {
-        ...school,
-        status: dash.status,
+        school: schoolFromApi || existing?.school || {
+          school_id: dash.school_id,
+          school_name: dash.school_name,
+          id: dash.school_id,
+          name: dash.school_name,
+          code: dash.school_id,
+        },
         overallScore: dash.current_score ?? 0,
         previousOverallScore: previousOverallScore ?? undefined,
-        criticalStandardsTotal: dash.intervention_required,
-        lastUpdated: dash.last_updated || school.lastUpdated,
+        status: dash.status,
+        assessmentsByCategory: existing?.assessmentsByCategory ?? [],
+        criticalStandardsTotal: dash.intervention_required ?? existing?.criticalStandardsTotal ?? 0,
+        lastUpdated: dash.last_updated || existing?.lastUpdated || "-",
+        completedAssessments: existing?.completedAssessments ?? 0,
+        totalAssessments: existing?.totalAssessments ?? 0,
       };
     });
-  }, [schoolPerformanceFromAssessments, schoolsDashboard, dashboardBySchoolId]);
+  }, [schoolPerformanceFromAssessments, schoolsDashboard, dashboardBySchoolId, schools]);
 
   const prefetchAspectRowMetricsForSchool = useCallback(async (schoolId: string) => {
     if (!selectedUniqueTermId) return;
@@ -796,7 +813,12 @@ export function SchoolPerformanceView({ assessments, refreshAssessments, isLoadi
     // Use optimistic filters when pending, otherwise use actual filters
     const activeFilters = isPending ? optimisticFilters : filters;
     
-    let filtered = schoolPerformanceData.filter(school => {
+    let filtered = schoolPerformanceData
+      .filter((school) => {
+        const isCentral = !!school.school?.is_central_office;
+        return orgScope === "trust" ? isCentral : !isCentral;
+      })
+      .filter(school => {
       const matchesSearch = searchTerm === "" ||
         (school.school?.name || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
         (school.school?.code && school.school.code.toLowerCase().includes(searchTerm.toLowerCase()));
@@ -985,6 +1007,31 @@ export function SchoolPerformanceView({ assessments, refreshAssessments, isLoadi
               <TermNavigationSkeleton />
             ) : (
               <div className="flex items-center gap-2 w-full md:w-auto">
+                {centralOfficeSchool && (
+                  <Select
+                    value={orgScope}
+                    onValueChange={(v) => {
+                      const next = v as "school" | "trust";
+                      setOrgScope(next);
+                      // If a user had Central Team selected in the school multiselect, clear it when switching back to Schools.
+                      if (next === "school" && centralOfficeSchool?.id) {
+                        const centralId = centralOfficeSchool.id;
+                        if (filters.school.includes(centralId) || optimisticFilters.school.includes(centralId)) {
+                          const nextValue = (optimisticFilters.school || []).filter((id: string) => id !== centralId);
+                          handleSchoolFilterChange(nextValue);
+                        }
+                      }
+                    }}
+                  >
+                    <SelectTrigger className="w-[170px] h-10">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="school">Schools</SelectItem>
+                      <SelectItem value="trust">Central Team</SelectItem>
+                    </SelectContent>
+                  </Select>
+                )}
                 <Select value={selectedTerm} onValueChange={handleTermChange}>
                   <SelectTrigger className="w-full md:w-[220px] h-10">
                     <SelectValue placeholder="Select term" />

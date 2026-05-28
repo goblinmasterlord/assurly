@@ -77,8 +77,8 @@ export default function UsersManagement() {
         const usersData = await getUsers(showInactive);
         setUsers(usersData);
 
-        // Fetch schools (including central team)
-        const schoolsData = await getSchools(true);
+        // Fetch schools (includes central team)
+        const schoolsData = await getSchools();
         setSchools(schoolsData);
       } catch (error) {
         console.error("Error fetching data:", error);

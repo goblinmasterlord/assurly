@@ -429,15 +429,11 @@ export const getInactiveAspects = async (): Promise<Aspect[]> => {
 
 /**
  * GET /api/schools
- * List all schools in the MAT
+ * List all schools in the MAT (includes central office row).
  */
-export const getSchools = async (includeCentral: boolean = false): Promise<School[]> => {
+export const getSchools = async (): Promise<School[]> => {
   try {
-    const params = new URLSearchParams();
-    if (includeCentral) params.append('include_central', 'true');
-
-    const url = `/api/schools${params.toString() ? `?${params}` : ''}`;
-    const response = await apiClient.get<School[]>(url);
+    const response = await apiClient.get<School[]>('/api/schools');
     
     return response.data.map(transformSchool);
   } catch (error) {

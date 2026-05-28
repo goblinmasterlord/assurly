@@ -375,11 +375,11 @@ export class EnhancedAssessmentService {
   /**
    * Get schools with long-term caching
    */
-  async getSchools(includeCentral: boolean = false): Promise<School[]> {
-    const cacheKey = includeCentral ? 'schools_with_central' : 'schools';
+  async getSchools(): Promise<School[]> {
+    const cacheKey = 'schools';
     return requestCache.get(
       cacheKey as any,
-      () => apiGetSchools(includeCentral)
+      () => apiGetSchools()
     );
   }
 
