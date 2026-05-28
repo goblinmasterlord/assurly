@@ -253,15 +253,15 @@ Returns all active schools for the authenticated user's MAT, including the centr
     "school_id": "cedar-park-primary",
     "school_name": "Cedar Park Primary",
     "school_type": "primary",
-    "is_central_office": 0,
-    "is_active": 1
+    "is_central_office": false,
+    "is_active": true
   },
   {
     "school_id": "HLT-CENTRAL",
     "school_name": "Harbour Learning Trust Central",
     "school_type": "central",
-    "is_central_office": 1,
-    "is_active": 1
+    "is_central_office": true,
+    "is_active": true
   }
 ]
 ```
@@ -271,12 +271,11 @@ Returns all active schools for the authenticated user's MAT, including the centr
 | `school_id` | string | no | Slug or code. |
 | `school_name` | string | no | |
 | `school_type` | string | no | One of `primary`, `secondary`, `all_through`, `special`, `central`. |
-| `is_central_office` | integer (0/1) | no | `1` = MAT central office. Exactly one per MAT. |
-| `is_active` | integer (0/1) | no | Always `1` in this response (inactive schools are filtered out). |
+| `is_central_office` | boolean | no | `true` for the MAT central office row. Exactly one per MAT. |
+| `is_active` | boolean | no | Always `true` in this response (inactive schools are filtered out). |
 
 **Frontend notes:**
-- `is_central_office` and `is_active` are returned as integers (`0`/`1`), not booleans. Coerce to boolean in TypeScript if needed.
-- The central office row is always included — identify it by `is_central_office == 1` (or `school_type == 'central'`).
+- The central office row is always included — identify it by `is_central_office === true` (or `school_type === 'central'`).
 
 ---
 
@@ -1532,7 +1531,7 @@ Authorization: Bearer <token>
     "school_id": "HLT-CENTRAL",
     "school_name": "Harbour Learning Trust Central",
     "mat_id": "HLT",
-    "is_active": 1,
+    "is_active": true,
     "last_login": "2026-04-20T14:32:01Z",
     "created_at": "2025-09-01T00:00:00Z"
   }
@@ -1548,7 +1547,7 @@ Authorization: Bearer <token>
 | `school_id` | string | yes | |
 | `school_name` | string | yes | Joined from `schools`. `null` if user has no school. |
 | `mat_id` | string | no | |
-| `is_active` | integer (0/1) | no | |
+| `is_active` | boolean | no | |
 | `last_login` | string (ISO 8601) | yes | |
 | `created_at` | string (ISO 8601) | yes | |
 
@@ -1779,3 +1778,4 @@ Admin/cron utility. No auth required (security concern). Not called by the front
 | v1.1 | 2026-05-21 | Renamed `aspect_category` enum value `"ofsted"` → `"strategic"` wherever it appears as a request body field, response field, or query param (List Aspects, Create Aspect, Update Aspect, Analytics Trends) and in JSON examples. Allowed values are now `"operational"` / `"strategic"`. |
 | v1.2 | 2026-05-27 | `GET /api/assessments` response now includes `school_type` (string) and `is_central_office` (boolean) on each group row, sourced from the `schools` table. Restores the Trust/School selector on the Assessments screen. |
 | v1.3 | 2026-05-28 | `GET /api/schools` now returns the central office row by default. Removed the `include_central` query param and the `AND is_central_office = FALSE` default filter — the endpoint always returns all active schools for the MAT. Callers that previously passed `include_central=true` will see no change in behaviour. |
+| v1.4 | 2026-05-28 | Standardised `is_central_office` and `is_active` on `GET /api/schools` and `is_active` on `GET /api/users` / `POST /api/users` / `PUT /api/users/{user_id}` to JSON booleans (`true`/`false`) instead of `0`/`1`. Other endpoints (`/api/dashboard/schools`, `/api/assessments`, `/api/auth/*`) already returned booleans. Frontend no longer needs to coerce integers client-side. |

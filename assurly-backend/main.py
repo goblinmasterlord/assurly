@@ -1031,8 +1031,17 @@ async def get_schools(
         cursor.execute(query, (current_mat_id,))
         schools = cursor.fetchall()
 
+        # Coerce tinyint(1) columns to bool so the JSON shape is consistent
+        # with /api/dashboard/schools and /api/assessments.
+        processed_schools = []
+        for school in schools:
+            row = dict(school)
+            row['is_central_office'] = bool(row['is_central_office'])
+            row['is_active'] = bool(row['is_active'])
+            processed_schools.append(row)
+
         connection.close()
-        return JSONResponse(content=schools, status_code=200)
+        return JSONResponse(content=processed_schools, status_code=200)
 
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
@@ -2590,6 +2599,7 @@ async def get_users(
         processed_users = []
         for user in users:
             processed_user = dict(user)
+            processed_user['is_active'] = bool(processed_user['is_active'])
             if processed_user.get('last_login'):
                 processed_user['last_login'] = processed_user['last_login'].strftime('%Y-%m-%dT%H:%M:%SZ')
             if processed_user.get('created_at'):
@@ -2694,6 +2704,7 @@ async def create_user(
 
         # Process datetime
         result = dict(created_user)
+        result['is_active'] = bool(result['is_active'])
         if result.get('created_at'):
             result['created_at'] = result['created_at'].strftime('%Y-%m-%dT%H:%M:%SZ')
 
@@ -2888,9 +2899,12 @@ async def update_user(
 
         connection.close()
 
+        updated_user_dict = dict(updated_user)
+        updated_user_dict['is_active'] = bool(updated_user_dict['is_active'])
+
         return JSONResponse(content={
             "message": "User updated successfully",
-            "user": dict(updated_user)
+            "user": updated_user_dict
         }, status_code=200)
 
     except HTTPException:
