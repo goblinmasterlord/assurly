@@ -1202,7 +1202,7 @@ The primary dashboard data endpoint. Returns per-school summary rows for the sel
 | Param | Type | Default | Notes |
 |---|---|---|---|
 | `term_id` | string | — | Full `unique_term_id`, e.g. `T2-2025-26`. If omitted, the backend selects the most recent term with assessment data. |
-| `view` | string | `"school"` | `🚧 In-flight — REQ-005`. `"school"` = non-central schools only; `"trust"` = central office only. |
+| `view` | string | `"school"` | `"school"` = non-central schools only; `"trust"` = central office only. The toggle is a server-side re-fetch — clients must re-request with the chosen `view`, not filter client-side. |
 
 **Response 200 (target shape):**
 
@@ -1243,8 +1243,8 @@ Per-school row fields:
 |---|---|---|---|
 | `school_id` | string | no | |
 | `school_name` | string | no | |
-| `school_type` | string | no | `🚧 In-flight — REQ-005`. `primary`, `secondary`, `all_through`, `special`, `central`. |
-| `is_central_office` | boolean | no | `🚧 In-flight — REQ-005`. |
+| `school_type` | string | no | `primary`, `secondary`, `all_through`, `special`, `central`. |
+| `is_central_office` | boolean | no | `true` for the MAT central office row. |
 | `current_term` | string | no | |
 | `status` | string | no | Computed: `not_started`, `in_progress`, `completed`. |
 | `current_score` | number | yes | Average rating (2dp). `null` if no ratings. |
@@ -1254,8 +1254,8 @@ Per-school row fields:
 | `total_standards` | integer | no | |
 | `completion_rate` | string | no | `"30/42"` format for display. |
 | `last_updated` | string (ISO 8601) | yes | |
-| `actions` | string | yes | `🚧 In-flight — REQ-002`. Aggregated or most recent actions text. |
-| `evidence_count` | integer | no | `🚧 In-flight — REQ-003`. Total evidence items across all assessment cells for this school/term. |
+| `actions` | string | yes | Most-recent non-empty `actions` text from an active standard for this `(school, term)`. `null` when no row has actions. |
+| `evidence_count` | integer | no | Total evidence items across all assessment cells for this school/term. `0` when none exist. |
 
 **Response 200 (empty):**
 
@@ -1754,7 +1754,7 @@ Admin/cron utility. No auth required (security concern). Not called by the front
 
 | # | Location | Issue | Severity | Fix alongside |
 |---|---|---|---|---|
-| 1 | `GET /api/dashboard/schools` (main.py ~L1243) | Broken implementation: `schools` variable referenced before definition. The main current-term query is a placeholder comment (`# ... [keep existing current term query] ...`). Endpoint will raise `NameError` at runtime. | **Blocking** — prevents REQ-005 | REQ-002/003/005 batch |
+| 1 | `GET /api/dashboard/schools` (main.py ~L1243) | **Resolved 2026-05-27** (commit `539664d`). The placeholder-comment defect was fixed by restoring the per-school summary query in its REQ-005 polarity-aware form; `view`, `actions`, `evidence_count`, `school_type`, `is_central_office` all now ship. See changelog v1.2. | Resolved | — |
 | 2 | `POST /api/assessments/{assessment_id}/submit` (main.py ~L3124) | References `standard_id` and `term_id` columns that no longer exist on `assessments`. Will raise `OperationalError` at runtime. | **Broken** — endpoint is dead | Mark deprecated. Frontend uses `PUT /api/assessments/{assessment_id}`. |
 | 3 | `GET /api/debug/assessment-parsing/{id}` (main.py ~L3066) | Same `standard_id`/`term_id` column issue. | **Broken** — debug only | Standalone removal |
 | 4 | `GET /api/users/me` (main.py ~L2810) | Dead code. Hardcoded permissions array `["complete_assessments", "view_school_data"]` and `active_assessments: []` TODO. Never called by frontend. Different shape from `UserResponse`. | **Cosmetic** | Standalone removal |
@@ -1779,3 +1779,4 @@ Admin/cron utility. No auth required (security concern). Not called by the front
 | v1.2 | 2026-05-27 | `GET /api/assessments` response now includes `school_type` (string) and `is_central_office` (boolean) on each group row, sourced from the `schools` table. Restores the Trust/School selector on the Assessments screen. |
 | v1.3 | 2026-05-28 | `GET /api/schools` now returns the central office row by default. Removed the `include_central` query param and the `AND is_central_office = FALSE` default filter — the endpoint always returns all active schools for the MAT. Callers that previously passed `include_central=true` will see no change in behaviour. |
 | v1.4 | 2026-05-28 | Standardised `is_central_office` and `is_active` on `GET /api/schools` and `is_active` on `GET /api/users` / `POST /api/users` / `PUT /api/users/{user_id}` to JSON booleans (`true`/`false`) instead of `0`/`1`. Other endpoints (`/api/dashboard/schools`, `/api/assessments`, `/api/auth/*`) already returned booleans. Frontend no longer needs to coerce integers client-side. |
+| v1.5 | 2026-05-28 | Doc reconciliation pass. Dropped `🚧 In-flight — REQ-002/003/005` tags from `GET /api/dashboard/schools` `view` param and `school_type` / `is_central_office` / `actions` / `evidence_count` fields — all now shipped. Marked Known Issue #1 (dashboard placeholder-comment defect) as **Resolved**. No new endpoints, no shape changes. |

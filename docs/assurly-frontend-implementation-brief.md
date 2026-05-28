@@ -244,12 +244,7 @@ The dashboard shows assessments per school by default. Users should be able to t
 ### 5.2 State management
 
 - Store the selected view in component state — session-only, no need to persist across page refreshes.
-- On toggle, re-fetch the dashboard data with the appropriate `?view=` query parameter.
-- If your current fetch pattern pulls all dashboard data in one request and filters client-side, you can either:
-  - Keep that pattern and filter on `schools.is_central_office` client-side, OR
-  - Switch to a per-view fetch.
-
-  Prefer client-side filtering if the dataset is small (which it is today — ~12 schools per MAT max). Drop to server-side only if performance degrades.
+- On toggle, **re-fetch** the dashboard data with the appropriate `?view=` query parameter. This is a server-side re-fetch, not a client-side filter — the backend filters by `view` server-side and a `view=school` response does **not** contain the central office row, so client-side filtering on `is_central_office` cannot recover it. Likewise a `view=trust` response contains only the central office. Do not attempt to fetch once and filter both views from a single payload.
 
 ### 5.3 Rendering differences
 
