@@ -152,7 +152,7 @@ export function SchoolPerformanceView({ assessments, refreshAssessments, isLoadi
   const [schoolsLoading, setSchoolsLoading] = useState(true);
   const [aspects, setAspects] = useState<Aspect[]>([]);
   const [aspectsLoading, setAspectsLoading] = useState(true);
-  const [orgScope, setOrgScope] = useState<"school" | "trust">("school");
+  const [dashboardView, setDashboardView] = useState<"school" | "trust">("school");
   const [schoolsDashboard, setSchoolsDashboard] = useState<SchoolsDashboardResponse | null>(null);
   const [dashboardLoading, setDashboardLoading] = useState(false);
   const [dashboardError, setDashboardError] = useState<string | null>(null);
@@ -225,7 +225,7 @@ export function SchoolPerformanceView({ assessments, refreshAssessments, isLoadi
       setDashboardLoading(true);
       setDashboardError(null);
       try {
-        const data = await getSchoolsDashboard(selectedUniqueTermId);
+        const data = await getSchoolsDashboard(selectedUniqueTermId, dashboardView);
         if (!cancelled) setSchoolsDashboard(data);
       } catch (err: any) {
         console.error("Failed to load schools dashboard:", err);
@@ -240,7 +240,7 @@ export function SchoolPerformanceView({ assessments, refreshAssessments, isLoadi
     return () => {
       cancelled = true;
     };
-  }, [selectedUniqueTermId]);
+  }, [selectedUniqueTermId, dashboardView]);
 
   const dashboardBySchoolId = useMemo(() => {
     const entries = schoolsDashboard?.schools?.map((s) => [s.school_id, s] as const) ?? [];
@@ -533,15 +533,12 @@ export function SchoolPerformanceView({ assessments, refreshAssessments, isLoadi
       .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
       .join(" ");
   }, []);
-  const schoolOptions: MultiSelectOption[] = schools
-    .filter(s => orgScope === "trust" ? !!s.is_central_office : !s.is_central_office)
-    .filter(school => school.name && school.id)
-    .map((school: School) => ({
-      label: school.name!,
-      value: school.id!
+  const schoolOptions: MultiSelectOption[] = (schoolsDashboard?.schools ?? [])
+    .filter((s) => s.school_name && s.school_id)
+    .map((s) => ({
+      label: s.school_name,
+      value: s.school_id,
     }));
-
-  const centralOfficeSchool = useMemo(() => schools.find((s) => !!s.is_central_office), [schools]);
 
   // Optimistic filter update handlers
   const updateFilter = useCallback((filterType: keyof typeof filters, value: string[]) => {
@@ -817,12 +814,7 @@ export function SchoolPerformanceView({ assessments, refreshAssessments, isLoadi
     // Use optimistic filters when pending, otherwise use actual filters
     const activeFilters = isPending ? optimisticFilters : filters;
     
-    let filtered = schoolPerformanceData
-      .filter((school) => {
-        const isCentral = !!school.school?.is_central_office;
-        return orgScope === "trust" ? isCentral : !isCentral;
-      })
-      .filter(school => {
+    let filtered = schoolPerformanceData.filter(school => {
       const matchesSearch = searchTerm === "" ||
         (school.school?.name || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
         (school.school?.code && school.school.code.toLowerCase().includes(searchTerm.toLowerCase()));
@@ -1011,19 +1003,14 @@ export function SchoolPerformanceView({ assessments, refreshAssessments, isLoadi
               <TermNavigationSkeleton />
             ) : (
               <div className="flex items-center gap-2 w-full md:w-auto">
-                {centralOfficeSchool && (
-                  <Tabs
-                    value={orgScope}
+                <Tabs
+                    value={dashboardView}
                     onValueChange={(v) => {
                       const next = v as "school" | "trust";
-                      setOrgScope(next);
-                      // If a user had Central Team selected in the school multiselect, clear it when switching back to Schools.
-                      if (next === "school" && centralOfficeSchool?.id) {
-                        const centralId = centralOfficeSchool.id;
-                        if (filters.school.includes(centralId) || optimisticFilters.school.includes(centralId)) {
-                          const nextValue = (optimisticFilters.school || []).filter((id: string) => id !== centralId);
-                          handleSchoolFilterChange(nextValue);
-                        }
+                      setDashboardView(next);
+                      // Clear school filter whenever the view changes to avoid filtering out newly fetched rows.
+                      if (filters.school.length > 0 || optimisticFilters.school.length > 0) {
+                        handleSchoolFilterChange([]);
                       }
                     }}
                   >
@@ -1032,7 +1019,6 @@ export function SchoolPerformanceView({ assessments, refreshAssessments, isLoadi
                       <TabsTrigger value="trust">Central Team</TabsTrigger>
                     </TabsList>
                   </Tabs>
-                )}
                 <Select value={selectedTerm} onValueChange={handleTermChange}>
                   <SelectTrigger className="w-full md:w-[220px] h-10">
                     <SelectValue placeholder="Select term" />

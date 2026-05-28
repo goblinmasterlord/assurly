@@ -2,15 +2,19 @@ import apiClient from '@/lib/api-client';
 import type { SchoolsDashboardResponse } from '@/types/dashboard';
 
 /**
- * GET /api/dashboard/schools?term_id=T2-2025-26
+ * GET /api/dashboard/schools?term_id=T2-2025-26&view=school|trust
  *
  * Notes:
  * - Backend returns an object in normal cases: { current_term, schools: [...] }
  * - Backend may return [] if there are no assessments at all (older behavior). We normalize that.
  */
-export async function getSchoolsDashboard(termId?: string): Promise<SchoolsDashboardResponse> {
+export async function getSchoolsDashboard(
+  termId?: string,
+  view: 'school' | 'trust' = 'school'
+): Promise<SchoolsDashboardResponse> {
   const params = new URLSearchParams();
   if (termId) params.set('term_id', termId);
+  if (view) params.set('view', view);
 
   const url = `/api/dashboard/schools${params.toString() ? `?${params}` : ''}`;
   const response = await apiClient.get<any>(url);
