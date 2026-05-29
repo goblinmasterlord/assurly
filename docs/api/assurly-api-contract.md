@@ -940,7 +940,6 @@ Authorization: Bearer <token>
   "academic_year": "2024-25",
   "rating": 3,
   "evidence_comments": "Building maintenance programme on track.",
-  "actions": "Schedule roof inspection by end of term.",
   "status": "completed",
   "due_date": "2024-12-20",
   "assigned_to": "user10",
@@ -963,7 +962,7 @@ Authorization: Bearer <token>
 | `standard_code` | string | no | |
 | `standard_name` | string | no | |
 | `standard_description` | string | yes | |
-| `standard_type` | string | no | `🚧 In-flight — REQ-004`. `"assurance"` or `"risk"`. Required by frontend for RAG polarity. Currently returned from the JOIN but not explicitly documented until REQ-004 ships. |
+| `standard_type` | string | no | `"assurance"` or `"risk"`. Required by frontend for RAG polarity. |
 | `mat_aspect_id` | string | no | |
 | `aspect_code` | string | no | |
 | `aspect_name` | string | no | |
@@ -973,7 +972,6 @@ Authorization: Bearer <token>
 | `academic_year` | string | no | |
 | `rating` | integer | yes | 1–4 or `null`. |
 | `evidence_comments` | string | yes | |
-| `actions` | string | yes | `🚧 In-flight — REQ-002`. Free-text next-steps. |
 | `status` | string | no | `not_started`, `in_progress`, `completed`, or `approved`. |
 | `due_date` | string (date) | yes | `YYYY-MM-DD`. |
 | `assigned_to` | string | yes | User ID. |
@@ -983,6 +981,8 @@ Authorization: Bearer <token>
 | `submitted_by_name` | string | yes | |
 | `last_updated` | string (ISO 8601) | yes | |
 | `updated_by` | string | yes | User ID. |
+
+Action checklist items are not embedded in this response — fetch them via `GET /api/assessments/{assessment_id}/actions` (see §31a).
 
 **Response 404:** `"Assessment not found"`.
 
@@ -1038,7 +1038,6 @@ Returns all standards within an aspect for a specific school and term, with thei
       "sort_order": 1,
       "rating": 3,
       "evidence_comments": "Good attendance tracking in place.",
-      "actions": "Review persistent absence intervention programme.",
       "version_id": "HLT-AC1-v2",
       "version_number": 2,
       "status": "completed",
@@ -1062,11 +1061,10 @@ Each standard in the `standards` array:
 | `standard_code` | string | no | |
 | `standard_name` | string | no | |
 | `standard_description` | string | yes | |
-| `standard_type` | string | no | `🚧 In-flight — REQ-004`. `"assurance"` or `"risk"`. Needed for RAG polarity. |
+| `standard_type` | string | no | `"assurance"` or `"risk"`. Needed for RAG polarity. |
 | `sort_order` | integer | no | |
 | `rating` | integer | yes | 1–4 or `null`. |
 | `evidence_comments` | string | yes | |
-| `actions` | string | yes | `🚧 In-flight — REQ-002`. |
 | `version_id` | string | yes | |
 | `version_number` | integer | yes | |
 | `status` | string | no | Defaults to `"not_started"` if no assessment. |
@@ -1079,7 +1077,8 @@ Each standard in the `standards` array:
 **Response 404:** `"School or aspect not found in your MAT"`.
 
 **Frontend notes:**
-- Standards without assessments have `null` for `assessment_id`, `id`, `rating`, `evidence_comments`, `actions`. The frontend must handle these gracefully — they represent standards that exist in the MAT's framework but haven't been rated yet for this school/term.
+- Standards without assessments have `null` for `assessment_id`, `id`, `rating`, `evidence_comments`. The frontend must handle these gracefully — they represent standards that exist in the MAT's framework but haven't been rated yet for this school/term.
+- Action checklist items are not embedded here. Fetch them per-assessment via `GET /api/assessments/{assessment_id}/actions` (see §31a).
 
 ---
 
@@ -1230,8 +1229,8 @@ The primary dashboard data endpoint. Returns per-school summary rows for the sel
       "total_standards": 42,
       "completion_rate": "30/42",
       "last_updated": "2026-04-20T14:32:01Z",
-      "actions": "Review safeguarding policy by May.",
-      "evidence_count": 5
+      "evidence_count": 5,
+      "outstanding_actions_count": 3
     }
   ]
 }
@@ -1254,8 +1253,8 @@ Per-school row fields:
 | `total_standards` | integer | no | |
 | `completion_rate` | string | no | `"30/42"` format for display. |
 | `last_updated` | string (ISO 8601) | yes | |
-| `actions` | string | yes | Most-recent non-empty `actions` text from an active standard for this `(school, term)`. `null` when no row has actions. |
 | `evidence_count` | integer | no | Total evidence items across all assessment cells for this school/term. `0` when none exist. |
+| `outstanding_actions_count` | integer | no | Count of incomplete `assessment_actions` rows across this school's assessments for the current term (active, non-archived standards only). `0` when none exist. |
 
 **Response 200 (empty):**
 
@@ -1272,6 +1271,140 @@ Returned when no assessment data exists for the MAT.
 - The `view` param determines which schools appear. Default `"school"` excludes central office rows. `"trust"` returns only the central office row — there's exactly one per MAT.
 - `previous_terms` is limited to 3 entries, newest first. Use for sparkline/trend display.
 - `evidence_count` drives the Files column indicator: show paperclip + count when > 0, blank when 0.
+- `outstanding_actions_count` drives the Actions column indicator. Replaces the prior `actions` string field (REQ-002 rework — actions are now per-assessment checklist items, fetched via the endpoints in the next section).
+
+---
+
+### Assessment actions (checklist)
+
+REQ-002 ships actions as a checklist of items per assessment, not a free-text field. Items live in the `assessment_actions` table (one row per item, FK to `assessments.id`, ON DELETE CASCADE). The four endpoints below are MAT-isolated: a token from one MAT cannot read or mutate actions on an assessment in another MAT. All ownership misses return **404** (we do not differentiate "not yours" from "not found").
+
+The path-level `{assessment_id}` is the composite virtual key — same form used by `GET /api/assessments/{assessment_id}` and `PUT /api/assessments/{assessment_id}`.
+
+#### 31a. List action items for an assessment
+
+```
+GET /api/assessments/{assessment_id}/actions
+Authorization: Bearer <token>
+```
+
+**Auth:** required.
+
+**Path params:**
+
+| Param | Type | Notes |
+|---|---|---|
+| `assessment_id` | string | Composite, e.g. `cedar-park-primary-ES1-T1-2024-25`. |
+
+**Response 200:**
+
+```json
+[
+  {
+    "id": "5f1f6a9f-...",
+    "text": "Schedule roof inspection by end of term.",
+    "is_completed": false,
+    "sort_order": 0,
+    "created_at": "2026-05-28T10:30:00Z",
+    "created_by": "user10",
+    "completed_at": null,
+    "completed_by": null
+  }
+]
+```
+
+Ordered by `sort_order` then `created_at`.
+
+| Field | Type | Nullable | Notes |
+|---|---|---|---|
+| `id` | string | no | UUID v4. |
+| `text` | string | no | |
+| `is_completed` | boolean | no | |
+| `sort_order` | integer | no | |
+| `created_at` | string (ISO 8601) | no | |
+| `created_by` | string | yes | User ID. Nullable because `created_by` has no FK (users are only soft-deleted). |
+| `completed_at` | string (ISO 8601) | yes | `null` until `is_completed` flips true. |
+| `completed_by` | string | yes | User ID. |
+
+**Response 404:** `"Assessment not found"`.
+
+#### 31b. Create action item
+
+```
+POST /api/assessments/{assessment_id}/actions
+Authorization: Bearer <token>
+Content-Type: application/json
+```
+
+**Auth:** required.
+
+**Path params:** same as 31a.
+
+**Request body:**
+
+```json
+{
+  "text": "Schedule roof inspection by end of term.",
+  "sort_order": 0
+}
+```
+
+| Field | Type | Required | Notes |
+|---|---|---|---|
+| `text` | string | yes | Non-empty. |
+| `sort_order` | integer | no | Defaults to `MAX(existing sort_order) + 1` for the assessment. |
+
+**Response 201:** the created `ActionItem` (same shape as the list items in 31a).
+
+**Response 404:** `"Assessment not found"`.
+
+#### 31c. Update action item
+
+```
+PUT /api/assessments/{assessment_id}/actions/{action_id}
+Authorization: Bearer <token>
+Content-Type: application/json
+```
+
+**Auth:** required.
+
+**Path params:**
+
+| Param | Type | Notes |
+|---|---|---|
+| `assessment_id` | string | Composite. |
+| `action_id` | string | UUID of the action item. |
+
+**Request body:** any subset of:
+
+```json
+{
+  "text": "Updated text.",
+  "is_completed": true,
+  "sort_order": 2
+}
+```
+
+Transition semantics: when `is_completed` flips from `false` → `true`, the backend sets `completed_at = NOW()` and `completed_by = <caller>`. Flipping back to `false` nulls both.
+
+**Response 200:** the updated `ActionItem`.
+
+**Response 404:** `"Assessment not found"` or `"Action not found"`.
+
+#### 31d. Delete action item
+
+```
+DELETE /api/assessments/{assessment_id}/actions/{action_id}
+Authorization: Bearer <token>
+```
+
+**Auth:** required.
+
+Hard-deletes the row (actions are ephemeral UI items, not historical records).
+
+**Response 204:** empty body.
+
+**Response 404:** `"Assessment not found"` or `"Action not found"`.
 
 ---
 
@@ -1763,10 +1896,10 @@ Admin/cron utility. No auth required (security concern). Not called by the front
 | 7 | `StandardRatingSubmission.rating` Pydantic comment (main.py ~L232) | Comment says `"1-5 or null"`. Correct range is `1-4` per `chk_rating_range`. | **Stale comment** | REQ-004 |
 | 8 | `POST /api/auth/cleanup-expired-tokens` (main.py ~L731) | No auth requirement on an admin/cron endpoint. Anyone can call it. | **Low security** | Standalone |
 | 9 | `GET /api/terms` (main.py ~L2402) | No auth requirement. Only unprotected data endpoint. Terms are public reference data so risk is low, but inconsistent with other endpoints. | **Low** | Standalone |
-| 10 | `PUT /api/assessments/{assessment_id}` and `POST /api/assessments/bulk-update` | Neither endpoint currently accepts the `actions` field — only `rating` and `evidence_comments` are read from `update_data`. | **Blocking REQ-002** | REQ-002 |
-| 11 | `GET /api/assessments/by-aspect/{aspect_code}` | Does not return `standard_type` or `actions` in the per-standard response. Both are needed (REQ-002 for `actions`, REQ-004 for `standard_type`/RAG polarity). `standard_type` is selected in the SQL but omitted from the response dict. | **Blocking REQ-002, REQ-004** | REQ-002/004 |
+| 10 | `PUT /api/assessments/{assessment_id}` and `POST /api/assessments/bulk-update` | **Resolved 2026-05-28** — superseded by the REQ-002 rework. Actions are no longer a free-text field on the assessment; they live in the `assessment_actions` child table and are managed via the dedicated endpoints in §31a-d. | Resolved | — |
+| 11 | `GET /api/assessments/by-aspect/{aspect_code}` | **Resolved 2026-05-28** — `standard_type` is now added to the per-standard response dict. `actions` is no longer part of this payload (see §31a-d). | Resolved | — |
 | 12 | `GET /api/standards/{mat_standard_id}` (single detail) | Selects `ms.standard_type` in the SQL but omits it from the `JSONResponse` content dict. The list endpoint (`GET /api/standards`) correctly returns it via `MatStandardResponse`. | **Cosmetic** — data is available, just not serialised | Standalone |
-| 13 | `GET /api/assessments/{assessment_id}` (single detail) | Does not SELECT `ms.standard_type` or `a.actions`. Both needed for target state (REQ-002, REQ-004). | **Blocking REQ-002, REQ-004** | REQ-002/004 |
+| 13 | `GET /api/assessments/{assessment_id}` (single detail) | **Resolved 2026-05-28** — `ms.standard_type` added to the SELECT and flows through `process_row_for_json` into the response. `actions` is no longer part of this payload (see §31a-d). | Resolved | — |
 
 ---
 
@@ -1780,3 +1913,4 @@ Admin/cron utility. No auth required (security concern). Not called by the front
 | v1.3 | 2026-05-28 | `GET /api/schools` now returns the central office row by default. Removed the `include_central` query param and the `AND is_central_office = FALSE` default filter — the endpoint always returns all active schools for the MAT. Callers that previously passed `include_central=true` will see no change in behaviour. |
 | v1.4 | 2026-05-28 | Standardised `is_central_office` and `is_active` on `GET /api/schools` and `is_active` on `GET /api/users` / `POST /api/users` / `PUT /api/users/{user_id}` to JSON booleans (`true`/`false`) instead of `0`/`1`. Other endpoints (`/api/dashboard/schools`, `/api/assessments`, `/api/auth/*`) already returned booleans. Frontend no longer needs to coerce integers client-side. |
 | v1.5 | 2026-05-28 | Doc reconciliation pass. Dropped `🚧 In-flight — REQ-002/003/005` tags from `GET /api/dashboard/schools` `view` param and `school_type` / `is_central_office` / `actions` / `evidence_count` fields — all now shipped. Marked Known Issue #1 (dashboard placeholder-comment defect) as **Resolved**. No new endpoints, no shape changes. |
+| v1.6 | 2026-05-28 | REQ-002 rework. `actions` is no longer a free-text field on `assessments` — it's now a checklist of items in a new `assessment_actions` child table, managed via four new endpoints (§31a-d: `GET`/`POST` list/create + `PUT`/`DELETE` per item). `GET /api/dashboard/schools` returns `outstanding_actions_count` (integer) in place of the old `actions` (string). `GET /api/assessments/{id}` and `GET /api/assessments/by-aspect/{aspect_code}` no longer document `actions`; both now return `standard_type` on the per-standard rows. Known Issues #10, #11, #13 resolved. |

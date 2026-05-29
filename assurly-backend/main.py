@@ -1,8 +1,8 @@
 from fastapi import FastAPI, HTTPException, Query, Depends, status, Request
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
-from pydantic import BaseModel, EmailStr, validator
+from pydantic import BaseModel, EmailStr, Field, validator
 from typing import List, Literal, Optional
 import pymysql
 import os
@@ -244,6 +244,26 @@ class AssessmentCreateRequest(BaseModel):
     academic_year: str
     due_date: Optional[str] = None
     assigned_to: Optional[List[str]] = None
+
+# Action item models — checklist of items per assessment (REQ-002 rework)
+class ActionItem(BaseModel):
+    id: str
+    text: str
+    is_completed: bool
+    sort_order: int
+    created_at: str
+    created_by: Optional[str] = None
+    completed_at: Optional[str] = None
+    completed_by: Optional[str] = None
+
+class ActionCreate(BaseModel):
+    text: str = Field(min_length=1)
+    sort_order: Optional[int] = None
+
+class ActionUpdate(BaseModel):
+    text: Optional[str] = Field(default=None, min_length=1)
+    is_completed: Optional[bool] = None
+    sort_order: Optional[int] = None
 
 # ================================
 # ASPECT & STANDARD MODELS (MAT-Specific)
@@ -1329,20 +1349,8 @@ async def get_schools_dashboard(
 
                 MAX(CASE WHEN ms.mat_standard_id IS NOT NULL THEN a.last_updated END) AS last_updated,
 
-                (SELECT a2.actions
-                   FROM assessments a2
-                   JOIN mat_standards ms2 ON ms2.mat_standard_id = a2.mat_standard_id
-                   WHERE a2.school_id = s.school_id
-                     AND a2.unique_term_id = %s
-                     AND a2.actions IS NOT NULL
-                     AND a2.actions <> ''
-                     AND ms2.is_active = 1
-                     AND ms2.mat_standard_id NOT LIKE %s
-                   ORDER BY a2.last_updated DESC
-                   LIMIT 1
-                ) AS actions,
-
-                COALESCE(ev.cnt, 0) AS evidence_count
+                COALESCE(ev.cnt, 0) AS evidence_count,
+                COALESCE(act.cnt, 0) AS outstanding_actions_count
 
             FROM schools s
             LEFT JOIN assessments a
@@ -1359,6 +1367,17 @@ async def get_schools_dashboard(
                   AND unique_term_id = %s
                 GROUP BY school_id
             ) ev ON ev.school_id = s.school_id
+            LEFT JOIN (
+                SELECT a.school_id, COUNT(*) AS cnt
+                FROM assessment_actions aa
+                JOIN assessments a ON a.id = aa.assessment_id
+                JOIN mat_standards ms ON ms.mat_standard_id = a.mat_standard_id
+                WHERE aa.is_completed = 0
+                  AND a.unique_term_id = %s
+                  AND ms.is_active = 1
+                  AND ms.mat_standard_id NOT LIKE %s
+                GROUP BY a.school_id
+            ) act ON act.school_id = s.school_id
             WHERE s.mat_id = %s
               AND s.is_active = 1
               AND s.is_central_office = %s
@@ -1367,12 +1386,12 @@ async def get_schools_dashboard(
         """
         deleted_pattern = '%-deleted-%'
         cursor.execute(current_query, (
-            term_id,                  # actions subquery: term filter
-            deleted_pattern,          # actions subquery: archive-rename exclusion
             term_id,                  # main JOIN: assessments term filter
             deleted_pattern,          # main JOIN: archive-rename exclusion
             current_mat_id,           # evidence subquery: MAT isolation
             term_id,                  # evidence subquery: term filter
+            term_id,                  # actions subquery: term filter
+            deleted_pattern,          # actions subquery: archive-rename exclusion
             current_mat_id,           # WHERE: MAT isolation
             is_central_office_flag,   # WHERE: trust/school view filter
         ))
@@ -1449,8 +1468,8 @@ async def get_schools_dashboard(
                 'total_standards': total,
                 'completion_rate': f"{completed}/{total}",
                 'last_updated': last_updated,
-                'actions': school['actions'],
                 'evidence_count': int(school['evidence_count'] or 0),
+                'outstanding_actions_count': int(school['outstanding_actions_count'] or 0),
             })
 
         connection.close()
@@ -2971,6 +2990,7 @@ async def get_assessment_details(
                 ms.standard_code,
                 ms.standard_name,
                 ms.standard_description,
+                ms.standard_type,
                 ma.mat_aspect_id,
                 ma.aspect_code,
                 ma.aspect_name,
@@ -3128,6 +3148,7 @@ async def get_assessments_by_aspect(
                 "standard_code": row['standard_code'],
                 "standard_name": row['standard_name'],
                 "standard_description": row['standard_description'],
+                "standard_type": row['standard_type'],
                 "sort_order": row['sort_order'],
                 "rating": row['rating'],
                 "evidence_comments": row['evidence_comments'],
@@ -3513,6 +3534,290 @@ async def bulk_update_assessments(
 
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+# ================================
+# ASSESSMENT ACTIONS (CHECKLIST) — REQ-002
+# ================================
+
+def _resolve_assessment_uuid(cursor, assessment_id: str, mat_id: str) -> Optional[str]:
+    """Resolve a composite assessment_id to its UUID PK, enforcing MAT isolation.
+
+    Returns the UUID (assessments.id) when the composite identifier belongs to
+    a school in the caller's MAT, or None when it does not. Callers should
+    treat None as 404 — do not differentiate "not yours" from "not found".
+    """
+    cursor.execute(
+        """
+        SELECT a.id
+        FROM assessments a
+        JOIN schools s ON s.school_id = a.school_id
+        WHERE a.assessment_id = %s
+          AND s.mat_id = %s
+        LIMIT 1
+        """,
+        (assessment_id, mat_id),
+    )
+    row = cursor.fetchone()
+    return row['id'] if row else None
+
+
+def _action_row_to_dict(row: dict) -> dict:
+    """Serialise an assessment_actions row for JSON responses."""
+    return {
+        'id': row['id'],
+        'text': row['text'],
+        'is_completed': bool(row['is_completed']),
+        'sort_order': int(row['sort_order']),
+        'created_at': row['created_at'].strftime('%Y-%m-%dT%H:%M:%SZ') if isinstance(row['created_at'], datetime) else row['created_at'],
+        'created_by': row['created_by'],
+        'completed_at': row['completed_at'].strftime('%Y-%m-%dT%H:%M:%SZ') if isinstance(row['completed_at'], datetime) else row['completed_at'],
+        'completed_by': row['completed_by'],
+    }
+
+
+@app.get("/api/assessments/{assessment_id}/actions", tags=["Assessments"])
+async def list_assessment_actions(
+    assessment_id: str,
+    current_mat_id: str = Depends(get_current_mat),
+    current_user: UserResponse = Depends(get_current_user)
+):
+    """
+    List checklist action items for an assessment.
+
+    Path Parameter:
+    - assessment_id: Composite, e.g. cedar-park-primary-ES1-T1-2024-25.
+
+    Returns the items ordered by sort_order then created_at.
+    Enforces MAT isolation - 404 if the assessment is not in the caller's MAT.
+    """
+    try:
+        connection = get_db_connection()
+        cursor = connection.cursor()
+
+        assessment_uuid = _resolve_assessment_uuid(cursor, assessment_id, current_mat_id)
+        if not assessment_uuid:
+            connection.close()
+            raise HTTPException(status_code=404, detail="Assessment not found")
+
+        cursor.execute(
+            """
+            SELECT id, assessment_id, text, is_completed, sort_order,
+                   created_at, created_by, completed_at, completed_by
+            FROM assessment_actions
+            WHERE assessment_id = %s
+            ORDER BY sort_order, created_at
+            """,
+            (assessment_uuid,),
+        )
+        rows = cursor.fetchall()
+        connection.close()
+
+        return JSONResponse(
+            content=[_action_row_to_dict(r) for r in rows],
+            status_code=200,
+        )
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/assessments/{assessment_id}/actions", tags=["Assessments"], status_code=status.HTTP_201_CREATED)
+async def create_assessment_action(
+    assessment_id: str,
+    body: ActionCreate,
+    current_mat_id: str = Depends(get_current_mat),
+    current_user: UserResponse = Depends(get_current_user)
+):
+    """
+    Create a new checklist action item on an assessment.
+
+    Path Parameter:
+    - assessment_id: Composite, e.g. cedar-park-primary-ES1-T1-2024-25.
+
+    Request body:
+    - text (required, non-empty)
+    - sort_order (optional; defaults to MAX(existing) + 1 for the assessment)
+
+    Enforces MAT isolation - 404 if the assessment is not in the caller's MAT.
+    """
+    try:
+        connection = get_db_connection()
+        cursor = connection.cursor()
+
+        assessment_uuid = _resolve_assessment_uuid(cursor, assessment_id, current_mat_id)
+        if not assessment_uuid:
+            connection.close()
+            raise HTTPException(status_code=404, detail="Assessment not found")
+
+        if body.sort_order is not None:
+            sort_order = body.sort_order
+        else:
+            cursor.execute(
+                "SELECT COALESCE(MAX(sort_order), -1) + 1 AS next_order FROM assessment_actions WHERE assessment_id = %s",
+                (assessment_uuid,),
+            )
+            sort_order = int(cursor.fetchone()['next_order'])
+
+        action_id = str(uuid.uuid4())
+        cursor.execute(
+            """
+            INSERT INTO assessment_actions
+                (id, assessment_id, text, is_completed, sort_order, created_by)
+            VALUES (%s, %s, %s, 0, %s, %s)
+            """,
+            (action_id, assessment_uuid, body.text, sort_order, current_user.user_id),
+        )
+        connection.commit()
+
+        cursor.execute(
+            """
+            SELECT id, assessment_id, text, is_completed, sort_order,
+                   created_at, created_by, completed_at, completed_by
+            FROM assessment_actions
+            WHERE id = %s
+            """,
+            (action_id,),
+        )
+        created = cursor.fetchone()
+        connection.close()
+
+        return JSONResponse(
+            content=_action_row_to_dict(created),
+            status_code=status.HTTP_201_CREATED,
+        )
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.put("/api/assessments/{assessment_id}/actions/{action_id}", tags=["Assessments"])
+async def update_assessment_action(
+    assessment_id: str,
+    action_id: str,
+    body: ActionUpdate,
+    current_mat_id: str = Depends(get_current_mat),
+    current_user: UserResponse = Depends(get_current_user)
+):
+    """
+    Update an action item. Partial updates accepted (any subset of fields).
+
+    On is_completed transitions: true -> set completed_at=NOW(), completed_by=user;
+                                  false -> null both.
+    """
+    try:
+        connection = get_db_connection()
+        cursor = connection.cursor()
+
+        assessment_uuid = _resolve_assessment_uuid(cursor, assessment_id, current_mat_id)
+        if not assessment_uuid:
+            connection.close()
+            raise HTTPException(status_code=404, detail="Assessment not found")
+
+        # NOTE: this read-then-write pattern is not transactional. Concurrent
+        # PUTs on the same action could race on the is_completed transition.
+        # Acceptable at early-adopter scale; revisit (single conditional UPDATE
+        # or wrap in a transaction) if concurrency grows.
+        cursor.execute(
+            "SELECT is_completed FROM assessment_actions WHERE id = %s AND assessment_id = %s",
+            (action_id, assessment_uuid),
+        )
+        existing = cursor.fetchone()
+        if not existing:
+            connection.close()
+            raise HTTPException(status_code=404, detail="Action not found")
+
+        set_clauses: List[str] = []
+        params: List = []
+
+        if body.text is not None:
+            set_clauses.append("text = %s")
+            params.append(body.text)
+
+        if body.sort_order is not None:
+            set_clauses.append("sort_order = %s")
+            params.append(body.sort_order)
+
+        if body.is_completed is not None:
+            set_clauses.append("is_completed = %s")
+            params.append(1 if body.is_completed else 0)
+            was_completed = bool(existing['is_completed'])
+            if body.is_completed and not was_completed:
+                set_clauses.append("completed_at = NOW()")
+                set_clauses.append("completed_by = %s")
+                params.append(current_user.user_id)
+            elif not body.is_completed and was_completed:
+                set_clauses.append("completed_at = NULL")
+                set_clauses.append("completed_by = NULL")
+
+        if set_clauses:
+            params.extend([action_id, assessment_uuid])
+            cursor.execute(
+                f"UPDATE assessment_actions SET {', '.join(set_clauses)} WHERE id = %s AND assessment_id = %s",
+                params,
+            )
+            connection.commit()
+
+        cursor.execute(
+            """
+            SELECT id, assessment_id, text, is_completed, sort_order,
+                   created_at, created_by, completed_at, completed_by
+            FROM assessment_actions
+            WHERE id = %s
+            """,
+            (action_id,),
+        )
+        updated = cursor.fetchone()
+        connection.close()
+
+        return JSONResponse(content=_action_row_to_dict(updated), status_code=200)
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.delete("/api/assessments/{assessment_id}/actions/{action_id}", tags=["Assessments"], status_code=status.HTTP_204_NO_CONTENT)
+async def delete_assessment_action(
+    assessment_id: str,
+    action_id: str,
+    current_mat_id: str = Depends(get_current_mat),
+    current_user: UserResponse = Depends(get_current_user)
+):
+    """
+    Hard-delete an action item. 204 on success, 404 if action or assessment is
+    not visible to the caller's MAT.
+    """
+    try:
+        connection = get_db_connection()
+        cursor = connection.cursor()
+
+        assessment_uuid = _resolve_assessment_uuid(cursor, assessment_id, current_mat_id)
+        if not assessment_uuid:
+            connection.close()
+            raise HTTPException(status_code=404, detail="Assessment not found")
+
+        cursor.execute(
+            "DELETE FROM assessment_actions WHERE id = %s AND assessment_id = %s",
+            (action_id, assessment_uuid),
+        )
+        if cursor.rowcount == 0:
+            connection.close()
+            raise HTTPException(status_code=404, detail="Action not found")
+
+        connection.commit()
+        connection.close()
+        return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
 
 # ================================
 # ANALYTICS ENDPOINTS

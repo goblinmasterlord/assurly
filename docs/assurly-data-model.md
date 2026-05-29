@@ -426,7 +426,6 @@ The core operational table. One row per (school, mat_standard, term). Rated 1–
 | `academic_year` | `varchar(9)` | NOT NULL | — | Denormalised from `unique_term_id` for query performance. |
 | `rating` | `int` | NULL | — | **1–4 only**, enforced by CHECK constraint `chk_rating_range`. NULL until the assessment is started. See §2.6. |
 | `evidence_comments` | `text` | NULL | — | Free-text commentary supporting the rating. |
-| `actions` | `text` | NULL | — | Free-text next-steps / remediation notes. Added April 2026 (REQ-002). |
 | `status` | `enum('not_started', 'in_progress', 'completed', 'approved')` | NULL | `'not_started'` | |
 | `due_date` | `date` | NULL | — | |
 | `submitted_at` | `timestamp` | NULL | — | |
@@ -443,6 +442,10 @@ The core operational table. One row per (school, mat_standard, term). Rated 1–
 **UPSERT pattern.** Assessments are often created-or-updated via a single endpoint. The `(school_id, mat_standard_id, unique_term_id)` triple uniquely identifies the logical assessment. The endpoint either inserts a new UUID-keyed row or updates the existing one matching this triple.
 
 **Current data:** 1000 rows, spanning 2023-24 to 2025-26, across 5 schools. 990 `completed`, 10 `not_started`.
+
+### `FIXED` 2026-05-28 — `actions` column dropped, replaced by `assessment_actions` child table (REQ-002 rework)
+
+`assessments.actions` (the free-text column added in April 2026) has been dropped. Actions are now modelled as a checklist of items in a new child table — see §17 `assessment_actions`. The dashboard read-path now exposes an integer `outstanding_actions_count` aggregate instead of the most-recent-actions-text correlated subquery; the assessment detail endpoints no longer surface actions inline.
 
 ### `FIXED` 2026-04-20 — `updated_by` type normalised
 
@@ -536,6 +539,36 @@ CREATE TABLE standard_evidence (
 1. Add an index on `(mat_standard_id, school_id, unique_term_id)` — every read from `GET /evidence/{mat_standard_id}` will filter on all three.
 2. Consider a `CHECK` constraint: `(evidence_type = 'file' AND file_path IS NOT NULL AND url IS NULL) OR (evidence_type = 'url' AND url IS NOT NULL AND file_path IS NULL)`.
 3. `ON DELETE` behaviour: default is `RESTRICT`. Consider `ON DELETE CASCADE` for `school_id` and `mat_standard_id` — if a school or standard is removed, orphaned evidence is useless.
+
+### `assessment_actions` — new table (REQ-002)
+
+Holds checklist items per assessment. Replaces the old free-text `assessments.actions` column (dropped — see §15). One row per item; grain = one parent assessment (i.e. one school × standard × term, the same grain as `assessments` and `standard_evidence`).
+
+```sql
+CREATE TABLE assessment_actions (
+  id            CHAR(36)    NOT NULL,
+  assessment_id CHAR(36)    NOT NULL,
+  text          TEXT        NOT NULL,
+  is_completed  TINYINT(1)  NOT NULL DEFAULT 0,
+  sort_order    INT         NOT NULL DEFAULT 0,
+  created_at    TIMESTAMP   DEFAULT CURRENT_TIMESTAMP,
+  created_by    CHAR(36)    NULL,   -- no FK (users soft-deleted only)
+  completed_at  TIMESTAMP   NULL,
+  completed_by  CHAR(36)    NULL,   -- no FK
+  PRIMARY KEY (id),
+  KEY idx_actions_assessment (assessment_id, sort_order),
+  FOREIGN KEY (assessment_id) REFERENCES assessments(id) ON DELETE CASCADE
+);
+```
+
+**Status:** shipped 2026-05-28 (manual DDL in prod).
+
+**Notes:**
+
+- `ON DELETE CASCADE` on `assessment_id` — deleting a parent assessment cleans up its actions.
+- `created_by` / `completed_by` are FK-less by design: users are only soft-deleted (`is_active = 0`), never hard-removed, so a dangling reference cannot occur. If users ever become hard-deletable, add `ON DELETE SET NULL` FKs.
+- Mutated only via the four nested CRUD endpoints under `/api/assessments/{assessment_id}/actions`. Endpoints enforce MAT isolation by resolving the composite `assessment_id` to `assessments.id` via a JOIN with `schools` filtered on the session MAT.
+- Dashboard aggregate: `GET /api/dashboard/schools` returns `outstanding_actions_count` per school (count of `is_completed = 0` rows joined through `assessments → schools`, restricted to active, non-archive-renamed standards). The integer-count aggregate replaces the prior text-of-most-recent-action display.
 
 ---
 
@@ -634,6 +667,7 @@ Full inventory of FK, CHECK, and UNIQUE constraints as of **2026-04-20**. Re-run
 
 | Table | Constraint | Column(s) | References | ON UPDATE | ON DELETE | Notes |
 |---|---|---|---|---|---|---|
+| `assessment_actions` | `fk_actions_assessment` | `assessment_id` | `assessments.id` | NO ACTION | **CASCADE** | Added 2026-05-28 with the new `assessment_actions` table (§17). Deleting a parent assessment cleans up its actions. |
 | `assessments` | `fk_assessments_approved` | `approved_by` | `users.user_id` | NO ACTION | SET NULL | |
 | `assessments` | `fk_assessments_assigned` | `assigned_to` | `users.user_id` | NO ACTION | SET NULL | |
 | `assessments` | `fk_assessments_school` | `school_id` | `schools.school_id` | NO ACTION | **CASCADE** | Deleting a school wipes its assessments. Dormant — no hard deletes used. |
@@ -747,3 +781,4 @@ ORDER BY tc.TABLE_NAME, tc.CONSTRAINT_NAME;
 | 2026-04-20 | §15, §16: Issue #4 marked resolved. Live re-verification showed 0 orphaned `version_id`s — earlier "29 orphans" finding was an artefact of a stale January 2026 JSON export. Live FK prevents the issue. |
 | 2026-04-20 | §5, §15, §16, §20.1: Fixed issue #3 (`assessments.updated_by` narrowed to `char(36)`, FK `fk_assessments_updated_by` added) and issue #6 (`healing-secondary-academy.school_type` → `'secondary'`). Full `school_type` enum documented. **All six originally-flagged issues now closed.** |
 | 2026-05-21 | §8, §10: Renamed `aspect_category` enum value `'ofsted'` → `'strategic'` on both `aspects` and `mat_aspects`. Enum is now `enum('operational', 'strategic')`; default unchanged (`'operational'`). DB migration applied manually; backend code and API contract brought into alignment. |
+| 2026-05-28 | §15, §17, §20.1: REQ-002 rework. Dropped the `assessments.actions` TEXT column; added new child table `assessment_actions` (one row per checklist item, FK to `assessments.id` ON DELETE CASCADE, index `idx_actions_assessment`). FK `fk_actions_assessment` added to §20.1. DB migration applied manually; backend purged of `a.actions` references, four new CRUD endpoints shipped at `/api/assessments/{assessment_id}/actions`, dashboard now returns `outstanding_actions_count` instead of the old text aggregate. |
