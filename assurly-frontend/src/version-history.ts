@@ -1,15 +1,10 @@
 /**
  * Application version and release notes.
- * Update this file with each fix and new feature shipped to Early Adopters.
+ * Update VERSION_HISTORY[0] with each new Early Adopter release (newest first).
  */
 
-export const APP_VERSION = {
-  /** Early Adopter programme label shown in the header badge */
-  label: "EA",
-  version: "1.31",
-  /** ISO date string (YYYY-MM-DD) — displayed as "Build {formatted}" in the updates modal */
-  buildDate: "2026-05-29",
-} as const;
+/** Assurly brand green from logo (#17ad99) */
+export const ASSURLY_GREEN = "#17ad99";
 
 export type ChangelogEntry = {
   title: string;
@@ -17,46 +12,170 @@ export type ChangelogEntry = {
   bullets: string[];
 };
 
-export const CHANGELOG: ChangelogEntry[] = [
+export type VersionRelease = {
+  version: string;
+  buildDate: string; // YYYY-MM-DD
+  entries: ChangelogEntry[];
+};
+
+export const VERSION_HISTORY: VersionRelease[] = [
   {
-    title: "Schools dashboard — empty schools & Central Team view",
-    description:
-      "The MAT overview now surfaces every school for the selected term, including those with no assessments yet, and switches correctly between individual schools and the trust central office.",
-    bullets: [
-      "Schools with no assessments for the current term appear at reduced opacity so active schools stand out while empties remain visible",
-      "Schools / Central Team toggle re-fetches dashboard data using view=school or view=trust (no longer a client-side filter)",
-      "Switching terms no longer blanks the school list — all rows returned by the API are rendered",
-      "Removed redundant subheadings (school id and “No assessments yet”) on empty dashboard rows",
+    version: "1.31",
+    buildDate: "2026-05-29",
+    entries: [
+      {
+        title: "Early Adopter release notes",
+        description:
+          "Version badge in the header opens release notes and a full version history — only visible when you are logged in.",
+        bullets: [
+          "EA badge shows the current Early Adopter version",
+          "Role switcher labels shortened to Overview and Assessments",
+          "Full version history page lists every EA release",
+        ],
+      },
     ],
   },
   {
-    title: "Aspect category renamed to Strategic",
-    description:
-      "The aspect_category enum value formerly labelled Ofsted is now Strategic, aligned with the API and database.",
-    bullets: [
-      "Types, filters, badges, and aspect forms use strategic instead of ofsted",
-      "Category label displays as Strategic in the UI",
+    version: "1.30",
+    buildDate: "2026-05-28",
+    entries: [
+      {
+        title: "Dashboard & assessments polish",
+        description: "Small UX improvements for empty schools and the Department Head view.",
+        bullets: [
+          "Removed redundant subheadings on empty dashboard school rows",
+          "Department Head view shows how many schools have no ratings yet for the term",
+        ],
+      },
     ],
   },
   {
-    title: "Schools API & central office detection",
-    description:
-      "The frontend now matches the updated /api/schools contract for central office rows and boolean flags.",
-    bullets: [
-      "Removed legacy include_central query parameter — all schools are returned by default",
-      "Central office identified via is_central_office (boolean) from the API",
+    version: "1.29",
+    buildDate: "2026-05-28",
+    entries: [
+      {
+        title: "Central Team dashboard view",
+        description:
+          "The Schools / Central Team toggle now loads the correct data from the server instead of filtering client-side.",
+        bullets: [
+          "Central Team fetches GET /api/dashboard/schools?view=trust",
+          "Schools view uses view=school (default)",
+          "Switching terms no longer blanks the school list",
+        ],
+      },
     ],
   },
   {
-    title: "Department Head assessments view",
-    description:
-      "School Dept. Head (Assessments) view calls out schools that still need ratings for the selected term.",
-    bullets: [
-      "Shows a notice when one or more schools have no ratings yet for the current term",
-      "Role switcher labels shortened to Overview and Assessments to free header space",
+    version: "1.28",
+    buildDate: "2026-05-28",
+    entries: [
+      {
+        title: "Central Team selector restored",
+        description:
+          "The trust central office row is included from /api/schools and the Overview toggle works again.",
+        bullets: [
+          "Central office detected via is_central_office (boolean)",
+          "Removed legacy include_central query parameter",
+        ],
+      },
+    ],
+  },
+  {
+    version: "1.27",
+    buildDate: "2026-05-28",
+    entries: [
+      {
+        title: "Empty schools on the dashboard",
+        description:
+          "Schools with no assessments for the current term remain visible but de-emphasised.",
+        bullets: [
+          "Rows with total_standards 0 and status not_started render at reduced opacity",
+          "All schools from the dashboard API are shown, including those with no data yet",
+        ],
+      },
+    ],
+  },
+  {
+    version: "1.26",
+    buildDate: "2026-05-21",
+    entries: [
+      {
+        title: "Strategic aspect category",
+        description:
+          "The aspect_category value formerly labelled Ofsted is now Strategic across the UI.",
+        bullets: [
+          "Types, filters, badges, and aspect forms use strategic",
+          "Display label shows as Strategic",
+        ],
+      },
+    ],
+  },
+  {
+    version: "1.25",
+    buildDate: "2026-05-21",
+    entries: [
+      {
+        title: "Assessments API school metadata",
+        description:
+          "Assessment list responses include school_type and is_central_office for trust/school views.",
+        bullets: [
+          "Supports correct rendering of central office vs school assessments",
+        ],
+      },
+    ],
+  },
+  {
+    version: "1.24",
+    buildDate: "2026-05-20",
+    entries: [
+      {
+        title: "Dashboard schools endpoint",
+        description: "MAT overview uses the bulk dashboard schools summary per term.",
+        bullets: [
+          "Completion rates and scores sourced from GET /api/dashboard/schools",
+          "Term selector drives dashboard refresh",
+        ],
+      },
+    ],
+  },
+  {
+    version: "1.23",
+    buildDate: "2026-04-20",
+    entries: [
+      {
+        title: "Users management",
+        description: "MAT administrators can deactivate users and optionally show inactive accounts.",
+        bullets: [
+          "Soft delete (is_active) instead of hard delete",
+          "Show inactive users toggle",
+          "Clearer deactivate confirmation dialog",
+        ],
+      },
+    ],
+  },
+  {
+    version: "1.22",
+    buildDate: "2026-04-15",
+    entries: [
+      {
+        title: "Ratings & school management fixes",
+        description: "Stability fixes for assessment editing and the school management view.",
+        bullets: [
+          "Aspect names display correctly in assessment flows",
+          "School management view corrections",
+        ],
+      },
     ],
   },
 ];
+
+export const LATEST_RELEASE = VERSION_HISTORY[0];
+
+export const APP_VERSION = {
+  label: "EA",
+  version: LATEST_RELEASE.version,
+  buildDate: LATEST_RELEASE.buildDate,
+} as const;
 
 export const FEEDBACK_EMAIL = "tom@thetransformative.com";
 
