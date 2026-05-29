@@ -20,6 +20,22 @@ export type VersionRelease = {
 
 export const VERSION_HISTORY: VersionRelease[] = [
   {
+    version: "1.32",
+    buildDate: "2026-05-29",
+    entries: [
+      {
+        title: "Assessment actions checklist",
+        description:
+          "Per-standard action items are now persisted via the API instead of local mock state.",
+        bullets: [
+          "Checklist loads, adds, toggles, and deletes via /api/assessments/{id}/actions",
+          "Dashboard shows outstanding action count per school when incomplete items exist",
+          "Risk-standard rating badges use inverted RAG colours on the assessment detail table",
+        ],
+      },
+    ],
+  },
+  {
     version: "1.31",
     buildDate: "2026-05-29",
     entries: [

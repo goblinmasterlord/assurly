@@ -76,6 +76,39 @@ import {
 import { useToast } from "@/hooks/use-toast";
 import { FileUpload } from "@/components/ui/file-upload";
 import { assessmentService } from "@/services/enhanced-assessment-service";
+import {
+  getActions,
+  createAction,
+  updateAction,
+  deleteAction,
+  type UiAction,
+} from "@/services/actions-service";
+import { getRagBadgeClasses } from "@/utils/rag";
+
+type StandardWithAssessmentId = Standard & { assessment_id?: string };
+
+function resolveStandardAssessmentId(
+  standard: StandardWithAssessmentId | undefined,
+  assessment: Assessment,
+  urlId?: string
+): string | undefined {
+  if (!standard) return undefined;
+
+  if (standard.assessment_id) {
+    return standard.assessment_id;
+  }
+
+  if (assessment.school_id && standard.standard_code) {
+    const termId =
+      assessment.unique_term_id ||
+      (urlId ? urlId.split("-").slice(-2).join("-") : undefined);
+    if (termId) {
+      return `${assessment.school_id}-${standard.standard_code}-${termId}`;
+    }
+  }
+
+  return standard.id || standard.mat_standard_id;
+}
 
 // Evidence Cell Component with smart text handling
 const EvidenceCell = ({ evidence }: { evidence: string }) => {
@@ -184,9 +217,11 @@ export function AssessmentDetailPage() {
   const [attachments, setAttachments] = useState<Record<string, FileAttachment[]>>({});
   
   // Actions state - per standard
-  type Action = { id: string; text: string; completed: boolean };
-  const [actions, setActions] = useState<Record<string, Action[]>>({});
+  const [actions, setActions] = useState<Record<string, UiAction[]>>({});
   const [newActionText, setNewActionText] = useState<Record<string, string>>({});
+  const [actionsLoadError, setActionsLoadError] = useState<string | null>(null);
+  const [actionsError, setActionsError] = useState<string | null>(null);
+  const [actionsMutating, setActionsMutating] = useState<Record<string, boolean>>({});
 
   // Initialize form state when assessment loads
   useEffect(() => {
@@ -205,13 +240,60 @@ export function AssessmentDetailPage() {
         if (standard.id) acc[standard.id] = [];
         return acc;
       }, {} as Record<string, FileAttachment[]>));
-      
-      setActions(assessment.standards.reduce((acc, standard) => {
-        if (standard.id) acc[standard.id] = []; // Initialize with empty actions
-        return acc;
-      }, {} as Record<string, Action[]>));
     }
   }, [assessment]);
+
+  useEffect(() => {
+    if (!assessment?.standards) return;
+
+    let cancelled = false;
+
+    const loadActions = async () => {
+      setActionsLoadError(null);
+      const emptyActions = assessment.standards!.reduce((acc, standard) => {
+        if (standard.id) acc[standard.id] = [];
+        return acc;
+      }, {} as Record<string, UiAction[]>);
+
+      try {
+        const entries = await Promise.all(
+          assessment.standards!.map(async (standard) => {
+            if (!standard.id) return null;
+            const assessmentId = resolveStandardAssessmentId(
+              standard as StandardWithAssessmentId,
+              assessment,
+              id
+            );
+            if (!assessmentId) return [standard.id, [] as UiAction[]] as const;
+            const items = await getActions(assessmentId);
+            return [standard.id, items] as const;
+          })
+        );
+
+        if (cancelled) return;
+
+        const loaded = { ...emptyActions };
+        for (const entry of entries) {
+          if (entry) {
+            loaded[entry[0]] = entry[1];
+          }
+        }
+        setActions(loaded);
+      } catch (error) {
+        console.error("Failed to load actions:", error);
+        if (!cancelled) {
+          setActionsLoadError("Failed to load action items. Please refresh the page.");
+          setActions(emptyActions);
+        }
+      }
+    };
+
+    loadActions();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [assessment, id]);
 
   const [saving, setSaving] = useState(false);
   const [showSuccessDialog, setShowSuccessDialog] = useState(false);
@@ -400,42 +482,114 @@ export function AssessmentDetailPage() {
     }));
   };
   
-  // Action handlers
-  const handleAddAction = (standardId: string) => {
+  const findStandardById = (standardId: string) =>
+    assessment?.standards?.find(
+      (std) => std.mat_standard_id === standardId || std.id === standardId
+    );
+
+  const getAssessmentIdForStandard = (standardId: string) => {
+    const standard = findStandardById(standardId);
+    return resolveStandardAssessmentId(
+      standard as StandardWithAssessmentId | undefined,
+      assessment!,
+      id
+    );
+  };
+
+  const setStandardMutating = (standardId: string, mutating: boolean) => {
+    setActionsMutating((prev) => ({ ...prev, [standardId]: mutating }));
+  };
+
+  const handleAddAction = async (standardId: string) => {
     const text = newActionText[standardId]?.trim();
-    if (!text) return;
-    
-    const newAction: Action = {
-      id: `action-${Date.now()}`,
-      text,
-      completed: false
-    };
-    
-    setActions((prev) => ({
-      ...prev,
-      [standardId]: [...(prev[standardId] || []), newAction],
-    }));
-    
-    setNewActionText((prev) => ({
-      ...prev,
-      [standardId]: "",
-    }));
+    if (!text || !assessment) return;
+
+    const assessmentId = getAssessmentIdForStandard(standardId);
+    if (!assessmentId) {
+      setActionsError("Could not resolve assessment for this standard.");
+      return;
+    }
+
+    setActionsError(null);
+    setStandardMutating(standardId, true);
+    try {
+      const newAction = await createAction(assessmentId, text);
+      setActions((prev) => ({
+        ...prev,
+        [standardId]: [...(prev[standardId] || []), newAction],
+      }));
+      setNewActionText((prev) => ({
+        ...prev,
+        [standardId]: "",
+      }));
+    } catch (error) {
+      setActionsError(
+        error instanceof Error ? error.message : "Failed to add action item."
+      );
+    } finally {
+      setStandardMutating(standardId, false);
+    }
   };
-  
-  const handleToggleAction = (standardId: string, actionId: string) => {
-    setActions((prev) => ({
-      ...prev,
-      [standardId]: (prev[standardId] || []).map(action =>
-        action.id === actionId ? { ...action, completed: !action.completed } : action
-      ),
-    }));
+
+  const handleToggleAction = async (standardId: string, actionId: string) => {
+    if (!assessment) return;
+
+    const current = actions[standardId]?.find((a) => a.id === actionId);
+    if (!current) return;
+
+    const assessmentId = getAssessmentIdForStandard(standardId);
+    if (!assessmentId) {
+      setActionsError("Could not resolve assessment for this standard.");
+      return;
+    }
+
+    setActionsError(null);
+    setStandardMutating(standardId, true);
+    try {
+      const updated = await updateAction(assessmentId, actionId, {
+        is_completed: !current.completed,
+      });
+      setActions((prev) => ({
+        ...prev,
+        [standardId]: (prev[standardId] || []).map((action) =>
+          action.id === actionId ? updated : action
+        ),
+      }));
+    } catch (error) {
+      setActionsError(
+        error instanceof Error ? error.message : "Failed to update action item."
+      );
+    } finally {
+      setStandardMutating(standardId, false);
+    }
   };
-  
-  const handleDeleteAction = (standardId: string, actionId: string) => {
-    setActions((prev) => ({
-      ...prev,
-      [standardId]: (prev[standardId] || []).filter(action => action.id !== actionId),
-    }));
+
+  const handleDeleteAction = async (standardId: string, actionId: string) => {
+    if (!assessment) return;
+
+    const assessmentId = getAssessmentIdForStandard(standardId);
+    if (!assessmentId) {
+      setActionsError("Could not resolve assessment for this standard.");
+      return;
+    }
+
+    setActionsError(null);
+    setStandardMutating(standardId, true);
+    try {
+      await deleteAction(assessmentId, actionId);
+      setActions((prev) => ({
+        ...prev,
+        [standardId]: (prev[standardId] || []).filter(
+          (action) => action.id !== actionId
+        ),
+      }));
+    } catch (error) {
+      setActionsError(
+        error instanceof Error ? error.message : "Failed to delete action item."
+      );
+    } finally {
+      setStandardMutating(standardId, false);
+    }
   };
   
   const handleSave = async () => {
@@ -479,29 +633,22 @@ export function AssessmentDetailPage() {
       // Use the assessment_id from each standard, not the group_id from URL
       // The assessment.standards array contains the correct assessment_id for each standard
       await submitAssessment(standards.map(s => {
-        const standard = assessment.standards?.find(std => 
-          std.mat_standard_id === s.standardId || std.id === s.standardId
+        const standard = findStandardById(s.standardId);
+        const assessmentId = resolveStandardAssessmentId(
+          standard as StandardWithAssessmentId | undefined,
+          assessment,
+          id
         );
-        // Get assessment_id from the standard (from API response) or construct it
-        const standardWithId = standard as (Standard & { assessment_id?: string }) | undefined;
-        let assessmentId = standardWithId?.assessment_id;
-        
-        // If assessment_id not available, construct it: school-standard-term-year
-        if (!assessmentId && standard && assessment) {
-          const termId = assessment.unique_term_id || id!.split('-').slice(-2).join('-');
-          assessmentId = `${assessment.school_id}-${standard.standard_code}-${termId}`;
-        }
-        
+
         return {
           assessment_id: assessmentId || s.standardId,
           rating: s.rating,
           evidence_comments: s.evidence
         };
       }));
-      
-      // Force refresh of assessments cache to ensure immediate updates
+
       await assessmentService.refreshAllData();
-      
+
       toast({
         title: "Progress saved",
         description: `Successfully saved progress for ${standards.length} standard${standards.length > 1 ? 's' : ''}`,
@@ -545,19 +692,13 @@ export function AssessmentDetailPage() {
       // Use the assessment_id from each standard, not the group_id from URL
       // The assessment.standards array contains the correct assessment_id for each standard
       await submitAssessment(standards.map(s => {
-        const standard = assessment.standards?.find(std => 
-          std.mat_standard_id === s.standardId || std.id === s.standardId
+        const standard = findStandardById(s.standardId);
+        const assessmentId = resolveStandardAssessmentId(
+          standard as StandardWithAssessmentId | undefined,
+          assessment,
+          id
         );
-        // Get assessment_id from the standard (from API response) or construct it
-        const standardWithId = standard as (Standard & { assessment_id?: string }) | undefined;
-        let assessmentId = standardWithId?.assessment_id;
-        
-        // If assessment_id not available, construct it: school-standard-term-year
-        if (!assessmentId && standard && assessment) {
-          const termId = assessment.unique_term_id || id!.split('-').slice(-2).join('-');
-          assessmentId = `${assessment.school_id}-${standard.standard_code}-${termId}`;
-        }
-        
+
         return {
           assessment_id: assessmentId || s.standardId,
           rating: s.rating,
@@ -1026,9 +1167,15 @@ export function AssessmentDetailPage() {
                         <div className="flex items-center justify-between mb-3">
                           <h3 className="text-base font-medium">Actions <span className="text-xs text-muted-foreground">(Optional)</span></h3>
                           <span className="text-xs text-muted-foreground">
-                            {actions[activeStandard.id!]?.filter((a: any) => a.completed).length || 0} / {actions[activeStandard.id!]?.length || 0} completed
+                            {actions[activeStandard.id!]?.filter((a) => a.completed).length || 0} / {actions[activeStandard.id!]?.length || 0} completed
                           </span>
                         </div>
+
+                        {(actionsLoadError || actionsError) && (
+                          <div className="mb-3 rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">
+                            {actionsError || actionsLoadError}
+                          </div>
+                        )}
                         
                         {/* Add Action Input */}
                         {canEdit && (
@@ -1046,13 +1193,18 @@ export function AssessmentDetailPage() {
                                   handleAddAction(activeStandard.id!);
                                 }
                               }}
+                              disabled={!!actionsMutating[activeStandard.id!]}
                               className="flex-1"
                             />
                             <Button
                               type="button"
                               size="sm"
                               onClick={() => activeStandard?.id && handleAddAction(activeStandard.id)}
-                              disabled={!activeStandard?.id || !newActionText[activeStandard.id]?.trim()}
+                              disabled={
+                                !activeStandard?.id ||
+                                !newActionText[activeStandard.id]?.trim() ||
+                                !!actionsMutating[activeStandard.id!]
+                              }
                             >
                               Add
                             </Button>
@@ -1066,12 +1218,12 @@ export function AssessmentDetailPage() {
                               No actions added yet
                             </p>
                           ) : (
-                            actions[activeStandard.id].map((action: any) => (
+                            actions[activeStandard.id].map((action) => (
                               <div key={action.id} className="flex items-start gap-2 group">
                                 <Checkbox
                                   checked={action.completed}
                                   onCheckedChange={() => activeStandard?.id && handleToggleAction(activeStandard.id, action.id)}
-                                  disabled={!canEdit}
+                                  disabled={!canEdit || !!actionsMutating[activeStandard.id!]}
                                   className="mt-1"
                                 />
                                 <span className={`flex-1 text-sm ${action.completed ? 'line-through text-muted-foreground' : ''}`}>
@@ -1083,6 +1235,7 @@ export function AssessmentDetailPage() {
                                     size="sm"
                                     className="h-6 px-2 opacity-0 group-hover:opacity-100 transition-opacity"
                                     onClick={() => activeStandard?.id && handleDeleteAction(activeStandard.id, action.id)}
+                                    disabled={!!actionsMutating[activeStandard.id!]}
                                   >
                                     <XCircle className="h-3 w-3" />
                                   </Button>
@@ -1469,14 +1622,14 @@ export function AssessmentDetailPage() {
                     <TableCell className="text-center">
                       {standard.rating && (
                         <div className="flex justify-center">
-                          <div className={`
-                            inline-flex items-center justify-center h-8 w-8 rounded-full text-sm font-semibold
-                            ${standard.rating === 5 ? 'bg-purple-100 text-purple-700 border border-purple-200' : ''}
-                            ${standard.rating === 4 ? 'bg-emerald-100 text-emerald-700 border border-emerald-200' : ''}
-                            ${standard.rating === 3 ? 'bg-blue-100 text-blue-700 border border-blue-200' : ''}
-                            ${standard.rating === 2 ? 'bg-amber-100 text-amber-700 border border-amber-200' : ''}
-                            ${standard.rating === 1 ? 'bg-red-100 text-red-700 border border-red-200' : ''}
-                          `}>
+                          <div
+                            className={cn(
+                              "inline-flex items-center justify-center h-8 w-8 rounded-full text-sm font-semibold",
+                              standard.rating === 5
+                                ? "bg-purple-100 text-purple-700 border border-purple-200"
+                                : getRagBadgeClasses(standard.rating, standard.standard_type)
+                            )}
+                          >
                             {standard.rating}
                           </div>
                         </div>

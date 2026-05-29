@@ -1194,6 +1194,7 @@ export function SchoolPerformanceView({ assessments, refreshAssessments, isLoadi
                   >
                     COMPLETION RATE
                   </SortableTableHead>
+                  <TableHead className="text-center">OUTSTANDING ACTIONS</TableHead>
                   <SortableTableHead 
                     className="text-center"
                     sortKey="lastUpdated"
@@ -1370,6 +1371,27 @@ export function SchoolPerformanceView({ assessments, refreshAssessments, isLoadi
                           <AnimatedProgress value={completionPercent} className="w-16 h-2" delay={index * 80 + 200} />
                         </div>
                       </TableCell>
+                      <TableCell className="text-center">
+                        {dashboardItem?.outstanding_actions_count != null &&
+                        dashboardItem.outstanding_actions_count > 0 ? (
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <Badge
+                                variant="outline"
+                                className="bg-amber-50 text-amber-700 border-amber-200 tabular-nums"
+                              >
+                                {dashboardItem.outstanding_actions_count}
+                              </Badge>
+                            </TooltipTrigger>
+                            <TooltipContent>
+                              <p>
+                                {dashboardItem.outstanding_actions_count} outstanding action
+                                {dashboardItem.outstanding_actions_count === 1 ? "" : "s"}
+                              </p>
+                            </TooltipContent>
+                          </Tooltip>
+                        ) : null}
+                      </TableCell>
                       <TableCell className="text-center text-sm text-slate-600">
                         {school.lastUpdated !== "-" ? new Date(school.lastUpdated).toLocaleDateString() : "—"}
                       </TableCell>
@@ -1378,7 +1400,7 @@ export function SchoolPerformanceView({ assessments, refreshAssessments, isLoadi
                     {/* Expanded Content */}
                     {isExpanded && (
                       <TableRow>
-                        <TableCell colSpan={8} className="bg-slate-50 p-0">
+                        <TableCell colSpan={9} className="bg-slate-50 p-0">
                           <div className="p-6 border-t">
                             <h4 className="text-sm font-medium text-slate-900 mb-4">Assessment Strategies</h4>
                             <div className="bg-white rounded-lg border">
