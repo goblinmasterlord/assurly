@@ -1,5 +1,6 @@
 import { Link, Outlet, useLocation, useNavigate } from "react-router-dom";
 import { RoleSwitcher } from "@/components/RoleSwitcher";
+import { VersionBadge } from "@/components/VersionBadge";
 import { ProfileDropdown } from "@/components/ProfileDropdown";
 import { Button } from "@/components/ui/button";
 import { useUser } from "@/contexts/UserContext";
@@ -84,12 +85,14 @@ export function RootLayout() {
               )}
             </nav>
           </div>
-          <div className="flex items-center space-x-4">
-            {/* Role switcher for development */}
+          <div className="flex items-center gap-2 sm:gap-3">
             {user && (
-              <div className="hidden md:block">
-                <RoleSwitcher />
-              </div>
+              <>
+                <VersionBadge />
+                <div className="hidden md:block">
+                  <RoleSwitcher />
+                </div>
+              </>
             )}
 
             {/* Data Management Portal Button */}

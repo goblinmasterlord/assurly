@@ -16,12 +16,12 @@ export function RoleSwitcher() {
   const roles: { value: UserRole; label: string; icon: ReactNode }[] = [
     {
       value: "mat-admin",
-      label: "MAT Management",
+      label: "Overview",
       icon: <Building2 className="mr-2 h-4 w-4" />,
     },
     {
       value: "department-head",
-      label: "School Dept. Head",
+      label: "Assessments",
       icon: <User2 className="mr-2 h-4 w-4" />,
     },
   ];
@@ -31,9 +31,9 @@ export function RoleSwitcher() {
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <Button variant="outline" size="sm" className="flex items-center gap-2">
+        <Button variant="outline" size="sm" className="h-8 gap-1.5 px-2.5 text-xs font-medium">
           {activeRole?.icon}
-          {activeRole?.label}
+          <span className="max-w-[7rem] truncate">{activeRole?.label}</span>
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="w-56">
