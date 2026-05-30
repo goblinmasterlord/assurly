@@ -530,7 +530,7 @@ Holds uploaded files and external URLs attached to assessment cells. File blobs 
 
 **Mutated only via** the four `/evidence/...` endpoints in the API contract (upload, link, list, delete). All four enforce MAT isolation: writes verify the supplied `mat_standard_id` belongs to the caller's MAT; reads/deletes 404 (rather than 403) on cross-MAT access to avoid leaking existence.
 
-**Gotcha:** evidence is keyed on the live `mat_standard_id`. When a standard is archive-renamed (the `-deleted-<unix_ts>` pattern — see §11), its evidence rows are not renamed alongside, so they become orphans from the perspective of the live standard. The archive-rename FK pattern would propagate via `ON UPDATE CASCADE` on `fk_evidence_mat_standard`, but only if that rule is enabled — re-verify against §20.1.
+**Archive-rename behaviour:** `fk_evidence_mat_standard` has `ON UPDATE CASCADE` — when a parent `mat_standard` is archive-renamed (the `-deleted-<unix_ts>` pattern, e.g. `HLT-AC5` → `HLT-AC5-deleted-1768213666`; see §11), the rename propagates to evidence rows automatically. Same convention used on `assessments` and `standard_versions`, so evidence stays linked to its parent's current identity. No orphans.
 
 ### `assessment_actions`
 
@@ -653,7 +653,7 @@ WHERE mat_id = :session_mat_id      -- MAT isolation
 
 ## 20. Appendix — constraint inventory
 
-Full inventory of FK, CHECK, and UNIQUE constraints as of **2026-04-20**. Re-run the diagnostic queries in §20.4 if rebuilding this section.
+Inventory of FK, CHECK, and UNIQUE constraints. Last full sweep from the live DB: **2026-04-20**. Incremental additions since are logged in the §21 changelog and folded into the tables below as they happen. To regenerate the full inventory from scratch, run the diagnostic queries in §20.4.
 
 ### 20.1 Foreign key constraints
 
@@ -668,10 +668,10 @@ Full inventory of FK, CHECK, and UNIQUE constraints as of **2026-04-20**. Re-run
 | `assessments` | `fk_assessments_term` | `unique_term_id` | `terms.unique_term_id` | NO ACTION | RESTRICT | |
 | `assessments` | `fk_assessments_updated_by` | `updated_by` | `users.user_id` | CASCADE | SET NULL | Added 2026-04-20. |
 | `assessments` | `fk_assessments_version` | `version_id` | `standard_versions.version_id` | CASCADE | SET NULL | |
-| `standard_evidence` | `fk_evidence_mat` | `mat_id` | `mats.mat_id` | NO ACTION | RESTRICT | Added April 2026 with the new `standard_evidence` table (§17). Denormalised MAT pointer for fast isolation filtering. |
-| `standard_evidence` | `fk_evidence_mat_standard` | `mat_standard_id` | `mat_standards.mat_standard_id` | NO ACTION | RESTRICT | Re-verify `ON UPDATE` rule against prod — archive-rename of the parent standard should propagate to evidence keys; if not CASCADE, evidence becomes orphaned (see §17 gotcha). |
-| `standard_evidence` | `fk_evidence_school` | `school_id` | `schools.school_id` | NO ACTION | RESTRICT | |
-| `standard_evidence` | `fk_evidence_term` | `unique_term_id` | `terms.unique_term_id` | NO ACTION | RESTRICT | |
+| `standard_evidence` | `fk_evidence_mat` | `mat_id` | `mats.mat_id` | NO ACTION | **CASCADE** | Added April 2026 with the new `standard_evidence` table (§17). Denormalised MAT pointer for fast isolation filtering. |
+| `standard_evidence` | `fk_evidence_mat_standard` | `mat_standard_id` | `mat_standards.mat_standard_id` | CASCADE | **CASCADE** | `ON UPDATE CASCADE` makes evidence follow archive-renames of the parent standard — see §17 archive-rename behaviour. |
+| `standard_evidence` | `fk_evidence_school` | `school_id` | `schools.school_id` | NO ACTION | **CASCADE** | |
+| `standard_evidence` | `fk_evidence_term` | `unique_term_id` | `terms.unique_term_id` | NO ACTION | RESTRICT | Blocks deleting a term that has evidence attached — consistent with `fk_assessments_term`. |
 | `mat_aspects` | `fk_mat_aspects_created_by` | `created_by_user_id` | `users.user_id` | NO ACTION | SET NULL | |
 | `mat_aspects` | `fk_mat_aspects_mat` | `mat_id` | `mats.mat_id` | NO ACTION | CASCADE | |
 | `mat_aspects` | `fk_mat_aspects_source` | `source_aspect_id` | `aspects.aspect_id` | NO ACTION | SET NULL | |
@@ -780,3 +780,4 @@ ORDER BY tc.TABLE_NAME, tc.CONSTRAINT_NAME;
 | 2026-05-21 | §8, §10: Renamed `aspect_category` enum value `'ofsted'` → `'strategic'` on both `aspects` and `mat_aspects`. Enum is now `enum('operational', 'strategic')`; default unchanged (`'operational'`). DB migration applied manually; backend code and API contract brought into alignment. |
 | 2026-05-28 | §15, §17, §20.1: REQ-002 rework. Dropped the `assessments.actions` TEXT column; added new child table `assessment_actions` (one row per checklist item, FK to `assessments.id` ON DELETE CASCADE, index `idx_actions_assessment`). FK `fk_actions_assessment` added to §20.1. DB migration applied manually; backend purged of `a.actions` references, four new CRUD endpoints shipped at `/api/assessments/{assessment_id}/actions`, dashboard now returns `outstanding_actions_count` instead of the old text aggregate. |
 | 2026-05-30 | §17, §20.1, §20.2: Promoted `standard_evidence` (REQ-003) from "in-flight schema changes" to a live table section. Renamed §17 to "Auxiliary tables — evidence and actions" and rewrote the evidence subsection in present-tense (column table, mutation surface, MAT-isolation behaviour, archive-rename gotcha). Added the four `fk_evidence_*` rows to §20.1 (`uploaded_by` deliberately FK-less, mirroring the `assessment_actions.created_by` pattern) and `chk_evidence_type_fields` to §20.2. |
+| 2026-05-30 | §17, §20.1: Verified the four `fk_evidence_*` rules against the live DB and updated the inventory: `fk_evidence_mat` / `fk_evidence_school` are `ON DELETE CASCADE` (not RESTRICT as the previous conservative default suggested), `fk_evidence_mat_standard` is `ON UPDATE CASCADE` + `ON DELETE CASCADE` (so archive-renames propagate to evidence — same pattern as `assessments`/`standard_versions`), `fk_evidence_term` is `ON DELETE RESTRICT`. §17 gotcha rewritten as a confirmed archive-rename-behaviour note. §20.1 preamble reframed: last full sweep date preserved, with incremental additions logged via the changelog. |

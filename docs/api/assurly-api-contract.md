@@ -982,7 +982,7 @@ Authorization: Bearer <token>
 | `last_updated` | string (ISO 8601) | yes | |
 | `updated_by` | string | yes | User ID. |
 
-Action checklist items are not embedded in this response — fetch them via `GET /api/assessments/{assessment_id}/actions` (see §31a).
+Action checklist items are not embedded in this response — fetch them via `GET /api/assessments/{assessment_id}/actions` (see §32a).
 
 **Response 404:** `"Assessment not found"`.
 
@@ -1078,7 +1078,7 @@ Each standard in the `standards` array:
 
 **Frontend notes:**
 - Standards without assessments have `null` for `assessment_id`, `id`, `rating`, `evidence_comments`. The frontend must handle these gracefully — they represent standards that exist in the MAT's framework but haven't been rated yet for this school/term.
-- Action checklist items are not embedded here. Fetch them per-assessment via `GET /api/assessments/{assessment_id}/actions` (see §31a).
+- Action checklist items are not embedded here. Fetch them per-assessment via `GET /api/assessments/{assessment_id}/actions` (see §32a).
 
 ---
 
@@ -1125,7 +1125,7 @@ Authorization: Bearer <token>
 
 **Frontend notes:**
 - Auto-sets `submitted_by` and `updated_by` to the current user.
-- Action checklist items are not managed here — use the dedicated `/api/assessments/{assessment_id}/actions` endpoints (§31a–d).
+- Action checklist items are not managed here — use the dedicated `/api/assessments/{assessment_id}/actions` endpoints (§32a–d).
 
 ---
 
@@ -1165,7 +1165,7 @@ Each item in `updates`:
 | `rating` | integer | no | 1–4. |
 | `evidence_comments` | string | no | |
 
-Action checklist items are not managed here — use the dedicated `/api/assessments/{assessment_id}/actions` endpoints (§31a–d).
+Action checklist items are not managed here — use the dedicated `/api/assessments/{assessment_id}/actions` endpoints (§32a–d).
 
 **Response 200:**
 
@@ -1280,7 +1280,7 @@ REQ-002 ships actions as a checklist of items per assessment, not a free-text fi
 
 The path-level `{assessment_id}` is the composite virtual key — same form used by `GET /api/assessments/{assessment_id}` and `PUT /api/assessments/{assessment_id}`.
 
-#### 31a. List action items for an assessment
+#### 32a. List action items for an assessment
 
 ```
 GET /api/assessments/{assessment_id}/actions
@@ -1327,7 +1327,7 @@ Ordered by `sort_order` then `created_at`.
 
 **Response 404:** `"Assessment not found"`.
 
-#### 31b. Create action item
+#### 32b. Create action item
 
 ```
 POST /api/assessments/{assessment_id}/actions
@@ -1337,7 +1337,7 @@ Content-Type: application/json
 
 **Auth:** required.
 
-**Path params:** same as 31a.
+**Path params:** same as §32a.
 
 **Request body:**
 
@@ -1353,11 +1353,11 @@ Content-Type: application/json
 | `text` | string | yes | Non-empty. |
 | `sort_order` | integer | no | Defaults to `MAX(existing sort_order) + 1` for the assessment. |
 
-**Response 201:** the created `ActionItem` (same shape as the list items in 31a).
+**Response 201:** the created `ActionItem` (same shape as the list items in §32a).
 
 **Response 404:** `"Assessment not found"`.
 
-#### 31c. Update action item
+#### 32c. Update action item
 
 ```
 PUT /api/assessments/{assessment_id}/actions/{action_id}
@@ -1390,7 +1390,7 @@ Transition semantics: when `is_completed` flips from `false` → `true`, the bac
 
 **Response 404:** `"Assessment not found"` or `"Action not found"`.
 
-#### 31d. Delete action item
+#### 32d. Delete action item
 
 ```
 DELETE /api/assessments/{assessment_id}/actions/{action_id}
@@ -1895,10 +1895,10 @@ Admin/cron utility. No auth required (security concern). Not called by the front
 | 7 | `StandardRatingSubmission.rating` Pydantic comment (main.py ~L232) | Comment says `"1-5 or null"`. Correct range is `1-4` per `chk_rating_range`. | **Stale comment** | REQ-004 |
 | 8 | `POST /api/auth/cleanup-expired-tokens` (main.py ~L731) | No auth requirement on an admin/cron endpoint. Anyone can call it. | **Low security** | Standalone |
 | 9 | `GET /api/terms` (main.py ~L2402) | No auth requirement. Only unprotected data endpoint. Terms are public reference data so risk is low, but inconsistent with other endpoints. | **Low** | Standalone |
-| 10 | `PUT /api/assessments/{assessment_id}` and `POST /api/assessments/bulk-update` | **Resolved 2026-05-28** — superseded by the REQ-002 rework. Actions are no longer a free-text field on the assessment; they live in the `assessment_actions` child table and are managed via the dedicated endpoints in §31a-d. | Resolved | — |
-| 11 | `GET /api/assessments/by-aspect/{aspect_code}` | **Resolved 2026-05-28** — `standard_type` is now added to the per-standard response dict. `actions` is no longer part of this payload (see §31a-d). | Resolved | — |
+| 10 | `PUT /api/assessments/{assessment_id}` and `POST /api/assessments/bulk-update` | **Resolved 2026-05-28** — superseded by the REQ-002 rework. Actions are no longer a free-text field on the assessment; they live in the `assessment_actions` child table and are managed via the dedicated endpoints in §32a-d. | Resolved | — |
+| 11 | `GET /api/assessments/by-aspect/{aspect_code}` | **Resolved 2026-05-28** — `standard_type` is now added to the per-standard response dict. `actions` is no longer part of this payload (see §32a-d). | Resolved | — |
 | 12 | `GET /api/standards/{mat_standard_id}` (single detail) | Selects `ms.standard_type` in the SQL but omits it from the `JSONResponse` content dict. The list endpoint (`GET /api/standards`) correctly returns it via `MatStandardResponse`. | **Cosmetic** — data is available, just not serialised | Standalone |
-| 13 | `GET /api/assessments/{assessment_id}` (single detail) | **Resolved 2026-05-28** — `ms.standard_type` added to the SELECT and flows through `process_row_for_json` into the response. `actions` is no longer part of this payload (see §31a-d). | Resolved | — |
+| 13 | `GET /api/assessments/{assessment_id}` (single detail) | **Resolved 2026-05-28** — `ms.standard_type` added to the SELECT and flows through `process_row_for_json` into the response. `actions` is no longer part of this payload (see §32a-d). | Resolved | — |
 
 ---
 
@@ -1912,6 +1912,7 @@ Admin/cron utility. No auth required (security concern). Not called by the front
 | v1.3 | 2026-05-28 | `GET /api/schools` now returns the central office row by default. Removed the `include_central` query param and the `AND is_central_office = FALSE` default filter — the endpoint always returns all active schools for the MAT. Callers that previously passed `include_central=true` will see no change in behaviour. |
 | v1.4 | 2026-05-28 | Standardised `is_central_office` and `is_active` on `GET /api/schools` and `is_active` on `GET /api/users` / `POST /api/users` / `PUT /api/users/{user_id}` to JSON booleans (`true`/`false`) instead of `0`/`1`. Other endpoints (`/api/dashboard/schools`, `/api/assessments`, `/api/auth/*`) already returned booleans. Frontend no longer needs to coerce integers client-side. |
 | v1.5 | 2026-05-28 | Doc reconciliation pass. Dropped `🚧 In-flight — REQ-002/003/005` tags from `GET /api/dashboard/schools` `view` param and `school_type` / `is_central_office` / `actions` / `evidence_count` fields — all now shipped. Marked Known Issue #1 (dashboard placeholder-comment defect) as **Resolved**. No new endpoints, no shape changes. |
-| v1.6 | 2026-05-28 | REQ-002 rework. `actions` is no longer a free-text field on `assessments` — it's now a checklist of items in a new `assessment_actions` child table, managed via four new endpoints (§31a-d: `GET`/`POST` list/create + `PUT`/`DELETE` per item). `GET /api/dashboard/schools` returns `outstanding_actions_count` (integer) in place of the old `actions` (string). `GET /api/assessments/{id}` and `GET /api/assessments/by-aspect/{aspect_code}` no longer document `actions`; both now return `standard_type` on the per-standard rows. Known Issues #10, #11, #13 resolved. |
-| v1.7 | 2026-05-30 | Removed stale `actions` field references from §25 and §26 (the actions work shipped as dedicated endpoints in §31a–d, not as a field on the assessment write endpoints). Doc-only cleanup; no shape change to deployed endpoints. |
+| v1.6 | 2026-05-28 | REQ-002 rework. `actions` is no longer a free-text field on `assessments` — it's now a checklist of items in a new `assessment_actions` child table, managed via four new endpoints (§32a-d: `GET`/`POST` list/create + `PUT`/`DELETE` per item). `GET /api/dashboard/schools` returns `outstanding_actions_count` (integer) in place of the old `actions` (string). `GET /api/assessments/{id}` and `GET /api/assessments/by-aspect/{aspect_code}` no longer document `actions`; both now return `standard_type` on the per-standard rows. Known Issues #10, #11, #13 resolved. |
+| v1.7 | 2026-05-30 | Removed stale `actions` field references from §25 and §26 (the actions work shipped as dedicated endpoints in §32a–d, not as a field on the assessment write endpoints). Doc-only cleanup; no shape change to deployed endpoints. |
 | v1.8 | 2026-05-30 | Promoted the Evidence section (endpoints §28–31) from `🚧 In-flight — REQ-003` to live. REQ-003 shipped some time ago; preamble and section header updated to present tense. No endpoint-shape changes. |
+| v1.9 | 2026-05-30 | Renumbered the four action-checklist endpoints from §31a–d to §32a–d to resolve a section-number collision with §31 (`DELETE /evidence/{evidence_id}`). Cross-references updated in §23, §24, §25, §26, Known Issues #10/#11/#13, and the v1.6/v1.7 changelog entries. Endpoint shapes and paths unchanged — only the doc section numbers. |
