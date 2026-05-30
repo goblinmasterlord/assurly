@@ -59,10 +59,10 @@ const CATEGORY_COLORS: Partial<Record<AssessmentCategory, string>> = {
 };
 
 const RATING_COLORS = {
-  1: '#dc2626', // Inadequate - Red
-  2: '#d97706', // Requires Improvement - Amber
-  3: '#16a34a', // Good - Green
-  4: '#1e40af', // Outstanding - Blue
+  1: '#dc2626', // Critical - Red
+  2: '#d97706', // Needs improvement - Amber
+  3: '#16a34a', // Healthy - Green
+  4: '#1e40af', // Strong - Blue
 };
 
 const ASSESSMENT_CATEGORIES: AssessmentCategory[] = [
@@ -270,9 +270,9 @@ export function AnalyticsPage() {
       // If we have a score, evaluate it
       if (avgScore > 0) {
         if (avgScore < 1.5) return 'Critical';
-        if (avgScore < 2.0 || hasOverdue) return 'Needs Attention';
-        if (avgScore >= 3.5) return 'Excellent';
-        return 'Good';
+        if (avgScore < 2.0 || hasOverdue) return 'Needs improvement';
+        if (avgScore >= 3.5) return 'Strong';
+        return 'Healthy';
       }
       
       // Default to Not Started if no score and no progress
@@ -513,7 +513,7 @@ export function AnalyticsPage() {
 
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Average Assurance Rating</CardTitle>
+            <CardTitle className="text-sm font-medium">Average Performance Rating</CardTitle>
             {isImproving ? (
               <TrendingUp className="h-4 w-4 text-green-600" />
             ) : (
@@ -653,7 +653,7 @@ export function AnalyticsPage() {
               Assessment Area Performance Breakdown
             </CardTitle>
             <CardDescription>
-              Average assurance ratings across all 6 assessment areas
+              Average performance ratings across all 6 assessment areas
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -680,7 +680,7 @@ export function AnalyticsPage() {
                       border: '1px solid #e2e8f0',
                       borderRadius: '6px'
                     }}
-                    formatter={(value: number) => [`${value.toFixed(1)}/4.0`, 'Average Assurance Rating']}
+                    formatter={(value: number) => [`${value.toFixed(1)}/4.0`, 'Average Performance Rating']}
                   />
                   <Bar dataKey="score" radius={[4, 4, 0, 0]}>
                     {analyticsData.categoryPerformance.map((entry, index) => {
@@ -756,9 +756,9 @@ export function AnalyticsPage() {
                     <TableCell>
                       <Badge 
                         variant={school.status === 'Critical' ? 'destructive' : 
-                                school.status === 'Needs Attention' ? 'secondary' :
-                                school.status === 'Excellent' ? 'default' : 'outline'}
-                        className={school.status === 'Excellent' ? 'bg-green-100 text-green-800 hover:bg-green-200' : ''}
+                                school.status === 'Needs improvement' ? 'secondary' :
+                                school.status === 'Strong' ? 'default' : 'outline'}
+                        className={school.status === 'Strong' ? 'bg-green-100 text-green-800 hover:bg-green-200' : ''}
                       >
                         {school.status}
                       </Badge>

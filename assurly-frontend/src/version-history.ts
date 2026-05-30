@@ -20,6 +20,22 @@ export type VersionRelease = {
 
 export const VERSION_HISTORY: VersionRelease[] = [
   {
+    version: "1.34",
+    buildDate: "2026-05-29",
+    entries: [
+      {
+        title: "Analytics and performance band labels",
+        description:
+          "Renamed misleading analytics copy and replaced Ofsted-style score band names with neutral performance zones.",
+        bullets: [
+          "Analytics card now reads Average Performance Rating",
+          "Dashboard performance zones use Strong, Healthy, Needs improvement, and Critical",
+          "Removed vestigial rating-5 colour branches from assessment utilities",
+        ],
+      },
+    ],
+  },
+  {
     version: "1.33",
     buildDate: "2026-05-29",
     entries: [

@@ -69,6 +69,13 @@ import {
 } from "@/components/ui/skeleton-loaders";
 import { getAspectDisplayName, calculateSchoolStatus, getStatusColor, getStatusIcon } from "@/lib/assessment-utils";
 import { getStatusLabel } from "@/utils/assessment";
+import {
+  getPerformanceBandBadgeClasses,
+  PERFORMANCE_BAND_LABELS,
+  PERFORMANCE_FILTER_OPTIONS,
+  scoreMatchesPerformanceFilter,
+  type PerformanceBandId,
+} from "@/utils/performance-bands";
 import { calculatePolarityAwareAverage } from "@/utils/rating-labels";
 import { FilterBar } from "@/components/ui/filter-bar";
 import { getSchools, getAspects } from "@/services/assessment-service";
@@ -462,13 +469,7 @@ export function SchoolPerformanceView({ assessments, refreshAssessments, isLoadi
   };
 
   // Create filter options for multi-select components
-  const performanceOptions: MultiSelectOption[] = [
-    { label: "Excellent", value: "excellent" },
-    { label: "Good", value: "good" },
-    { label: "Requires Improvement", value: "requires-improvement" },
-    { label: "Inadequate", value: "inadequate" },
-    { label: "No Data", value: "no-data" }
-  ];
+  const performanceOptions: MultiSelectOption[] = PERFORMANCE_FILTER_OPTIONS;
 
   const statusOptions: MultiSelectOption[] = [
     { label: "Completed", value: "completed" },
@@ -817,16 +818,12 @@ export function SchoolPerformanceView({ assessments, refreshAssessments, isLoadi
         (school.school?.name || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
         (school.school?.code && school.school.code.toLowerCase().includes(searchTerm.toLowerCase()));
 
-      const matchesPerformance = activeFilters.performance.length === 0 || activeFilters.performance.some(filter => {
-        switch (filter) {
-          case "excellent": return school.overallScore >= 3.5;
-          case "good": return school.overallScore >= 2.5 && school.overallScore < 3.5;
-          case "requires-improvement": return school.overallScore >= 1.5 && school.overallScore < 2.5;
-          case "inadequate": return school.overallScore < 1.5 && school.overallScore > 0;
-          case "no-data": return school.overallScore === 0;
-          default: return false;
-        }
-      });
+      const matchesPerformance = activeFilters.performance.length === 0 || activeFilters.performance.some(filter =>
+        scoreMatchesPerformanceFilter(
+          school.overallScore,
+          filter as PerformanceBandId | 'no-data'
+        )
+      );
 
       const matchesStatus = activeFilters.status.length === 0 || activeFilters.status.some(status => {
         return school.assessmentsByCategory.some(cat => {
@@ -937,12 +934,7 @@ export function SchoolPerformanceView({ assessments, refreshAssessments, isLoadi
   };
 
 
-  const getScoreBadgeColor = (score: number) => {
-    if (score >= 3.5) return "bg-emerald-50 text-emerald-700 border-emerald-200";
-    if (score >= 2.5) return "bg-indigo-50 text-indigo-700 border-indigo-200";
-    if (score >= 1.5) return "bg-amber-50 text-amber-700 border-amber-200";
-    return "bg-rose-50 text-rose-700 border-rose-200";
-  };
+  const getScoreBadgeColor = getPerformanceBandBadgeClasses;
 
   const getStatusColor = (status: string) => {
     switch (status) {
@@ -1637,25 +1629,25 @@ export function SchoolPerformanceView({ assessments, refreshAssessments, isLoadi
             <div className="flex items-center gap-1.5">
               <div className="w-3 h-2 bg-emerald-500 rounded-sm opacity-60"></div>
               <span className="text-xs text-slate-600">
-                <span className="font-medium text-emerald-700">Outstanding</span> (3.5-4.0)
+                <span className="font-medium text-emerald-700">{PERFORMANCE_BAND_LABELS.strong}</span> (3.5–4.0)
               </span>
             </div>
             <div className="flex items-center gap-1.5">
               <div className="w-3 h-2 bg-indigo-500 rounded-sm opacity-60"></div>
               <span className="text-xs text-slate-600">
-                <span className="font-medium text-indigo-700">Good</span> (2.5-3.4)
+                <span className="font-medium text-indigo-700">{PERFORMANCE_BAND_LABELS.healthy}</span> (2.5–3.4)
               </span>
             </div>
             <div className="flex items-center gap-1.5">
               <div className="w-3 h-2 bg-amber-500 rounded-sm opacity-60"></div>
               <span className="text-xs text-slate-600">
-                <span className="font-medium text-amber-700">Requires Improvement</span> (1.5-2.4)
+                <span className="font-medium text-amber-700">{PERFORMANCE_BAND_LABELS['needs-improvement']}</span> (1.5–2.4)
               </span>
             </div>
             <div className="flex items-center gap-1.5">
               <div className="w-3 h-2 bg-red-500 rounded-sm opacity-60"></div>
               <span className="text-xs text-slate-600">
-                <span className="font-medium text-red-700">Inadequate</span> (1.0-1.4)
+                <span className="font-medium text-red-700">{PERFORMANCE_BAND_LABELS.critical}</span> (1.0–1.4)
               </span>
             </div>
           </div>
