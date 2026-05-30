@@ -500,49 +500,41 @@ All original issues now closed. Additional cleanup performed during the hardenin
 
 ---
 
-## 17. In-flight schema changes (April 2026)
+## 17. Auxiliary tables — evidence and actions
 
-Work currently underway that will modify the schema. Do not rely on these until they ship.
+Two child tables hang off the assessment grain. Both shipped between April and May 2026 and are live in production.
 
-### `standard_evidence` — new table (REQ-003)
+### `standard_evidence`
 
-Will hold uploaded files and external URLs attached to assessments. File blobs live in GCS; this table holds metadata.
+Holds uploaded files and external URLs attached to assessment cells. File blobs live in GCS; this table holds metadata only. Shipped April 2026 (REQ-003).
 
-```sql
-CREATE TABLE standard_evidence (
-  id                CHAR(36)     NOT NULL,
-  mat_id            CHAR(36)     NOT NULL,
-  mat_standard_id   CHAR(36)     NOT NULL,
-  school_id         CHAR(36)     NOT NULL,
-  unique_term_id    VARCHAR(20)  NOT NULL,
-  evidence_type     ENUM('file', 'url') NOT NULL,
-  file_path         VARCHAR(1000) NULL,   -- GCS object path; NULL when evidence_type='url'
-  url               VARCHAR(2000) NULL,   -- External URL; NULL when evidence_type='file'
-  original_filename VARCHAR(500)  NULL,
-  uploaded_by       CHAR(36)     NOT NULL,
-  created_at        TIMESTAMP    DEFAULT CURRENT_TIMESTAMP,
-  PRIMARY KEY (id),
-  FOREIGN KEY (mat_id)          REFERENCES mats(mat_id),
-  FOREIGN KEY (mat_standard_id) REFERENCES mat_standards(mat_standard_id),
-  FOREIGN KEY (school_id)       REFERENCES schools(school_id),
-  FOREIGN KEY (unique_term_id)  REFERENCES terms(unique_term_id),
-  FOREIGN KEY (uploaded_by)     REFERENCES users(user_id)
-);
-```
+**Grain:** one row per evidence item. Multiple items may attach to the same `(mat_standard_id, school_id, unique_term_id)` triple — same grain as `assessments`.
+
+| Column | Type | Nullable | Default | Notes |
+|---|---|---|---|---|
+| `id` | `char(36)` | NOT NULL | — | **PK**. UUID v4. |
+| `mat_id` | `char(36)` | NOT NULL | — | **FK** → `mats.mat_id`. Denormalised for MAT-isolation filtering on read. |
+| `mat_standard_id` | `char(36)` | NOT NULL | — | **FK** → `mat_standards.mat_standard_id`. |
+| `school_id` | `char(36)` | NOT NULL | — | **FK** → `schools.school_id`. |
+| `unique_term_id` | `varchar(20)` | NOT NULL | — | **FK** → `terms.unique_term_id`. |
+| `evidence_type` | `enum('file', 'url')` | NOT NULL | — | Discriminator between the two variants. |
+| `file_path` | `varchar(1000)` | NULL | — | GCS object path under `{mat_id}/{mat_standard_id}/`. Populated when `evidence_type='file'`, NULL when `='url'`. Internal — do not surface to users. |
+| `url` | `varchar(2000)` | NULL | — | External URL (must start `https://`). Populated when `evidence_type='url'`, NULL when `='file'`. |
+| `original_filename` | `varchar(500)` | NULL | — | Uploader's filename. NULL for URL evidence. |
+| `uploaded_by` | `char(36)` | NOT NULL | — | User ID. **No FK** — by design, mirroring `assessment_actions.created_by`: users are only soft-deleted, never hard-removed, so a dangling reference cannot occur. |
+| `created_at` | `timestamp` | NULL | `CURRENT_TIMESTAMP` | |
+
+**Mutual-exclusion CHECK:** `chk_evidence_type_fields` enforces that exactly one of `(file_path, url)` is populated according to `evidence_type`. See §20.2.
 
 **GCS bucket:** `europe-west2`, keys under `{mat_id}/{mat_standard_id}/{filename}`.
 
-**Gotcha:** evidence is scoped to the `(mat_standard_id, school_id, unique_term_id)` triple — same grain as `assessments`. A `mat_standard` being archive-renamed would orphan its evidence unless the evidence is renamed alongside. Out of scope for REQ-003 but worth flagging.
+**Mutated only via** the four `/evidence/...` endpoints in the API contract (upload, link, list, delete). All four enforce MAT isolation: writes verify the supplied `mat_standard_id` belongs to the caller's MAT; reads/deletes 404 (rather than 403) on cross-MAT access to avoid leaking existence.
 
-**Recommended additions to spec before ship:**
+**Gotcha:** evidence is keyed on the live `mat_standard_id`. When a standard is archive-renamed (the `-deleted-<unix_ts>` pattern — see §11), its evidence rows are not renamed alongside, so they become orphans from the perspective of the live standard. The archive-rename FK pattern would propagate via `ON UPDATE CASCADE` on `fk_evidence_mat_standard`, but only if that rule is enabled — re-verify against §20.1.
 
-1. Add an index on `(mat_standard_id, school_id, unique_term_id)` — every read from `GET /evidence/{mat_standard_id}` will filter on all three.
-2. Consider a `CHECK` constraint: `(evidence_type = 'file' AND file_path IS NOT NULL AND url IS NULL) OR (evidence_type = 'url' AND url IS NOT NULL AND file_path IS NULL)`.
-3. `ON DELETE` behaviour: default is `RESTRICT`. Consider `ON DELETE CASCADE` for `school_id` and `mat_standard_id` — if a school or standard is removed, orphaned evidence is useless.
+### `assessment_actions`
 
-### `assessment_actions` — new table (REQ-002)
-
-Holds checklist items per assessment. Replaces the old free-text `assessments.actions` column (dropped — see §15). One row per item; grain = one parent assessment (i.e. one school × standard × term, the same grain as `assessments` and `standard_evidence`).
+Holds checklist items per assessment. Replaces the old free-text `assessments.actions` column (dropped — see §15). One row per item; grain = one parent assessment (i.e. one school × standard × term, the same grain as `assessments` and `standard_evidence`). Shipped May 2026 (REQ-002 rework).
 
 ```sql
 CREATE TABLE assessment_actions (
@@ -676,6 +668,10 @@ Full inventory of FK, CHECK, and UNIQUE constraints as of **2026-04-20**. Re-run
 | `assessments` | `fk_assessments_term` | `unique_term_id` | `terms.unique_term_id` | NO ACTION | RESTRICT | |
 | `assessments` | `fk_assessments_updated_by` | `updated_by` | `users.user_id` | CASCADE | SET NULL | Added 2026-04-20. |
 | `assessments` | `fk_assessments_version` | `version_id` | `standard_versions.version_id` | CASCADE | SET NULL | |
+| `standard_evidence` | `fk_evidence_mat` | `mat_id` | `mats.mat_id` | NO ACTION | RESTRICT | Added April 2026 with the new `standard_evidence` table (§17). Denormalised MAT pointer for fast isolation filtering. |
+| `standard_evidence` | `fk_evidence_mat_standard` | `mat_standard_id` | `mat_standards.mat_standard_id` | NO ACTION | RESTRICT | Re-verify `ON UPDATE` rule against prod — archive-rename of the parent standard should propagate to evidence keys; if not CASCADE, evidence becomes orphaned (see §17 gotcha). |
+| `standard_evidence` | `fk_evidence_school` | `school_id` | `schools.school_id` | NO ACTION | RESTRICT | |
+| `standard_evidence` | `fk_evidence_term` | `unique_term_id` | `terms.unique_term_id` | NO ACTION | RESTRICT | |
 | `mat_aspects` | `fk_mat_aspects_created_by` | `created_by_user_id` | `users.user_id` | NO ACTION | SET NULL | |
 | `mat_aspects` | `fk_mat_aspects_mat` | `mat_id` | `mats.mat_id` | NO ACTION | CASCADE | |
 | `mat_aspects` | `fk_mat_aspects_source` | `source_aspect_id` | `aspects.aspect_id` | NO ACTION | SET NULL | |
@@ -711,6 +707,7 @@ Full inventory of FK, CHECK, and UNIQUE constraints as of **2026-04-20**. Re-run
 | Table | Constraint | Clause |
 |---|---|---|
 | `assessments` | `chk_rating_range` | `(rating IS NULL OR rating BETWEEN 1 AND 4)` |
+| `standard_evidence` | `chk_evidence_type_fields` | `(evidence_type = 'file' AND file_path IS NOT NULL AND url IS NULL) OR (evidence_type = 'url' AND url IS NOT NULL AND file_path IS NULL)` |
 
 ### 20.3 UNIQUE constraints
 
@@ -782,3 +779,4 @@ ORDER BY tc.TABLE_NAME, tc.CONSTRAINT_NAME;
 | 2026-04-20 | §5, §15, §16, §20.1: Fixed issue #3 (`assessments.updated_by` narrowed to `char(36)`, FK `fk_assessments_updated_by` added) and issue #6 (`healing-secondary-academy.school_type` → `'secondary'`). Full `school_type` enum documented. **All six originally-flagged issues now closed.** |
 | 2026-05-21 | §8, §10: Renamed `aspect_category` enum value `'ofsted'` → `'strategic'` on both `aspects` and `mat_aspects`. Enum is now `enum('operational', 'strategic')`; default unchanged (`'operational'`). DB migration applied manually; backend code and API contract brought into alignment. |
 | 2026-05-28 | §15, §17, §20.1: REQ-002 rework. Dropped the `assessments.actions` TEXT column; added new child table `assessment_actions` (one row per checklist item, FK to `assessments.id` ON DELETE CASCADE, index `idx_actions_assessment`). FK `fk_actions_assessment` added to §20.1. DB migration applied manually; backend purged of `a.actions` references, four new CRUD endpoints shipped at `/api/assessments/{assessment_id}/actions`, dashboard now returns `outstanding_actions_count` instead of the old text aggregate. |
+| 2026-05-30 | §17, §20.1, §20.2: Promoted `standard_evidence` (REQ-003) from "in-flight schema changes" to a live table section. Renamed §17 to "Auxiliary tables — evidence and actions" and rewrote the evidence subsection in present-tense (column table, mutation surface, MAT-isolation behaviour, archive-rename gotcha). Added the four `fk_evidence_*` rows to §20.1 (`uploaded_by` deliberately FK-less, mirroring the `assessment_actions.created_by` pattern) and `chk_evidence_type_fields` to §20.2. |

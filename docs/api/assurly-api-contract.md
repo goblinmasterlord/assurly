@@ -1407,9 +1407,9 @@ Hard-deletes the row (actions are ephemeral UI items, not historical records).
 
 ---
 
-### Evidence `🚧 In-flight — REQ-003`
+### Evidence
 
-All four evidence endpoints are in-flight. The path prefix is `/evidence/...` (not `/api/evidence/...`).
+The four evidence endpoints are live. The path prefix is `/evidence/...` (not `/api/evidence/...`).
 
 #### 28. Upload file evidence
 
@@ -1914,3 +1914,4 @@ Admin/cron utility. No auth required (security concern). Not called by the front
 | v1.5 | 2026-05-28 | Doc reconciliation pass. Dropped `🚧 In-flight — REQ-002/003/005` tags from `GET /api/dashboard/schools` `view` param and `school_type` / `is_central_office` / `actions` / `evidence_count` fields — all now shipped. Marked Known Issue #1 (dashboard placeholder-comment defect) as **Resolved**. No new endpoints, no shape changes. |
 | v1.6 | 2026-05-28 | REQ-002 rework. `actions` is no longer a free-text field on `assessments` — it's now a checklist of items in a new `assessment_actions` child table, managed via four new endpoints (§31a-d: `GET`/`POST` list/create + `PUT`/`DELETE` per item). `GET /api/dashboard/schools` returns `outstanding_actions_count` (integer) in place of the old `actions` (string). `GET /api/assessments/{id}` and `GET /api/assessments/by-aspect/{aspect_code}` no longer document `actions`; both now return `standard_type` on the per-standard rows. Known Issues #10, #11, #13 resolved. |
 | v1.7 | 2026-05-30 | Removed stale `actions` field references from §25 and §26 (the actions work shipped as dedicated endpoints in §31a–d, not as a field on the assessment write endpoints). Doc-only cleanup; no shape change to deployed endpoints. |
+| v1.8 | 2026-05-30 | Promoted the Evidence section (endpoints §28–31) from `🚧 In-flight — REQ-003` to live. REQ-003 shipped some time ago; preamble and section header updated to present tense. No endpoint-shape changes. |
