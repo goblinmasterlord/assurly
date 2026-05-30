@@ -1,5 +1,12 @@
 # Assurly — Frontend Implementation Brief (April 2026)
 
+> **ARCHIVED — historical record.** This brief documented in-flight work for REQ-002/003/004/005 (April 2026) and the subsequent `assessment_actions` rework (May 2026). All work described here has shipped. The current state of the schema and API is documented in:
+>
+> - `docs/assurly-data-model.md` (schema)
+> - `docs/api/assurly-api-contract.md` (API)
+>
+> Do not use this brief as a reference for current behaviour. Some details here are now stale (e.g. the original REQ-002 `actions` text-field approach was superseded by the `assessment_actions` child table). Refer to the live docs above.
+
 > **Audience:** Cursor, implementing React (frontend) changes on the Assurly web app.
 >
 > **Stack:** React, Recharts for visualisations, React DnD where relevant. British English throughout user-facing strings.
