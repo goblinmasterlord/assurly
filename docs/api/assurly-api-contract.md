@@ -1102,8 +1102,7 @@ Authorization: Bearer <token>
 ```json
 {
   "rating": 4,
-  "evidence_comments": "All targets met with strong evidence base.",
-  "actions": "Maintain current approach; share best practice across trust."
+  "evidence_comments": "All targets met with strong evidence base."
 }
 ```
 
@@ -1111,7 +1110,6 @@ Authorization: Bearer <token>
 |---|---|---|---|
 | `rating` | integer | no | 1–4 or `null`. Setting a non-null rating changes status to `"completed"`; setting `null` changes it to `"in_progress"`. |
 | `evidence_comments` | string | no | |
-| `actions` | string | no | `🚧 In-flight — REQ-002`. |
 
 **Response 200:**
 
@@ -1127,6 +1125,7 @@ Authorization: Bearer <token>
 
 **Frontend notes:**
 - Auto-sets `submitted_by` and `updated_by` to the current user.
+- Action checklist items are not managed here — use the dedicated `/api/assessments/{assessment_id}/actions` endpoints (§31a–d).
 
 ---
 
@@ -1147,8 +1146,7 @@ Authorization: Bearer <token>
     {
       "assessment_id": "cedar-park-primary-ES1-T1-2024-25",
       "rating": 4,
-      "evidence_comments": "Excellent",
-      "actions": "No further action required."
+      "evidence_comments": "Excellent"
     },
     {
       "assessment_id": "cedar-park-primary-ES2-T1-2024-25",
@@ -1166,7 +1164,8 @@ Each item in `updates`:
 | `assessment_id` | string | yes | Virtual composite key. |
 | `rating` | integer | no | 1–4. |
 | `evidence_comments` | string | no | |
-| `actions` | string | no | `🚧 In-flight — REQ-002`. |
+
+Action checklist items are not managed here — use the dedicated `/api/assessments/{assessment_id}/actions` endpoints (§31a–d).
 
 **Response 200:**
 
@@ -1914,3 +1913,4 @@ Admin/cron utility. No auth required (security concern). Not called by the front
 | v1.4 | 2026-05-28 | Standardised `is_central_office` and `is_active` on `GET /api/schools` and `is_active` on `GET /api/users` / `POST /api/users` / `PUT /api/users/{user_id}` to JSON booleans (`true`/`false`) instead of `0`/`1`. Other endpoints (`/api/dashboard/schools`, `/api/assessments`, `/api/auth/*`) already returned booleans. Frontend no longer needs to coerce integers client-side. |
 | v1.5 | 2026-05-28 | Doc reconciliation pass. Dropped `🚧 In-flight — REQ-002/003/005` tags from `GET /api/dashboard/schools` `view` param and `school_type` / `is_central_office` / `actions` / `evidence_count` fields — all now shipped. Marked Known Issue #1 (dashboard placeholder-comment defect) as **Resolved**. No new endpoints, no shape changes. |
 | v1.6 | 2026-05-28 | REQ-002 rework. `actions` is no longer a free-text field on `assessments` — it's now a checklist of items in a new `assessment_actions` child table, managed via four new endpoints (§31a-d: `GET`/`POST` list/create + `PUT`/`DELETE` per item). `GET /api/dashboard/schools` returns `outstanding_actions_count` (integer) in place of the old `actions` (string). `GET /api/assessments/{id}` and `GET /api/assessments/by-aspect/{aspect_code}` no longer document `actions`; both now return `standard_type` on the per-standard rows. Known Issues #10, #11, #13 resolved. |
+| v1.7 | 2026-05-30 | Removed stale `actions` field references from §25 and §26 (the actions work shipped as dedicated endpoints in §31a–d, not as a field on the assessment write endpoints). Doc-only cleanup; no shape change to deployed endpoints. |
