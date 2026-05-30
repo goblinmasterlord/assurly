@@ -1216,6 +1216,8 @@ The primary dashboard data endpoint. Returns per-school summary rows for the sel
       "current_term": "T2-2025-26",
       "status": "in_progress",
       "current_score": 3.25,
+      "assurance_score": 3.40,
+      "risk_score": 3.00,
       "previous_terms": [
         {
           "term_id": "T1-2025-26",
@@ -1245,7 +1247,9 @@ Per-school row fields:
 | `is_central_office` | boolean | no | `true` for the MAT central office row. |
 | `current_term` | string | no | |
 | `status` | string | no | Computed: `not_started`, `in_progress`, `completed`. |
-| `current_score` | number | yes | Average rating (2dp). `null` if no ratings. |
+| `current_score` | number | yes | Polarity-corrected average rating across all standards (2dp). Risk-type ratings are inverted before averaging (`5 - rating`) so assurance and risk are unified onto a single "higher is better" scale. `null` if no ratings. |
+| `assurance_score` | number | yes | Raw average of ratings for assurance-type standards only (2dp). Higher = more assured. `null` if no assurance standards exist for this school. |
+| `risk_score` | number | yes | Raw average of ratings for risk-type standards only (2dp). Higher = less risky (rating 4 on a risk standard means "No risk or mitigated"). `null` if no risk standards exist for this school. |
 | `previous_terms` | array | no | Up to 3 prior terms with `term_id`, `academic_year`, `avg_score`. |
 | `intervention_required` | integer | no | Count of standards with a low rating. |
 | `completed_standards` | integer | no | |
@@ -1271,6 +1275,7 @@ Returned when no assessment data exists for the MAT.
 - `previous_terms` is limited to 3 entries, newest first. Use for sparkline/trend display.
 - `evidence_count` drives the Files column indicator: show paperclip + count when > 0, blank when 0.
 - `outstanding_actions_count` drives the Actions column indicator. Replaces the prior `actions` string field (REQ-002 rework — actions are now per-assessment checklist items, fetched via the endpoints in the next section).
+- All three scores (`current_score`, `assurance_score`, `risk_score`) are on the same 1–4 scale and "higher is better" in all three cases. `current_score` is polarity-corrected (risk inverted before averaging, unified across both types); `assurance_score` and `risk_score` are raw single-polarity averages. The shared "higher is better" reading falls out of the risk label semantics — rating 4 on a risk standard means "No risk or mitigated", rating 1 means "Critical risk" — so a high `risk_score` is good news. Use the same colour palette for all three.
 
 ---
 
@@ -1916,3 +1921,4 @@ Admin/cron utility. No auth required (security concern). Not called by the front
 | v1.7 | 2026-05-30 | Removed stale `actions` field references from §25 and §26 (the actions work shipped as dedicated endpoints in §32a–d, not as a field on the assessment write endpoints). Doc-only cleanup; no shape change to deployed endpoints. |
 | v1.8 | 2026-05-30 | Promoted the Evidence section (endpoints §28–31) from `🚧 In-flight — REQ-003` to live. REQ-003 shipped some time ago; preamble and section header updated to present tense. No endpoint-shape changes. |
 | v1.9 | 2026-05-30 | Renumbered the four action-checklist endpoints from §31a–d to §32a–d to resolve a section-number collision with §31 (`DELETE /evidence/{evidence_id}`). Cross-references updated in §23, §24, §25, §26, Known Issues #10/#11/#13, and the v1.6/v1.7 changelog entries. Endpoint shapes and paths unchanged — only the doc section numbers. |
+| v2.0 | 2026-05-30 | `GET /api/dashboard/schools` (§27) now returns two new per-school fields alongside `current_score`: `assurance_score` (raw average of assurance-type ratings) and `risk_score` (raw average of risk-type ratings). Both are `number \| null` — null when no standards of that type exist for the school. All three scores read "higher is better" on a 1–4 scale; `current_score` remains the only polarity-corrected one. Additive change — no existing field shape modified. |

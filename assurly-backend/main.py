@@ -1337,6 +1337,9 @@ async def get_schools_dashboard(
                     ELSE a.rating
                 END), 2) AS current_score,
 
+                ROUND(AVG(CASE WHEN ms.standard_type = 'assurance' THEN a.rating END), 2) AS assurance_score,
+                ROUND(AVG(CASE WHEN ms.standard_type = 'risk'      THEN a.rating END), 2) AS risk_score,
+
                 SUM(CASE
                     WHEN ms.mat_standard_id IS NULL THEN 0
                     WHEN ms.standard_type = 'assurance' AND a.rating <= 2 THEN 1
@@ -1462,6 +1465,8 @@ async def get_schools_dashboard(
                 'current_term': term_id,
                 'status': school['status'],
                 'current_score': float(school['current_score']) if school['current_score'] is not None else None,
+                'assurance_score': float(school['assurance_score']) if school['assurance_score'] is not None else None,
+                'risk_score':      float(school['risk_score'])      if school['risk_score']      is not None else None,
                 'previous_terms': school_trends.get(school_id, []),
                 'intervention_required': int(school['intervention_required'] or 0),
                 'completed_standards': completed,

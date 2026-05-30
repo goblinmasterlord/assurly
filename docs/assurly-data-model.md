@@ -68,12 +68,17 @@ Different entities use different deletion semantics. This is intentional:
 
 ### 2.5 RAG polarity
 
-A rating of 4 does not universally mean "good". Polarity depends on `mat_standards.standard_type`:
+Rating semantics depend on `mat_standards.standard_type`. Both polarities read "higher is better" — but the label set differs:
 
-- `standard_type = 'assurance'`: higher is better. `4` = green, `1` = red.
-- `standard_type = 'risk'`: higher is worse. `4` = red, `1` = green.
+- `standard_type = 'assurance'`: rating 4 = "Highly assured" (best), rating 1 = "Inadequate" (worst).
+- `standard_type = 'risk'`: rating 4 = "No risk or mitigated" (best), rating 1 = "Critical risk" (worst).
 
-This is applied both client-side (React utility) and potentially server-side (views/endpoints — audit pending). Any code computing RAG colour MUST take `standard_type` as input.
+Canonical labels live in `assurly-frontend/src/utils/rating-labels.ts`. Any code rendering a rating to a user MUST take `standard_type` as input to pick the right label set. RAG colour mapping is uniform across both types (high rating = green, low rating = red) because the label semantics absorb the polarity.
+
+**Dashboard score fields** (`GET /api/dashboard/schools` — see API contract §27):
+
+- `current_score` is the unified per-school average across mixed types. The backend inverts risk ratings (`5 - rating`) before averaging. Note this inversion was introduced before the current "higher is better for both polarities" label convention settled — under that convention, inverting risk ratings flips a 4 ("No risk or mitigated") into a 1 contribution. The score is still reported on a 1–4 scale; semantics are nominally "higher is better" but the formula's effect on mixed-type aspects under current labels should be reviewed separately.
+- `assurance_score` and `risk_score` are raw single-polarity averages — straight `AVG(rating)` over the matching type only, no inversion. Both read "higher is better" directly against the label.
 
 ### 2.6 Rating scale
 
@@ -779,3 +784,4 @@ ORDER BY tc.TABLE_NAME, tc.CONSTRAINT_NAME;
 | 2026-05-28 | §15, §17, §20.1: REQ-002 rework. Dropped the `assessments.actions` TEXT column; added new child table `assessment_actions` (one row per checklist item, FK to `assessments.id` ON DELETE CASCADE, index `idx_actions_assessment`). FK `fk_actions_assessment` added to §20.1. DB migration applied manually; backend purged of `a.actions` references, four new CRUD endpoints shipped at `/api/assessments/{assessment_id}/actions`, dashboard now returns `outstanding_actions_count` instead of the old text aggregate. |
 | 2026-05-30 | §17, §20.1, §20.2: Promoted `standard_evidence` (REQ-003) from "in-flight schema changes" to a live table section. Renamed §17 to "Auxiliary tables — evidence and actions" and rewrote the evidence subsection in present-tense (column table, mutation surface, MAT-isolation behaviour, archive-rename gotcha). Added the four `fk_evidence_*` rows to §20.1 (`uploaded_by` deliberately FK-less, mirroring the `assessment_actions.created_by` pattern) and `chk_evidence_type_fields` to §20.2. |
 | 2026-05-30 | §17, §20.1: Verified the four `fk_evidence_*` rules against the live DB and updated the inventory: `fk_evidence_mat` / `fk_evidence_school` are `ON DELETE CASCADE` (not RESTRICT as the previous conservative default suggested), `fk_evidence_mat_standard` is `ON UPDATE CASCADE` + `ON DELETE CASCADE` (so archive-renames propagate to evidence — same pattern as `assessments`/`standard_versions`), `fk_evidence_term` is `ON DELETE RESTRICT`. §17 gotcha rewritten as a confirmed archive-rename-behaviour note. §20.1 preamble reframed: last full sweep date preserved, with incremental additions logged via the changelog. |
+| 2026-05-30 | §2.5: Rewritten to align with the canonical rating labels in `assurly-frontend/src/utils/rating-labels.ts` (rating 4 reads "best" for both `assurance` and `risk`, not just `assurance` as the old text said). Added a dashboard-scores subsection noting that `GET /api/dashboard/schools` now returns `assurance_score` and `risk_score` (raw single-polarity averages) alongside `current_score` (which still applies the `5 - rating` inversion to risk ratings — flagged for review). No schema or constraint changes. |
