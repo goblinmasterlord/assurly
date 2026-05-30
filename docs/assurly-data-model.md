@@ -553,8 +553,6 @@ CREATE TABLE assessment_actions (
 );
 ```
 
-**Status:** shipped 2026-05-28 (manual DDL in prod).
-
 **Notes:**
 
 - `ON DELETE CASCADE` on `assessment_id` — deleting a parent assessment cleans up its actions.
