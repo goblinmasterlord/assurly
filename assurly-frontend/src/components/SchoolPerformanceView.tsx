@@ -69,6 +69,7 @@ import {
 } from "@/components/ui/skeleton-loaders";
 import { getAspectDisplayName, calculateSchoolStatus, getStatusColor, getStatusIcon } from "@/lib/assessment-utils";
 import { getStatusLabel } from "@/utils/assessment";
+import { calculatePolarityAwareAverage } from "@/utils/rating-labels";
 import { FilterBar } from "@/components/ui/filter-bar";
 import { getSchools, getAspects } from "@/services/assessment-service";
 import { getSchoolsDashboard } from "@/services/dashboard-service";
@@ -248,10 +249,7 @@ export function SchoolPerformanceView({ assessments, refreshAssessments, isLoadi
   }, [schoolsDashboard]);
 
   const computeAvgScore = useCallback((data: AssessmentByAspect): number | null => {
-    const rated = data.standards.filter(s => s.rating !== null) as Array<{ rating: Exclude<Rating, null> }>;
-    if (rated.length === 0) return null;
-    const sum = rated.reduce((acc, s) => acc + (s.rating || 0), 0);
-    return Math.round((sum / rated.length) * 10) / 10;
+    return calculatePolarityAwareAverage(data.standards);
   }, []);
 
   const computeInterventionRequired = useCallback((data: AssessmentByAspect): number => {

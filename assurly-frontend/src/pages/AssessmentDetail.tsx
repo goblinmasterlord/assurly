@@ -51,7 +51,7 @@ import {
   User,
   XCircle,
 } from "lucide-react";
-import { RatingLabels, RatingDescriptions, type Rating, type Standard, type Assessment, type FileAttachment } from "@/types/assessment";
+import { type Rating, type Standard, type Assessment, type FileAttachment, type StandardType } from "@/types/assessment";
 import {
   Tooltip,
   TooltipContent,
@@ -84,6 +84,12 @@ import {
   type UiAction,
 } from "@/services/actions-service";
 import { getRagBadgeClasses } from "@/utils/rag";
+import {
+  RATING_OPTIONS,
+  getRatingLabel,
+  getRatingDescription,
+  calculatePolarityAwareAverage,
+} from "@/utils/rating-labels";
 
 type StandardWithAssessmentId = Standard & { assessment_id?: string };
 
@@ -1086,19 +1092,21 @@ export function AssessmentDetailPage() {
                               </Button>
                             </TooltipTrigger>
                             <TooltipContent className="max-w-sm">
-                              <p>1: Inadequate - {RatingDescriptions[1]}</p>
-                              <p>2: Requires Improvement - {RatingDescriptions[2]}</p>
-                              <p>3: Good - {RatingDescriptions[3]}</p>
-                              <p>4: Outstanding - {RatingDescriptions[4]}</p>
-                              <p>5: Exceptional - {RatingDescriptions[5]}</p>
+                              {RATING_OPTIONS.map((rating) => (
+                                <p key={rating}>
+                                  {rating}: {getRatingLabel(rating, activeStandard.standard_type)} —{' '}
+                                  {getRatingDescription(rating, activeStandard.standard_type)}
+                                </p>
+                              ))}
                             </TooltipContent>
                           </Tooltip>
                         </TooltipProvider>
                       </div>
                       
-                      <div className="grid grid-cols-1 lg:grid-cols-5 gap-3">
-                        {[1, 2, 3, 4, 5].map((rating) => {
+                      <div className="grid grid-cols-1 lg:grid-cols-4 gap-3">
+                        {RATING_OPTIONS.map((rating) => {
                           const isSelected = ratings[activeStandard.id!] === rating;
+                          const standardType = activeStandard.standard_type;
                           return (
                             <div 
                               key={rating}
@@ -1117,13 +1125,12 @@ export function AssessmentDetailPage() {
                               <div className="flex items-center justify-between">
                                 <div className="flex items-center gap-1.5">
                                   <span className="font-medium">{rating}:</span>
-                                  <span className="font-medium">{RatingLabels[rating as 1 | 2 | 3 | 4 | 5]}</span>
+                                  <span className="font-medium">{getRatingLabel(rating, standardType)}</span>
                                 </div>
-                                {/* Fixed checkmark position */}
                                 {isSelected && <Check className="h-4 w-4 text-primary shrink-0" />}
                               </div>
                               <p className="text-xs text-muted-foreground mt-1.5">
-                                {RatingDescriptions[rating as 1 | 2 | 3 | 4 | 5]}
+                                {getRatingDescription(rating, standardType)}
                               </p>
                               {role === "department-head" && assessment.status !== "completed" && (
                                 <span className="absolute top-2 right-2 text-xs font-mono text-muted-foreground bg-gray-50 px-1.5 py-0.5 rounded">
@@ -1498,10 +1505,12 @@ export function AssessmentDetailPage() {
                   <div className="h-10 w-10 rounded-lg bg-slate-100 flex items-center justify-center">
                     <span className="text-slate-700 font-semibold text-sm">
                       {(() => {
-                        const averageRating = assessment.standards
-                          .filter(s => s.rating !== null)
-                          .reduce((sum, s) => sum + (s.rating || 0), 0) / 
-                          assessment.standards.filter(s => s.rating !== null).length;
+                        const averageRating = calculatePolarityAwareAverage(
+                          assessment.standards.map((s) => ({
+                            rating: s.id ? ratings[s.id] ?? s.rating : s.rating,
+                            standard_type: s.standard_type,
+                          }))
+                        );
                         return averageRating ? averageRating.toFixed(1) : '—';
                       })()}
                     </span>
@@ -1625,9 +1634,7 @@ export function AssessmentDetailPage() {
                           <div
                             className={cn(
                               "inline-flex items-center justify-center h-8 w-8 rounded-full text-sm font-semibold",
-                              standard.rating === 5
-                                ? "bg-purple-100 text-purple-700 border border-purple-200"
-                                : getRagBadgeClasses(standard.rating, standard.standard_type)
+                              getRagBadgeClasses(standard.rating, standard.standard_type)
                             )}
                           >
                             {standard.rating}
@@ -1710,24 +1717,27 @@ export function AssessmentDetailPage() {
             <div className="space-y-2 my-2">
               <h4 className="text-sm font-medium">Assessment Summary:</h4>
               <div className="grid grid-cols-2 gap-2 text-sm">
-                {[1, 2, 3, 4, 5].map(rating => {
-                  const count = assessment.standards!.filter(s => s.id && ratings[s.id] === rating).length;
-                  if (count === 0) return null;
-                  
-                  const color = rating === 1 ? "text-red-600" :
-                              rating === 2 ? "text-amber-600" :
-                              rating === 3 ? "text-blue-600" :
-                              rating === 4 ? "text-emerald-600" :
-                              rating === 5 ? "text-purple-600" :
-                              "text-green-600";
-                  
-                  return (
-                    <div key={rating} className="flex items-center gap-1.5">
-                      <span className={cn("font-medium", color)}>
-                        {count}× {RatingLabels[rating as 1|2|3|4|5]}
+                {RATING_OPTIONS.flatMap((rating) => {
+                  const standardsAtRating = assessment.standards!.filter(
+                    (s) => s.id && ratings[s.id] === rating
+                  );
+                  if (standardsAtRating.length === 0) return [];
+
+                  const byType = new Map<StandardType | 'assurance', typeof standardsAtRating>();
+                  for (const s of standardsAtRating) {
+                    const type = s.standard_type || 'assurance';
+                    const group = byType.get(type) || [];
+                    group.push(s);
+                    byType.set(type, group);
+                  }
+
+                  return Array.from(byType.entries()).map(([type, stds]) => (
+                    <div key={`${rating}-${type}`} className="flex items-center gap-1.5">
+                      <span className="font-medium text-slate-700">
+                        {stds.length}× {getRatingLabel(rating, type)}
                       </span>
                     </div>
-                  );
+                  ));
                 })}
               </div>
             </div>

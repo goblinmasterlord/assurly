@@ -20,6 +20,22 @@ export type VersionRelease = {
 
 export const VERSION_HISTORY: VersionRelease[] = [
   {
+    version: "1.33",
+    buildDate: "2026-05-29",
+    entries: [
+      {
+        title: "Polarity-aware rating labels",
+        description:
+          "Assessment rating pickers now use a 1–4 scale with labels and subheadings that change for assurance vs risk standards.",
+        bullets: [
+          "Removed the legacy 5-option (Exceptional) rating scale from assessment pages",
+          "Assurance and risk standards show distinct labels and picker subheadings",
+          "Client-side score averages invert risk ratings before averaging mixed aspects",
+        ],
+      },
+    ],
+  },
+  {
     version: "1.32",
     buildDate: "2026-05-29",
     entries: [
