@@ -2,18 +2,12 @@ import type { StandardType } from '@/types/assessment';
 
 export type RagColour = 'green' | 'amber-green' | 'amber' | 'red' | 'grey';
 
-const ASSURANCE_PALETTE: Record<number, RagColour> = {
+/** Unified 1–4 scale: 4 = best for assurance and risk (labels carry polarity, not colours). */
+const RATING_PALETTE: Record<number, RagColour> = {
   4: 'green',
   3: 'amber-green',
   2: 'amber',
   1: 'red',
-};
-
-const RISK_PALETTE: Record<number, RagColour> = {
-  4: 'red',
-  3: 'amber',
-  2: 'amber-green',
-  1: 'green',
 };
 
 const BADGE_CLASSES: Record<RagColour, string> = {
@@ -26,13 +20,11 @@ const BADGE_CLASSES: Record<RagColour, string> = {
 
 export function getRagColour(
   rating: number | null,
-  standardType?: StandardType
+  _standardType?: StandardType
 ): RagColour {
   if (rating == null) return 'grey';
 
-  // API should always send standard_type; assurance polarity is the explicit fallback.
-  const palette = standardType === 'risk' ? RISK_PALETTE : ASSURANCE_PALETTE;
-  return palette[rating] ?? 'grey';
+  return RATING_PALETTE[rating] ?? 'grey';
 }
 
 export function getRagBadgeClasses(
