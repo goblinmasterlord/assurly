@@ -20,6 +20,22 @@ export type VersionRelease = {
 
 export const VERSION_HISTORY: VersionRelease[] = [
   {
+    version: "1.37",
+    buildDate: "2026-05-31",
+    entries: [
+      {
+        title: "Post-save aggregate refresh",
+        description:
+          "Saving a standard rating now invalidates the right caches and refetches detail and dashboard aggregates without a full page reload.",
+        bullets: [
+          "Assessment saves route through the enhanced service with scoped cache invalidation",
+          "Dashboard and expanded aspect rows refresh intervention counts after rating changes",
+          "Detail page overall rating and completion update immediately after save",
+        ],
+      },
+    ],
+  },
+  {
     version: "1.35",
     buildDate: "2026-05-29",
     entries: [

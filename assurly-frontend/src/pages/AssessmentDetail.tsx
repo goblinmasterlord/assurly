@@ -28,7 +28,6 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { useUser } from "@/contexts/UserContext";
-import { submitAssessment } from "@/services/assessment-service"; // Keep submit function
 import { useAssessment } from "@/hooks/use-assessments"; // Optimized assessment fetching
 import { getStatusLabel, isOverdue } from "@/utils/assessment";
 import {
@@ -75,7 +74,6 @@ import {
 } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
 import { FileUpload } from "@/components/ui/file-upload";
-import { assessmentService } from "@/services/enhanced-assessment-service";
 import {
   getActions,
   createAction,
@@ -164,11 +162,12 @@ export function AssessmentDetailPage() {
   const isAdminView = searchParams.get('view') === 'admin' && role === 'mat-admin';
   
   // 🚀 OPTIMIZED: Using enhanced assessment hook with caching and automatic refresh
-      const { 
-      assessment, 
-      isLoading, 
-      error, 
-      refreshAssessment
+      const {
+      assessment,
+      isLoading,
+      error,
+      refreshAssessment,
+      submitAssessment,
     } = useAssessment(id || '');
   
   // Legacy fetchAssessment function for compatibility (just calls refreshAssessment)
@@ -365,10 +364,7 @@ export function AssessmentDetailPage() {
   const handleSaveEdit = async () => {
     await handleSave();
     setIsEditMode(false);
-    
-    // Refresh assessment data
-    await fetchAssessment(false);
-    
+
     toast({
       title: "Assessment updated",
       description: "Your changes have been saved successfully.",
@@ -636,24 +632,8 @@ export function AssessmentDetailPage() {
         return;
       }
 
-      // Use the assessment_id from each standard, not the group_id from URL
-      // The assessment.standards array contains the correct assessment_id for each standard
-      await submitAssessment(standards.map(s => {
-        const standard = findStandardById(s.standardId);
-        const assessmentId = resolveStandardAssessmentId(
-          standard as StandardWithAssessmentId | undefined,
-          assessment,
-          id
-        );
-
-        return {
-          assessment_id: assessmentId || s.standardId,
-          rating: s.rating,
-          evidence_comments: s.evidence
-        };
-      }));
-
-      await assessmentService.refreshAllData();
+      await submitAssessment(standards);
+      await refreshAssessment();
 
       toast({
         title: "Progress saved",
@@ -695,26 +675,9 @@ export function AssessmentDetailPage() {
         evidence: evidence[standardId] || '',
       }));
 
-      // Use the assessment_id from each standard, not the group_id from URL
-      // The assessment.standards array contains the correct assessment_id for each standard
-      await submitAssessment(standards.map(s => {
-        const standard = findStandardById(s.standardId);
-        const assessmentId = resolveStandardAssessmentId(
-          standard as StandardWithAssessmentId | undefined,
-          assessment,
-          id
-        );
+      await submitAssessment(standards);
+      await refreshAssessment();
 
-        return {
-          assessment_id: assessmentId || s.standardId,
-          rating: s.rating,
-          evidence_comments: s.evidence
-        };
-      }));
-      
-      // Force refresh of assessments cache to ensure immediate updates
-      await assessmentService.refreshAllData();
-      
       setShowSuccessDialog(true);
     } catch (error) {
       console.error('Submit error:', error);

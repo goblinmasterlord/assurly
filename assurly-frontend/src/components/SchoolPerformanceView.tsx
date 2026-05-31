@@ -79,8 +79,8 @@ import {
 import { calculateAverageRating } from "@/utils/rating-labels";
 import { FilterBar } from "@/components/ui/filter-bar";
 import { getSchools, getAspects } from "@/services/assessment-service";
-import { getSchoolsDashboard } from "@/services/dashboard-service";
 import { assessmentService } from "@/services/enhanced-assessment-service";
+import { requestCache } from "@/lib/request-cache";
 import type { Aspect } from "@/types/assessment";
 import type { AssessmentByAspect, Rating, AssessmentStatus } from "@/types/assessment";
 import { useOptimisticFilter } from "@/hooks/use-optimistic-filter";
@@ -226,29 +226,39 @@ export function SchoolPerformanceView({ assessments, refreshAssessments, isLoadi
   // Fetch schools dashboard summary (bulk dashboard endpoint)
   const selectedUniqueTermId = useMemo(() => termLabelToUniqueTermId(selectedTerm), [selectedTerm]);
 
-  useEffect(() => {
-    let cancelled = false;
-
-    const loadDashboard = async () => {
-      setDashboardLoading(true);
-      setDashboardError(null);
-      try {
-        const data = await getSchoolsDashboard(selectedUniqueTermId, dashboardView);
-        if (!cancelled) setSchoolsDashboard(data);
-      } catch (err: any) {
-        console.error("Failed to load schools dashboard:", err);
-        const message = err?.userMessage || err?.message || "Failed to load dashboard data";
-        if (!cancelled) setDashboardError(message);
-      } finally {
-        if (!cancelled) setDashboardLoading(false);
-      }
-    };
-
-    loadDashboard();
-    return () => {
-      cancelled = true;
-    };
+  const loadDashboard = useCallback(async () => {
+    setDashboardLoading(true);
+    setDashboardError(null);
+    try {
+      const data = await assessmentService.getSchoolsDashboard(
+        selectedUniqueTermId,
+        dashboardView
+      );
+      setSchoolsDashboard(data);
+    } catch (err: any) {
+      console.error("Failed to load schools dashboard:", err);
+      const message = err?.userMessage || err?.message || "Failed to load dashboard data";
+      setDashboardError(message);
+    } finally {
+      setDashboardLoading(false);
+    }
   }, [selectedUniqueTermId, dashboardView]);
+
+  useEffect(() => {
+    void loadDashboard();
+  }, [loadDashboard]);
+
+  // Refetch dashboard / clear aspect metrics when rating saves invalidate caches
+  useEffect(() => {
+    return requestCache.subscribePrefixInvalidation((prefix) => {
+      if (prefix.startsWith("dashboard_schools")) {
+        void loadDashboard();
+      }
+      if (prefix.startsWith("aspect_")) {
+        setAspectRowMetrics({});
+      }
+    });
+  }, [loadDashboard]);
 
   const dashboardBySchoolId = useMemo(() => {
     const entries = schoolsDashboard?.schools?.map((s) => [s.school_id, s] as const) ?? [];
@@ -750,7 +760,6 @@ export function SchoolPerformanceView({ assessments, refreshAssessments, isLoadi
       if (!aspectCode) return;
 
       const key = `${schoolId}:${aspectCode}:${selectedUniqueTermId}`;
-      if (aspectRowMetrics[key]) return;
 
       const current = await assessmentService.getAssessmentsByAspect(aspectCode, schoolId, selectedUniqueTermId);
       const current_score = computeAvgScore(current);

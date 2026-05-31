@@ -25,6 +25,7 @@ import {
   deleteAspect as apiDeleteAspect,
   getTerms as apiGetTerms,
 } from '@/services/assessment-service';
+import { getSchoolsDashboard as apiGetSchoolsDashboard } from '@/services/dashboard-service';
 import type { 
   Assessment,
   AssessmentByAspect,
@@ -36,6 +37,7 @@ import type {
   DeleteStandardResponse,
   DeleteAspectResponse
 } from '@/types/assessment';
+import type { SchoolsDashboardResponse } from '@/types/dashboard';
 
 // Enhanced service with caching, optimistic updates, and intelligent data management
 export class EnhancedAssessmentService {
@@ -89,6 +91,20 @@ export class EnhancedAssessmentService {
   }
 
   /**
+   * Schools dashboard summary with per-term caching
+   */
+  async getSchoolsDashboard(
+    termId?: string,
+    view: 'school' | 'trust' = 'school'
+  ): Promise<SchoolsDashboardResponse> {
+    return requestCache.get(
+      'dashboard_schools',
+      () => apiGetSchoolsDashboard(termId, view),
+      { termId: termId ?? null, view }
+    );
+  }
+
+  /**
    * Update single assessment with optimistic updates
    */
   async updateAssessment(
@@ -135,13 +151,14 @@ export class EnhancedAssessmentService {
   }>): Promise<void> {
     try {
       await apiBulkUpdateAssessments(updates);
-      
-      // Invalidate all affected caches
-      updates.forEach(u => {
+
+      updates.forEach((u) => {
         requestCache.invalidate('assessment_detail', { id: u.assessment_id });
       });
       requestCache.invalidate('assessments');
-      
+      requestCache.invalidateByPrefix('aspect_');
+      requestCache.invalidateByPrefix('dashboard_schools');
+
       console.log(`✅ ${updates.length} assessments updated successfully`);
     } catch (error) {
       console.error('❌ Bulk update failed');
@@ -441,6 +458,8 @@ export class EnhancedAssessmentService {
     // Invalidate all caches
     requestCache.invalidate('assessments');
     requestCache.invalidate('assessment_detail');
+    requestCache.invalidateByPrefix('aspect_');
+    requestCache.invalidateByPrefix('dashboard_schools');
     requestCache.invalidate('schools');
     requestCache.invalidate('standards');
     requestCache.invalidate('aspects');

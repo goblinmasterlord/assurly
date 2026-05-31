@@ -1,6 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { assessmentService } from '@/services/enhanced-assessment-service';
-import { getAssessmentsByAspect } from '@/services/assessment-service';
 import { parseGroupId } from '@/lib/data-transformers';
 import type { Assessment, AssessmentCategory, AcademicTerm, AcademicYear, School, Standard, Rating, AssessmentByAspect } from '@/types/assessment';
 
@@ -183,7 +182,7 @@ export function useAssessment(assessmentId: string | undefined) {
         // Parse group_id and use by-aspect endpoint
         const parsed = parseGroupId(assessmentId);
         const uniqueTermId = `${parsed.termId}-${parsed.academicYear}`;
-        const aspectData = await getAssessmentsByAspect(
+        const aspectData = await assessmentService.getAssessmentsByAspect(
           parsed.aspectCode,
           parsed.schoolId,
           uniqueTermId
