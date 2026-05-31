@@ -1310,11 +1310,11 @@ async def get_schools_dashboard(
         selected_term_num = int(term_parts[0][1])
         selected_academic_year = term_parts[1]
 
-        # Polarity is applied via mat_standards.standard_type:
-        #   assurance -> higher rating is better; low rating (<=2) needs action
-        #   risk      -> higher rating is worse;  high rating (>=3) needs action
-        # current_score normalises both onto a unified "higher is better" scale
-        # so trust- and school-level averages are directly comparable.
+        # Both polarities read "higher is better" under the deployed rating
+        # labels (see assurly-frontend/src/utils/rating-labels.ts and
+        # data-model bible §2.5), so per-type transformations aren't needed:
+        # current_score is a plain average, and intervention_required flags
+        # any rating <= 2 regardless of standard_type.
         # Soft-deleted standards are excluded via mat_standards.is_active and
         # the '-deleted-' archive-rename marker.
         current_query = """
@@ -1331,21 +1331,12 @@ async def get_schools_dashboard(
                     ELSE 'in_progress'
                 END AS status,
 
-                ROUND(AVG(CASE
-                    WHEN ms.mat_standard_id IS NULL THEN NULL
-                    WHEN ms.standard_type = 'risk' THEN (5 - a.rating)
-                    ELSE a.rating
-                END), 2) AS current_score,
+                ROUND(AVG(a.rating), 2) AS current_score,
 
                 ROUND(AVG(CASE WHEN ms.standard_type = 'assurance' THEN a.rating END), 2) AS assurance_score,
                 ROUND(AVG(CASE WHEN ms.standard_type = 'risk'      THEN a.rating END), 2) AS risk_score,
 
-                SUM(CASE
-                    WHEN ms.mat_standard_id IS NULL THEN 0
-                    WHEN ms.standard_type = 'assurance' AND a.rating <= 2 THEN 1
-                    WHEN ms.standard_type = 'risk'      AND a.rating >= 3 THEN 1
-                    ELSE 0
-                END) AS intervention_required,
+                SUM(CASE WHEN a.rating <= 2 THEN 1 ELSE 0 END) AS intervention_required,
 
                 COUNT(CASE WHEN ms.mat_standard_id IS NOT NULL AND a.rating IS NOT NULL THEN 1 END) AS completed_standards,
                 COUNT(ms.mat_standard_id) AS total_standards,
