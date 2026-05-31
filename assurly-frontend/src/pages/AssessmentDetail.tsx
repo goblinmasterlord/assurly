@@ -88,6 +88,7 @@ import {
   getRatingDescription,
   calculateAverageRating,
 } from "@/utils/rating-labels";
+import { StandardTypeBadge } from "@/components/StandardTypeBadge";
 
 type StandardWithAssessmentId = Standard & { assessment_id?: string };
 
@@ -112,6 +113,45 @@ function resolveStandardAssessmentId(
   }
 
   return standard.id || standard.mat_standard_id;
+}
+
+function getSortedStandards(standards: Standard[]) {
+  return standards.slice().sort((a, b) => {
+    const aCode = a.code || "";
+    const bCode = b.code || "";
+    const aMatch = aCode.match(/([A-Z]+)(\d+)/);
+    const bMatch = bCode.match(/([A-Z]+)(\d+)/);
+
+    if (aMatch && bMatch) {
+      const aPrefix = aMatch[1];
+      const bPrefix = bMatch[1];
+      const aNum = parseInt(aMatch[2], 10);
+      const bNum = parseInt(bMatch[2], 10);
+
+      if (aPrefix !== bPrefix) {
+        return aPrefix.localeCompare(bPrefix);
+      }
+
+      return aNum - bNum;
+    }
+
+    return aCode.localeCompare(bCode);
+  });
+}
+
+function getGroupedStandards(standards: Standard[]) {
+  const sorted = getSortedStandards(standards);
+  return {
+    assurance: sorted.filter(
+      (s) => (s.standard_type || "assurance") === "assurance"
+    ),
+    risk: sorted.filter((s) => s.standard_type === "risk"),
+  };
+}
+
+function getNavigationStandards(standards: Standard[]) {
+  const { assurance, risk } = getGroupedStandards(standards);
+  return [...assurance, ...risk];
 }
 
 // Evidence Cell Component with smart text handling
@@ -183,37 +223,11 @@ export function AssessmentDetailPage() {
   const relatedAssessments: Assessment[] = [];
   
   const [activeStandard, setActiveStandard] = useState<Standard | null>(null);
-  
-  // Helper function to get sorted standards
-  const getSortedStandards = (standards: Standard[]) => {
-    return standards.slice().sort((a, b) => {
-      const aCode = a.code || '';
-      const bCode = b.code || '';
-      const aMatch = aCode.match(/([A-Z]+)(\d+)/);
-      const bMatch = bCode.match(/([A-Z]+)(\d+)/);
-      
-      if (aMatch && bMatch) {
-        const aPrefix = aMatch[1];
-        const bPrefix = bMatch[1];
-        const aNum = parseInt(aMatch[2], 10);
-        const bNum = parseInt(bMatch[2], 10);
-        
-        if (aPrefix !== bPrefix) {
-          return aPrefix.localeCompare(bPrefix);
-        }
-        
-        return aNum - bNum;
-      }
-      
-      return aCode.localeCompare(bCode);
-    });
-  };
-  
+
   // Update activeStandard when assessment loads
   useEffect(() => {
     if (assessment?.standards && assessment.standards.length > 0) {
-      const sortedStandards = getSortedStandards(assessment.standards);
-      setActiveStandard(sortedStandards[0]);
+      setActiveStandard(getNavigationStandards(assessment.standards)[0]);
     }
   }, [assessment]);
   
@@ -335,13 +349,12 @@ export function AssessmentDetailPage() {
 
   const groupedStandards = useMemo(() => {
     if (!assessment?.standards) return { assurance: [] as Standard[], risk: [] as Standard[] };
-    const sorted = getSortedStandards(assessment.standards);
-    return {
-      assurance: sorted.filter(
-        (s) => (s.standard_type || "assurance") === "assurance"
-      ),
-      risk: sorted.filter((s) => s.standard_type === "risk"),
-    };
+    return getGroupedStandards(assessment.standards);
+  }, [assessment?.standards]);
+
+  const navigationStandards = useMemo(() => {
+    if (!assessment?.standards) return [] as Standard[];
+    return getNavigationStandards(assessment.standards);
   }, [assessment?.standards]);
   
   // Edit mode state for completed assessments
@@ -352,25 +365,22 @@ export function AssessmentDetailPage() {
   
   useEffect(() => {
     if (assessment?.standards && activeStandard) {
-      const sortedStandards = getSortedStandards(assessment.standards);
-      const index = sortedStandards.findIndex(s => s.id === activeStandard.id);
+      const index = navigationStandards.findIndex((s) => s.id === activeStandard.id);
       if (index !== -1) {
         setActiveStandardIndex(index);
       }
     }
-  }, [activeStandard, assessment]);
+  }, [activeStandard, assessment, navigationStandards]);
 
   const goToNextStandard = () => {
-    if (assessment?.standards && activeStandardIndex < assessment.standards.length - 1) {
-      const sortedStandards = getSortedStandards(assessment.standards);
-      setActiveStandard(sortedStandards[activeStandardIndex + 1]);
+    if (navigationStandards.length > 0 && activeStandardIndex < navigationStandards.length - 1) {
+      setActiveStandard(navigationStandards[activeStandardIndex + 1]);
     }
   };
 
   const goToPreviousStandard = () => {
-    if (assessment?.standards && activeStandardIndex > 0) {
-      const sortedStandards = getSortedStandards(assessment.standards);
-      setActiveStandard(sortedStandards[activeStandardIndex - 1]);
+    if (navigationStandards.length > 0 && activeStandardIndex > 0) {
+      setActiveStandard(navigationStandards[activeStandardIndex - 1]);
     }
   };
 
@@ -983,65 +993,88 @@ export function AssessmentDetailPage() {
             </CardHeader>
             <CardContent className="px-2 py-2 max-h-[60vh] overflow-y-auto">
               <div className="space-y-1">
-                {assessment.standards
-                  .slice()
-                  .sort((a, b) => {
-                    // Extract the numeric part from the standard code (e.g., ED1 -> 1, ED10 -> 10)
-                    const aCode = a.code || '';
-                    const bCode = b.code || '';
-                    const aMatch = aCode.match(/([A-Z]+)(\d+)/);
-                    const bMatch = bCode.match(/([A-Z]+)(\d+)/);
-                    
-                    if (aMatch && bMatch) {
-                      const aPrefix = aMatch[1];
-                      const bPrefix = bMatch[1];
-                      const aNum = parseInt(aMatch[2], 10);
-                      const bNum = parseInt(bMatch[2], 10);
-                      
-                      // First sort by prefix (ED, ES, FN, etc.)
-                      if (aPrefix !== bPrefix) {
-                        return aPrefix.localeCompare(bPrefix);
-                      }
-                      
-                      // Then sort numerically
-                      return aNum - bNum;
-                    }
-                    
-                    // Fallback to string comparison if pattern doesn't match
-                    return aCode.localeCompare(bCode);
-                  })
-                  .map((standard, index) => {
-                  const status = getStatusStatus(standard);
-                  return (
-                    <Button
-                      key={standard.id}
-                      variant="ghost"
-                      className={cn(
-                        "w-full justify-between rounded-lg px-4 py-3 h-auto border transition-colors",
-                        activeStandard?.id === standard.id 
-                          ? "border-primary/70 bg-primary/5" 
-                          : "border-transparent hover:bg-slate-50",
-                      )}
-                      onClick={() => setActiveStandard(standard)}
-                    >
-                      <div className="flex items-center gap-3">
-                        <div className={cn(
-                          "text-slate-700 rounded-full w-6 h-6 flex items-center justify-center text-xs font-medium",
-                          activeStandard?.id === standard.id ? "bg-primary/10 text-primary" : "bg-slate-200"
-                        )}>
-                          {index + 1}
-                        </div>
-                        <div className="text-left">
-                          <span className={cn("font-medium block text-sm", activeStandard?.id === standard.id ? "text-primary" : "")}>{standard.code}</span>
-                          <span className={cn("text-xs truncate max-w-[150px] block", activeStandard?.id === standard.id ? "text-foreground" : "text-muted-foreground")}>{standard.title}</span>
-                        </div>
-                      </div>
-                      <div className="flex items-center">
-                        {getStatusIcon(getStandardStatus(standard))}
-                      </div>
-                    </Button>
-                  );
-                })}
+                {([
+                  {
+                    key: "assurance" as const,
+                    title: "Assurance",
+                    standards: groupedStandards.assurance,
+                    headerClass: "text-green-800",
+                  },
+                  {
+                    key: "risk" as const,
+                    title: "Risk",
+                    standards: groupedStandards.risk,
+                    headerClass: "text-red-800",
+                  },
+                ] as const)
+                  .filter((section) => section.standards.length > 0)
+                  .map((section) => (
+                    <div key={section.key} className="space-y-1">
+                      <p
+                        className={cn(
+                          "text-xs font-medium px-3 pt-2 pb-1",
+                          section.headerClass
+                        )}
+                      >
+                        {section.title}
+                      </p>
+                      {section.standards.map((standard, index) => (
+                        <Button
+                          key={standard.id}
+                          variant="ghost"
+                          className={cn(
+                            "w-full justify-between rounded-lg px-4 py-3 h-auto border transition-colors",
+                            activeStandard?.id === standard.id
+                              ? "border-primary/70 bg-primary/5"
+                              : "border-transparent hover:bg-slate-50"
+                          )}
+                          onClick={() => setActiveStandard(standard)}
+                        >
+                          <div className="flex items-center gap-3 min-w-0">
+                            <div
+                              className={cn(
+                                "text-slate-700 rounded-full w-6 h-6 flex-shrink-0 flex items-center justify-center text-xs font-medium",
+                                activeStandard?.id === standard.id
+                                  ? "bg-primary/10 text-primary"
+                                  : "bg-slate-200"
+                              )}
+                            >
+                              {index + 1}
+                            </div>
+                            <div className="text-left min-w-0">
+                              <div className="flex items-center gap-1.5 flex-wrap">
+                                <span
+                                  className={cn(
+                                    "font-medium text-sm",
+                                    activeStandard?.id === standard.id ? "text-primary" : ""
+                                  )}
+                                >
+                                  {standard.code}
+                                </span>
+                                <StandardTypeBadge
+                                  type={standard.standard_type || "assurance"}
+                                  className="text-[9px] px-1 py-0 h-4 leading-4"
+                                />
+                              </div>
+                              <span
+                                className={cn(
+                                  "text-xs truncate max-w-[150px] block",
+                                  activeStandard?.id === standard.id
+                                    ? "text-foreground"
+                                    : "text-muted-foreground"
+                                )}
+                              >
+                                {standard.title}
+                              </span>
+                            </div>
+                          </div>
+                          <div className="flex items-center flex-shrink-0">
+                            {getStatusIcon(getStandardStatus(standard))}
+                          </div>
+                        </Button>
+                      ))}
+                    </div>
+                  ))}
               </div>
             </CardContent>
           </Card>
@@ -1052,9 +1085,15 @@ export function AssessmentDetailPage() {
               <Card className="h-full">
                 <CardHeader className="pb-2">
                   <div className="flex items-center justify-between mb-2">
-                    <Badge variant="outline" className="text-primary border-primary">
-                      Standard {activeStandardIndex + 1} of {totalCount}
-                    </Badge>
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <Badge variant="outline" className="text-primary border-primary">
+                        Standard {activeStandardIndex + 1} of {totalCount}
+                      </Badge>
+                      <StandardTypeBadge
+                        type={activeStandard.standard_type || "assurance"}
+                        className="text-[10px] h-5 px-1.5 py-0.5"
+                      />
+                    </div>
                     <div className="flex items-center text-sm text-muted-foreground">
                       <Button 
                         variant="ghost" 
@@ -1654,6 +1693,7 @@ export function AssessmentDetailPage() {
                     <TableHeader>
                       <TableRow className="border-slate-200/60">
                         <TableHead className="w-12 text-center font-semibold text-slate-600">#</TableHead>
+                        <TableHead className="w-24 text-center font-semibold text-slate-600">Type</TableHead>
                         <TableHead className="font-semibold text-slate-600">Standard</TableHead>
                         <TableHead className="w-24 text-center font-semibold text-slate-600">Rating</TableHead>
                         <TableHead className="w-20 text-center font-semibold text-slate-600">Status</TableHead>
@@ -1673,6 +1713,13 @@ export function AssessmentDetailPage() {
                             <span className="text-sm font-medium text-slate-500">
                               {index + 1}
                             </span>
+                          </TableCell>
+
+                          <TableCell className="text-center">
+                            <StandardTypeBadge
+                              type={standard.standard_type || "assurance"}
+                              className="text-[10px] px-1.5 py-0.5"
+                            />
                           </TableCell>
 
                           <TableCell className="py-4">
