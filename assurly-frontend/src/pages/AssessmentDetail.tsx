@@ -303,6 +303,46 @@ export function AssessmentDetailPage() {
   const [saving, setSaving] = useState(false);
   const [showSuccessDialog, setShowSuccessDialog] = useState(false);
   const [activeStandardIndex, setActiveStandardIndex] = useState(0);
+
+  const standardsRatingInputs = useMemo(() => {
+    if (!assessment?.standards) return [];
+    return getSortedStandards(assessment.standards).map((s) => ({
+      rating: s.id ? ratings[s.id] ?? s.rating : s.rating,
+      standard_type: s.standard_type,
+    }));
+  }, [assessment?.standards, ratings]);
+
+  const overallAvg = useMemo(
+    () => calculateAverageRating(standardsRatingInputs),
+    [standardsRatingInputs]
+  );
+  const assuranceAvg = useMemo(
+    () =>
+      calculateAverageRating(
+        standardsRatingInputs.filter(
+          (s) => (s.standard_type || "assurance") === "assurance"
+        )
+      ),
+    [standardsRatingInputs]
+  );
+  const riskAvg = useMemo(
+    () =>
+      calculateAverageRating(
+        standardsRatingInputs.filter((s) => s.standard_type === "risk")
+      ),
+    [standardsRatingInputs]
+  );
+
+  const groupedStandards = useMemo(() => {
+    if (!assessment?.standards) return { assurance: [] as Standard[], risk: [] as Standard[] };
+    const sorted = getSortedStandards(assessment.standards);
+    return {
+      assurance: sorted.filter(
+        (s) => (s.standard_type || "assurance") === "assurance"
+      ),
+      risk: sorted.filter((s) => s.standard_type === "risk"),
+    };
+  }, [assessment?.standards]);
   
   // Edit mode state for completed assessments
   const [isEditMode, setIsEditMode] = useState(false);
@@ -1470,20 +1510,12 @@ export function AssessmentDetailPage() {
         <div className="space-y-6">
           {/* Compact Metrics Bar */}
           <Card className="border-slate-200/60">
-            <CardContent className="px-6 py-4">
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
+            <CardContent className="px-6 py-4 space-y-6">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                 <div className="flex items-center space-x-3">
                   <div className="h-10 w-10 rounded-lg bg-slate-100 flex items-center justify-center">
                     <span className="text-slate-700 font-semibold text-sm">
-                      {(() => {
-                        const averageRating = calculateAverageRating(
-                          assessment.standards.map((s) => ({
-                            rating: s.id ? ratings[s.id] ?? s.rating : s.rating,
-                            standard_type: s.standard_type,
-                          }))
-                        );
-                        return averageRating ? averageRating.toFixed(1) : '—';
-                      })()}
+                      {overallAvg != null ? overallAvg.toFixed(1) : "—"}
                     </span>
                   </div>
                   <div>
@@ -1492,6 +1524,32 @@ export function AssessmentDetailPage() {
                   </div>
                 </div>
 
+                <div className="flex items-center space-x-3">
+                  <div className="h-10 w-10 rounded-lg bg-green-50 border border-green-100 flex items-center justify-center">
+                    <span className="text-green-800 font-semibold text-sm">
+                      {assuranceAvg != null ? assuranceAvg.toFixed(1) : "—"}
+                    </span>
+                  </div>
+                  <div>
+                    <p className="text-xs text-green-700/70 font-medium">Average Score</p>
+                    <p className="text-sm font-semibold text-slate-900">Assurance Avg</p>
+                  </div>
+                </div>
+
+                <div className="flex items-center space-x-3">
+                  <div className="h-10 w-10 rounded-lg bg-red-50 border border-red-100 flex items-center justify-center">
+                    <span className="text-red-800 font-semibold text-sm">
+                      {riskAvg != null ? riskAvg.toFixed(1) : "—"}
+                    </span>
+                  </div>
+                  <div>
+                    <p className="text-xs text-red-700/70 font-medium">Average Score</p>
+                    <p className="text-sm font-semibold text-slate-900">Risk Avg</p>
+                  </div>
+                </div>
+              </div>
+
+              <div className="border-t border-slate-200/60 pt-4 grid grid-cols-2 md:grid-cols-4 gap-6">
                 <div className="flex items-center space-x-3">
                   <div className="h-10 w-10 rounded-lg bg-slate-100 flex items-center justify-center">
                     <span className="text-slate-700 font-semibold text-sm">
@@ -1560,113 +1618,147 @@ export function AssessmentDetailPage() {
             </CardContent>
           </Card>
 
-          {/* Enhanced Standards Table */}
+          {/* Enhanced Standards Table — grouped by standard type */}
           <Card className="border-slate-200/60">
-            <Table>
-              <TableHeader>
-                <TableRow className="border-slate-200/60">
-                  <TableHead className="w-12 text-center font-semibold text-slate-600">#</TableHead>
-                  <TableHead className="font-semibold text-slate-600">Standard</TableHead>
-                  <TableHead className="w-24 text-center font-semibold text-slate-600">Rating</TableHead>
-                  <TableHead className="w-20 text-center font-semibold text-slate-600">Status</TableHead>
-                  <TableHead className="w-80 font-semibold text-slate-600">Comments</TableHead>
-                  <TableHead className="w-20 font-semibold text-slate-600">Files</TableHead>
-                  <TableHead className="w-36 font-semibold text-slate-600">Updated by</TableHead>
-                  <TableHead className="w-24 text-right font-semibold text-slate-600">Updated</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {getSortedStandards(assessment.standards).map((standard, index) => (
-                  // Standard objects may carry extra API fields in aspect view
-                  <TableRow 
-                    key={standard.id} 
-                    className="border-slate-200/60 hover:bg-slate-50/50 transition-colors"
-                  >
-                    <TableCell className="text-center">
-                      <span className="text-sm font-medium text-slate-500">
-                        {index + 1}
-                      </span>
-                    </TableCell>
-                    
-                    <TableCell className="py-4">
-                      <div className="space-y-1">
-                        <h4 className="font-medium text-slate-900 leading-tight">
-                          {standard.title}
-                        </h4>
-                        <p className="text-sm text-slate-500 leading-relaxed">
-                          {standard.description}
-                        </p>
-                      </div>
-                    </TableCell>
-                    
-                    <TableCell className="text-center">
-                      {standard.rating && (
-                        <div className="flex justify-center">
-                          <div
-                            className={cn(
-                              "inline-flex items-center justify-center h-8 w-8 rounded-full text-sm font-semibold",
-                              getRagBadgeClasses(standard.rating, standard.standard_type)
-                            )}
-                          >
-                            {standard.rating}
-                          </div>
-                        </div>
+            {([
+              {
+                key: "assurance" as const,
+                title: "Assurance Standards",
+                standards: groupedStandards.assurance,
+                headerClass: "text-green-800",
+              },
+              {
+                key: "risk" as const,
+                title: "Risk Standards",
+                standards: groupedStandards.risk,
+                headerClass: "text-red-800",
+              },
+            ] as const)
+              .filter((section) => section.standards.length > 0)
+              .map((section, sectionIndex) => (
+                <div
+                  key={section.key}
+                  className={cn(sectionIndex > 0 && "border-t border-slate-200/60")}
+                >
+                  <div className="px-6 pt-4 pb-2">
+                    <h3
+                      className={cn(
+                        "text-sm font-medium text-slate-600",
+                        section.headerClass
                       )}
-                    </TableCell>
-                    
-                    <TableCell className="text-center">
-                      <div className="flex justify-center">
-                        {standard.rating ? (
-                          <div className="h-6 w-6 rounded-full bg-emerald-100 flex items-center justify-center">
-                            <CheckCircle className="h-4 w-4 text-emerald-600" />
-                          </div>
-                        ) : (
-                          <div className="h-6 w-6 rounded-full bg-slate-100 flex items-center justify-center">
-                            <Clock className="h-3 w-3 text-slate-400" />
-                          </div>
-                        )}
-                      </div>
-                    </TableCell>
-                    
-                    <TableCell>
-                      {standard.evidence ? (
-                        <EvidenceCell evidence={standard.evidence} />
-                      ) : (
-                        <span className="text-sm text-slate-400 italic">No comments provided</span>
-                      )}
-                    </TableCell>
-                    
-                    <TableCell className="text-center">
-                      <span className="text-sm text-slate-500">
-                        {standard.id ? (attachments[standard.id]?.length || 0) : 0}
-                      </span>
-                    </TableCell>
+                    >
+                      {section.title}
+                    </h3>
+                  </div>
+                  <Table>
+                    <TableHeader>
+                      <TableRow className="border-slate-200/60">
+                        <TableHead className="w-12 text-center font-semibold text-slate-600">#</TableHead>
+                        <TableHead className="font-semibold text-slate-600">Standard</TableHead>
+                        <TableHead className="w-24 text-center font-semibold text-slate-600">Rating</TableHead>
+                        <TableHead className="w-20 text-center font-semibold text-slate-600">Status</TableHead>
+                        <TableHead className="w-80 font-semibold text-slate-600">Comments</TableHead>
+                        <TableHead className="w-20 font-semibold text-slate-600">Files</TableHead>
+                        <TableHead className="w-36 font-semibold text-slate-600">Updated by</TableHead>
+                        <TableHead className="w-24 text-right font-semibold text-slate-600">Updated</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {section.standards.map((standard, index) => (
+                        <TableRow
+                          key={standard.id}
+                          className="border-slate-200/60 hover:bg-slate-50/50 transition-colors"
+                        >
+                          <TableCell className="text-center">
+                            <span className="text-sm font-medium text-slate-500">
+                              {index + 1}
+                            </span>
+                          </TableCell>
 
-                    <TableCell>
-                      <span className="text-sm text-slate-600">
-                        {(() => {
-                          const s: any = standard as any;
-                          return s.updated_by_name || s.assigned_to_name || "—";
-                        })()}
-                      </span>
-                    </TableCell>
-                    
-                    <TableCell className="text-right">
-                      <span className="text-sm text-slate-500">
-                        {(() => {
-                          const s: any = standard as any;
-                          const ts = s.last_updated || s.updated_at || s.updatedAt;
-                          if (!ts) return '—';
-                          const date = new Date(ts);
-                          if (Number.isNaN(date.getTime())) return '—';
-                          return date.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
-                        })()}
-                      </span>
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
+                          <TableCell className="py-4">
+                            <div className="space-y-1">
+                              <h4 className="font-medium text-slate-900 leading-tight">
+                                {standard.title}
+                              </h4>
+                              <p className="text-sm text-slate-500 leading-relaxed">
+                                {standard.description}
+                              </p>
+                            </div>
+                          </TableCell>
+
+                          <TableCell className="text-center">
+                            {standard.rating && (
+                              <div className="flex justify-center">
+                                <div
+                                  className={cn(
+                                    "inline-flex items-center justify-center h-8 w-8 rounded-full text-sm font-semibold",
+                                    getRagBadgeClasses(standard.rating, standard.standard_type)
+                                  )}
+                                >
+                                  {standard.rating}
+                                </div>
+                              </div>
+                            )}
+                          </TableCell>
+
+                          <TableCell className="text-center">
+                            <div className="flex justify-center">
+                              {standard.rating ? (
+                                <div className="h-6 w-6 rounded-full bg-emerald-100 flex items-center justify-center">
+                                  <CheckCircle className="h-4 w-4 text-emerald-600" />
+                                </div>
+                              ) : (
+                                <div className="h-6 w-6 rounded-full bg-slate-100 flex items-center justify-center">
+                                  <Clock className="h-3 w-3 text-slate-400" />
+                                </div>
+                              )}
+                            </div>
+                          </TableCell>
+
+                          <TableCell>
+                            {standard.evidence ? (
+                              <EvidenceCell evidence={standard.evidence} />
+                            ) : (
+                              <span className="text-sm text-slate-400 italic">No comments provided</span>
+                            )}
+                          </TableCell>
+
+                          <TableCell className="text-center">
+                            <span className="text-sm text-slate-500">
+                              {standard.id ? (attachments[standard.id]?.length || 0) : 0}
+                            </span>
+                          </TableCell>
+
+                          <TableCell>
+                            <span className="text-sm text-slate-600">
+                              {(() => {
+                                const s: any = standard as any;
+                                return s.updated_by_name || s.assigned_to_name || "—";
+                              })()}
+                            </span>
+                          </TableCell>
+
+                          <TableCell className="text-right">
+                            <span className="text-sm text-slate-500">
+                              {(() => {
+                                const s: any = standard as any;
+                                const ts = s.last_updated || s.updated_at || s.updatedAt;
+                                if (!ts) return "—";
+                                const date = new Date(ts);
+                                if (Number.isNaN(date.getTime())) return "—";
+                                return date.toLocaleDateString("en-GB", {
+                                  day: "numeric",
+                                  month: "short",
+                                });
+                              })()}
+                            </span>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
+              ))}
           </Card>
         </div>
       )}

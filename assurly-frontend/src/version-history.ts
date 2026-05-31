@@ -20,6 +20,23 @@ export type VersionRelease = {
 
 export const VERSION_HISTORY: VersionRelease[] = [
   {
+    version: "1.39",
+    buildDate: "2026-05-31",
+    entries: [
+      {
+        title: "Surface aspect and standard types",
+        description:
+          "Assessment detail and dashboard now show assurance/risk averages, grouped standards, and aspect category badges.",
+        bullets: [
+          "Assessment detail header shows Overall, Assurance Avg, and Risk Avg metric cards",
+          "Standards table grouped into Assurance and Risk sections with per-section numbering",
+          "Dashboard aspect rows show Strategic/Operational category badges",
+          "Retired Ofsted vocabulary removed from intervention tooltip and AI mock copy",
+        ],
+      },
+    ],
+  },
+  {
     version: "1.38",
     buildDate: "2026-05-31",
     entries: [

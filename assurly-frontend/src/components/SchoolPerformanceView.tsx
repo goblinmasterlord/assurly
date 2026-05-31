@@ -78,6 +78,7 @@ import {
 } from "@/utils/performance-bands";
 import { calculateAverageRating } from "@/utils/rating-labels";
 import { FilterBar } from "@/components/ui/filter-bar";
+import { AspectCategoryBadge } from "@/components/AspectCategoryBadge";
 import { getSchools, getAspects } from "@/services/assessment-service";
 import { assessmentService } from "@/services/enhanced-assessment-service";
 import { requestCache } from "@/lib/request-cache";
@@ -498,23 +499,6 @@ export function SchoolPerformanceView({ assessments, refreshAssessments, isLoadi
     }
   };
 
-  // Helper function - define before usage to avoid temporal dead zone
-  const getPerformanceTrend = (score: number, criticalCount: number) => {
-    if (score >= 3.5 && criticalCount === 0) {
-      return "Excellent";
-    } else if (score >= 3.0 && criticalCount <= 1) {
-      return "Strong";
-    } else if (score >= 2.5 && criticalCount <= 3) {
-      return "Good";
-    } else if (score >= 2.0 && criticalCount <= 5) {
-      return "Satisfactory";
-    } else if (score >= 1.5) {
-      return "Needs Attention";
-    } else {
-      return "Requires Attention";
-    }
-  };
-
   // Create filter options for multi-select components
   const performanceOptions: MultiSelectOption[] = PERFORMANCE_FILTER_OPTIONS;
 
@@ -570,15 +554,6 @@ export function SchoolPerformanceView({ assessments, refreshAssessments, isLoadi
     return map;
   }, [aspects]);
 
-  const formatAspectCategory = useCallback((category?: string) => {
-    if (!category) return "—";
-    const normalized = category.replace(/_/g, " ").toLowerCase();
-    return normalized
-      .split(" ")
-      .filter(Boolean)
-      .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
-      .join(" ");
-  }, []);
   const schoolOptions: MultiSelectOption[] = (schoolsDashboard?.schools ?? [])
     .filter((s) => s.school_name && s.school_id)
     .map((s) => ({
@@ -1481,7 +1456,6 @@ export function SchoolPerformanceView({ assessments, refreshAssessments, isLoadi
                                   {school.assessmentsByCategory.map((categoryData, catIndex) => {
                                     const aspectMeta = categoryValueToAspect.get((categoryData.category || '').toLowerCase());
                                     const aspectName = aspectMeta?.aspect_name || getAspectDisplayName(categoryData.category);
-                                    const aspectCategory = formatAspectCategory(aspectMeta?.aspect_category);
                                     const aspectCode = aspectMeta?.aspect_code;
                                     const metricKey = (schoolId && aspectCode && selectedUniqueTermId)
                                       ? `${schoolId}:${aspectCode}:${selectedUniqueTermId}`
@@ -1499,10 +1473,15 @@ export function SchoolPerformanceView({ assessments, refreshAssessments, isLoadi
                                             {getCategoryIcon(categoryData.category)}
                                           </div>
                                           <div className="min-w-0">
-                                            <p className="font-medium text-sm text-slate-900 leading-tight">{aspectName}</p>
-                                            <p className="text-xs text-slate-500 mt-0.5">
-                                              {aspectCategory}
-                                            </p>
+                                            <div className="flex items-center gap-2 flex-wrap">
+                                              <p className="font-medium text-sm text-slate-900 leading-tight">{aspectName}</p>
+                                              {aspectMeta?.aspect_category && (
+                                                <AspectCategoryBadge
+                                                  category={aspectMeta.aspect_category}
+                                                  className="text-[10px] h-5 px-1.5 py-0.5"
+                                                />
+                                              )}
+                                            </div>
                                           </div>
                                         </div>
                                       </TableCell>
@@ -1628,7 +1607,7 @@ export function SchoolPerformanceView({ assessments, refreshAssessments, isLoadi
                                               <div className="space-y-2">
                                                 <p className="font-medium text-sm">Requires attention</p>
                                                 <p className="text-xs leading-relaxed">
-                                                  This aspect has an overall score of {categoryData.overallScore.toFixed(1)}, indicating that one or more standards are rated as inadequate and require immediate attention.
+                                                  Standards rated 1 or 2 — showing critical or needs-improvement performance.
                                                 </p>
                                               </div>
                                             </TooltipContent>
