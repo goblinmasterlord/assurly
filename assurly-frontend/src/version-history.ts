@@ -20,6 +20,22 @@ export type VersionRelease = {
 
 export const VERSION_HISTORY: VersionRelease[] = [
   {
+    version: "1.38",
+    buildDate: "2026-05-31",
+    entries: [
+      {
+        title: "Dashboard aspect-metrics stability",
+        description:
+          "Fixed an effect loop that could freeze the MAT dashboard when expanding a school row after a rating save.",
+        bullets: [
+          "Aspect row prefetch no longer depends on metrics state in useCallback",
+          "Cache invalidation clears only the affected aspect metric keys",
+          "Assessment detail keyboard save uses the current handleSave handler",
+        ],
+      },
+    ],
+  },
+  {
     version: "1.37",
     buildDate: "2026-05-31",
     entries: [

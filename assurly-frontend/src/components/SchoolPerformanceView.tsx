@@ -1,4 +1,4 @@
-import React, { useMemo, useState, useEffect, useTransition, useCallback } from "react";
+import React, { useMemo, useState, useEffect, useTransition, useCallback, useRef } from "react";
 import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -82,6 +82,18 @@ import { getSchools, getAspects } from "@/services/assessment-service";
 import { assessmentService } from "@/services/enhanced-assessment-service";
 import { requestCache } from "@/lib/request-cache";
 import type { Aspect } from "@/types/assessment";
+
+/** Maps request-cache key `aspect_<code>_<school>_<term>:` to UI metrics key `<school>:<code>:<term>`. */
+function aspectCacheKeyToMetricKey(cacheKey: string): string | null {
+  if (!cacheKey.startsWith("aspect_")) return null;
+  const body = cacheKey.endsWith(":") ? cacheKey.slice(0, -1) : cacheKey;
+  const segments = body.slice("aspect_".length).split("_");
+  if (segments.length < 3) return null;
+  const aspectCode = segments[0];
+  const termId = segments[segments.length - 1];
+  const schoolId = segments.slice(1, -1).join("_");
+  return `${schoolId}:${aspectCode}:${termId}`;
+}
 import type { AssessmentByAspect, Rating, AssessmentStatus } from "@/types/assessment";
 import { useOptimisticFilter } from "@/hooks/use-optimistic-filter";
 import { useInlineLoading } from "@/hooks/use-inline-loading";
@@ -179,6 +191,8 @@ export function SchoolPerformanceView({ assessments, refreshAssessments, isLoadi
   };
 
   const [aspectRowMetrics, setAspectRowMetrics] = useState<Record<string, AspectRowMetrics>>({});
+  const loadedAspectMetricKeysRef = useRef<Set<string>>(new Set());
+  const inFlightAspectMetricKeysRef = useRef<Set<string>>(new Set());
 
   const formatStatus = useCallback((status: string): string => {
     // Accept DB formats: not_started / in_progress / completed
@@ -248,17 +262,40 @@ export function SchoolPerformanceView({ assessments, refreshAssessments, isLoadi
     void loadDashboard();
   }, [loadDashboard]);
 
-  // Refetch dashboard / clear aspect metrics when rating saves invalidate caches
+  // Refetch dashboard / drop invalidated aspect metrics when rating saves clear caches
   useEffect(() => {
-    return requestCache.subscribePrefixInvalidation((prefix) => {
+    return requestCache.subscribePrefixInvalidation((prefix, deletedKeys) => {
       if (prefix.startsWith("dashboard_schools")) {
         void loadDashboard();
       }
       if (prefix.startsWith("aspect_")) {
-        setAspectRowMetrics({});
+        const metricKeysToDrop = new Set<string>();
+        for (const cacheKey of deletedKeys) {
+          const metricKey = aspectCacheKeyToMetricKey(cacheKey);
+          if (metricKey) metricKeysToDrop.add(metricKey);
+        }
+        if (metricKeysToDrop.size === 0) return;
+
+        for (const metricKey of metricKeysToDrop) {
+          loadedAspectMetricKeysRef.current.delete(metricKey);
+          inFlightAspectMetricKeysRef.current.delete(metricKey);
+        }
+        setAspectRowMetrics((prev) => {
+          const next = { ...prev };
+          for (const metricKey of metricKeysToDrop) {
+            delete next[metricKey];
+          }
+          return next;
+        });
       }
     });
   }, [loadDashboard]);
+
+  useEffect(() => {
+    loadedAspectMetricKeysRef.current.clear();
+    inFlightAspectMetricKeysRef.current.clear();
+    setAspectRowMetrics({});
+  }, [selectedUniqueTermId]);
 
   const dashboardBySchoolId = useMemo(() => {
     const entries = schoolsDashboard?.schools?.map((s) => [s.school_id, s] as const) ?? [];
@@ -761,35 +798,60 @@ export function SchoolPerformanceView({ assessments, refreshAssessments, isLoadi
 
       const key = `${schoolId}:${aspectCode}:${selectedUniqueTermId}`;
 
-      const current = await assessmentService.getAssessmentsByAspect(aspectCode, schoolId, selectedUniqueTermId);
-      const current_score = computeAvgScore(current);
-      const intervention_required = computeInterventionRequired(current);
-      const last_updated = computeLastUpdated(current);
+      if (
+        loadedAspectMetricKeysRef.current.has(key) ||
+        inFlightAspectMetricKeysRef.current.has(key)
+      ) {
+        return;
+      }
+      inFlightAspectMetricKeysRef.current.add(key);
 
-      const previous_terms = await Promise.all(previousUniqueTerms.map(async (termId) => {
-        const resp = await assessmentService.getAssessmentsByAspect(aspectCode, schoolId, termId);
-        return {
-          term_id: resp.term_id,
-          academic_year: resp.academic_year,
-          avg_score: computeAvgScore(resp),
-        };
-      }));
+      try {
+        const current = await assessmentService.getAssessmentsByAspect(
+          aspectCode,
+          schoolId,
+          selectedUniqueTermId
+        );
+        const current_score = computeAvgScore(current);
+        const intervention_required = computeInterventionRequired(current);
+        const last_updated = computeLastUpdated(current);
 
-      setAspectRowMetrics(prev => ({
-        ...prev,
-        [key]: {
-          status: current.status as any,
-          current_score,
-          previous_terms,
-          intervention_required,
-          completed_standards: current.completed_standards,
-          total_standards: current.total_standards,
-          last_updated,
-        }
-      }));
+        const previous_terms = await Promise.all(
+          previousUniqueTerms.map(async (termId) => {
+            const resp = await assessmentService.getAssessmentsByAspect(
+              aspectCode,
+              schoolId,
+              termId
+            );
+            return {
+              term_id: resp.term_id,
+              academic_year: resp.academic_year,
+              avg_score: computeAvgScore(resp),
+            };
+          })
+        );
+
+        setAspectRowMetrics((prev) => {
+          if (prev[key]) return prev;
+          return {
+            ...prev,
+            [key]: {
+              status: current.status as AspectRowMetrics["status"],
+              current_score,
+              previous_terms,
+              intervention_required,
+              completed_standards: current.completed_standards,
+              total_standards: current.total_standards,
+              last_updated,
+            },
+          };
+        });
+        loadedAspectMetricKeysRef.current.add(key);
+      } finally {
+        inFlightAspectMetricKeysRef.current.delete(key);
+      }
     }));
   }, [
-    aspectRowMetrics,
     availableTerms,
     categoryValueToAspect,
     computeAvgScore,

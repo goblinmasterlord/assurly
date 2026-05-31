@@ -48,7 +48,9 @@ class RequestCache {
   private cache = new Map<string, CacheEntry<any>>();
   private pendingRequests = new Map<string, Promise<any>>();
   private subscribers = new Map<string, Set<(data: any) => void>>();
-  private prefixInvalidationListeners = new Set<(prefix: string) => void>();
+  private prefixInvalidationListeners = new Set<
+    (prefix: string, deletedKeys: string[]) => void
+  >();
 
   // Generate cache key from request parameters
   private generateKey(type: string, params?: Record<string, any>): string {
@@ -231,7 +233,7 @@ class RequestCache {
       if (DEBUG_CACHE) console.log(`🗑️  Invalidated ${keysToDelete.length} cache entries with prefix: ${prefix}`);
       this.prefixInvalidationListeners.forEach((callback) => {
         try {
-          callback(prefix);
+          callback(prefix, keysToDelete);
         } catch (error) {
           console.error('Prefix invalidation listener error:', error);
         }
@@ -239,7 +241,9 @@ class RequestCache {
     }
   }
 
-  subscribePrefixInvalidation(callback: (prefix: string) => void): () => void {
+  subscribePrefixInvalidation(
+    callback: (prefix: string, deletedKeys: string[]) => void
+  ): () => void {
     this.prefixInvalidationListeners.add(callback);
     return () => {
       this.prefixInvalidationListeners.delete(callback);

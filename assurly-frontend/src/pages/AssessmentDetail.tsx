@@ -361,6 +361,68 @@ export function AssessmentDetailPage() {
     });
   };
 
+  const handleRatingChange = useCallback((standardId: string, value: Rating) => {
+    setRatings((prev) => ({
+      ...prev,
+      [standardId]: value,
+    }));
+  }, []);
+
+  const handleSave = useCallback(async () => {
+    if (!assessment || !id) return;
+
+    setSaving(true);
+    try {
+      const standardsWithData = new Set<string>();
+
+      Object.entries(ratings).forEach(([standardId, rating]) => {
+        if (rating !== null) {
+          standardsWithData.add(standardId);
+        }
+      });
+
+      Object.entries(evidence).forEach(([standardId, evidenceText]) => {
+        if (evidenceText && evidenceText.trim().length > 0) {
+          standardsWithData.add(standardId);
+        }
+      });
+
+      const standards = Array.from(standardsWithData).map((standardId) => ({
+        standardId,
+        rating: ratings[standardId] || null,
+        evidence: evidence[standardId] || "",
+      }));
+
+      if (standards.length === 0) {
+        toast({
+          title: "Nothing to save",
+          description:
+            "Please add a rating or evidence to at least one standard before saving.",
+          variant: "destructive",
+        });
+        return;
+      }
+
+      await submitAssessment(standards);
+      await refreshAssessment();
+
+      toast({
+        title: "Progress saved",
+        description: `Successfully saved progress for ${standards.length} standard${standards.length > 1 ? "s" : ""}`,
+        variant: "default",
+      });
+    } catch (error) {
+      console.error("Save error:", error);
+      toast({
+        title: "Save failed",
+        description: "There was an error saving your progress. Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setSaving(false);
+    }
+  }, [assessment, id, ratings, evidence, submitAssessment, refreshAssessment, toast]);
+
   const handleSaveEdit = async () => {
     await handleSave();
     setIsEditMode(false);
@@ -370,35 +432,39 @@ export function AssessmentDetailPage() {
       description: "Your changes have been saved successfully.",
     });
   };
-  
-  // Add keyboard navigation
+
+  const canEditForShortcuts =
+    !!assessment &&
+    (role === "department-head" || role === "mat-admin") &&
+    (assessment.status !== "completed" || isEditMode);
+
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      // Only activate keyboard shortcuts when we're in the assessment detail view
-      if (!activeStandard || !canEdit) return;
-      
-      // Don't trigger shortcuts when typing in input fields
-      const target = e.target as HTMLElement;
-      const isTyping = target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable;
+      if (!activeStandard || !canEditForShortcuts) return;
 
-      // Arrow right or Cmd/Ctrl+J: Next standard
+      const target = e.target as HTMLElement;
+      const isTyping =
+        target.tagName === "INPUT" ||
+        target.tagName === "TEXTAREA" ||
+        target.isContentEditable;
+
       if (e.key === "ArrowRight" || (e.key.toLowerCase() === "j" && (e.ctrlKey || e.metaKey))) {
         e.preventDefault();
         goToNextStandard();
-      }
-      // Arrow left or Cmd/Ctrl+K: Previous standard
-      else if (e.key === "ArrowLeft" || (e.key.toLowerCase() === "k" && (e.ctrlKey || e.metaKey))) {
+      } else if (e.key === "ArrowLeft" || (e.key.toLowerCase() === "k" && (e.ctrlKey || e.metaKey))) {
         e.preventDefault();
         goToPreviousStandard();
-      }
-      // Numbers 1-4: Set rating for current standard (only when not typing)
-      else if (!isTyping && ["1", "2", "3", "4"].includes(e.key) && !e.ctrlKey && !e.metaKey && activeStandard?.id) {
-        handleRatingChange(activeStandard.id, parseInt(e.key) as Rating);
-      }
-      // Cmd/Ctrl+S: Save progress
-      else if (e.key.toLowerCase() === "s" && (e.ctrlKey || e.metaKey)) {
-        e.preventDefault(); // Prevent browser save dialog
-        handleSave();
+      } else if (
+        !isTyping &&
+        ["1", "2", "3", "4"].includes(e.key) &&
+        !e.ctrlKey &&
+        !e.metaKey &&
+        activeStandard?.id
+      ) {
+        handleRatingChange(activeStandard.id, parseInt(e.key, 10) as Rating);
+      } else if (e.key.toLowerCase() === "s" && (e.ctrlKey || e.metaKey)) {
+        e.preventDefault();
+        void handleSave();
       }
     };
 
@@ -406,7 +472,14 @@ export function AssessmentDetailPage() {
     return () => {
       window.removeEventListener("keydown", handleKeyDown);
     };
-  }, [activeStandard, activeStandardIndex, assessment, role]);
+  }, [
+    activeStandard,
+    canEditForShortcuts,
+    goToNextStandard,
+    goToPreviousStandard,
+    handleRatingChange,
+    handleSave,
+  ]);
 
   // Update the UI for keyboard shortcuts help
   const keyboardShortcuts = [
@@ -462,13 +535,6 @@ export function AssessmentDetailPage() {
   const completedCount = Object.values(ratings).filter(r => r !== null).length;
   const totalCount = assessment.standards?.length || 0;
   const progressPercentage = totalCount > 0 ? (completedCount / totalCount) * 100 : 0;
-  
-  const handleRatingChange = (standardId: string, value: Rating) => {
-    setRatings(prev => ({
-      ...prev,
-      [standardId]: value,
-    }));
-  };
   
   const handleEvidenceChange = (standardId: string, value: string) => {
     setEvidence(prev => ({
@@ -594,64 +660,6 @@ export function AssessmentDetailPage() {
     }
   };
   
-  const handleSave = async () => {
-    if (!assessment || !id) return;
-    
-    setSaving(true);
-    try {
-      // Get all standard IDs that have either a rating or evidence
-      const standardsWithData = new Set<string>();
-      
-      // Add standards with ratings
-      Object.entries(ratings).forEach(([standardId, rating]) => {
-        if (rating !== null) {
-          standardsWithData.add(standardId);
-        }
-      });
-      
-      // Add standards with evidence
-      Object.entries(evidence).forEach(([standardId, evidenceText]) => {
-        if (evidenceText && evidenceText.trim().length > 0) {
-          standardsWithData.add(standardId);
-        }
-      });
-
-      // Convert to the format expected by the API
-      const standards = Array.from(standardsWithData).map(standardId => ({
-        standardId,
-        rating: ratings[standardId] || null, // null is allowed by the API
-        evidence: evidence[standardId] || '',
-      }));
-
-      if (standards.length === 0) {
-        toast({
-          title: "Nothing to save",
-          description: "Please add a rating or evidence to at least one standard before saving.",
-          variant: "destructive",
-        });
-        return;
-      }
-
-      await submitAssessment(standards);
-      await refreshAssessment();
-
-      toast({
-        title: "Progress saved",
-        description: `Successfully saved progress for ${standards.length} standard${standards.length > 1 ? 's' : ''}`,
-        variant: "default",
-      });
-    } catch (error) {
-      console.error('Save error:', error);
-      toast({
-        title: "Save failed",
-        description: "There was an error saving your progress. Please try again.",
-        variant: "destructive",
-      });
-    } finally {
-      setSaving(false);
-    }
-  };
-  
   const handleSubmit = async () => {
     if (!assessment || !id) return;
     
@@ -734,8 +742,8 @@ export function AssessmentDetailPage() {
 
   const isCompleted = progressPercentage === 100;
   const canSubmit = isCompleted && (role === "department-head" || role === "mat-admin") && (assessment.status !== "completed" || isEditMode);
-  const canEdit = (role === "department-head" || role === "mat-admin") && (assessment.status !== "completed" || isEditMode);
-  
+  const canEdit = canEditForShortcuts;
+
   return (
     <div className="container max-w-7xl py-6 md:py-10">
       <div className="flex flex-wrap items-center justify-between gap-4 mb-6">
