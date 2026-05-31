@@ -76,7 +76,7 @@ import {
   scoreMatchesPerformanceFilter,
   type PerformanceBandId,
 } from "@/utils/performance-bands";
-import { calculatePolarityAwareAverage } from "@/utils/rating-labels";
+import { calculateAverageRating } from "@/utils/rating-labels";
 import { FilterBar } from "@/components/ui/filter-bar";
 import { getSchools, getAspects } from "@/services/assessment-service";
 import { getSchoolsDashboard } from "@/services/dashboard-service";
@@ -256,7 +256,7 @@ export function SchoolPerformanceView({ assessments, refreshAssessments, isLoadi
   }, [schoolsDashboard]);
 
   const computeAvgScore = useCallback((data: AssessmentByAspect): number | null => {
-    return calculatePolarityAwareAverage(data.standards);
+    return calculateAverageRating(data.standards);
   }, []);
 
   const computeInterventionRequired = useCallback((data: AssessmentByAspect): number => {

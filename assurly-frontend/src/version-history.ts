@@ -20,6 +20,21 @@ export type VersionRelease = {
 
 export const VERSION_HISTORY: VersionRelease[] = [
   {
+    version: "1.35",
+    buildDate: "2026-05-29",
+    entries: [
+      {
+        title: "Unified rating averages",
+        description:
+          "Frontend score averages now use plain 1–4 means, matching the backend after the unified scale convention (4 = best for assurance and risk).",
+        bullets: [
+          "Removed risk rating inversion from client-side average calculations",
+          "Aspect and analytics averages align with backend current_score",
+        ],
+      },
+    ],
+  },
+  {
     version: "1.34",
     buildDate: "2026-05-29",
     entries: [

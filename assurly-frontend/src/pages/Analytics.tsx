@@ -33,7 +33,7 @@ import {
 } from "recharts";
 import { useAssessments, useSchools } from "@/hooks/use-assessments";
 import type { Assessment, AssessmentCategory, School } from "@/types/assessment";
-import { calculatePolarityAwareAverage } from "@/utils/rating-labels";
+import { calculateAverageRating } from "@/utils/rating-labels";
 import { TermStepper } from "@/components/ui/term-stepper";
 
 // Professional education sector color scheme
@@ -221,7 +221,7 @@ export function AnalyticsPage() {
     // NOTE: Assessment summaries don't include standards array, use overallScore field
     const calculateAssessmentScore = (assessment: Assessment): number => {
       if (assessment.standards && assessment.standards.length > 0) {
-        return calculatePolarityAwareAverage(assessment.standards) ?? 0;
+        return calculateAverageRating(assessment.standards) ?? 0;
       }
 
       return assessment.overallScore || 0;

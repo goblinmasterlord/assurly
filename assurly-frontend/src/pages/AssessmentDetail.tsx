@@ -88,7 +88,7 @@ import {
   RATING_OPTIONS,
   getRatingLabel,
   getRatingDescription,
-  calculatePolarityAwareAverage,
+  calculateAverageRating,
 } from "@/utils/rating-labels";
 
 type StandardWithAssessmentId = Standard & { assessment_id?: string };
@@ -1505,7 +1505,7 @@ export function AssessmentDetailPage() {
                   <div className="h-10 w-10 rounded-lg bg-slate-100 flex items-center justify-center">
                     <span className="text-slate-700 font-semibold text-sm">
                       {(() => {
-                        const averageRating = calculatePolarityAwareAverage(
+                        const averageRating = calculateAverageRating(
                           assessment.standards.map((s) => ({
                             rating: s.id ? ratings[s.id] ?? s.rating : s.rating,
                             standard_type: s.standard_type,

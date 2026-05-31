@@ -55,27 +55,16 @@ export function getRatingDescription(
   return descriptions[rating];
 }
 
-/** Convert a raw rating to assurance-equivalent value for averaging mixed polarities. */
-export function ratingForAverage(
-  rating: number,
-  standardType?: StandardType
-): number {
-  if (standardType === 'risk') return 5 - rating;
-  return rating;
-}
-
-export function calculatePolarityAwareAverage(
+/** Plain average of rated standards on the unified 1–4 scale (4 = best for all types). */
+export function calculateAverageRating(
   standards: Array<{ rating?: number | null; standard_type?: StandardType }>
 ): number | null {
-  const rated = standards.filter(
-    (s): s is { rating: number; standard_type?: StandardType } =>
-      s.rating != null && isRatedValue(s.rating)
-  );
-  if (rated.length === 0) return null;
+  const ratings = standards
+    .map((s) => s.rating)
+    .filter((rating): rating is number => rating != null && isRatedValue(rating));
 
-  const sum = rated.reduce(
-    (acc, s) => acc + ratingForAverage(s.rating, s.standard_type),
-    0
-  );
-  return Math.round((sum / rated.length) * 10) / 10;
+  if (ratings.length === 0) return null;
+
+  const sum = ratings.reduce((acc, rating) => acc + rating, 0);
+  return Math.round((sum / ratings.length) * 10) / 10;
 }

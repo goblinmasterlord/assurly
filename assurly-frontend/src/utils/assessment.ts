@@ -2,9 +2,11 @@
 
 import type { Assessment, AssessmentGroup, AssessmentStatus, AssessmentStandard, AssessmentByAspect } from '../types/assessment';
 import {
-  calculatePolarityAwareAverage,
+  calculateAverageRating,
   getRatingLabel as getPolarityRatingLabel,
 } from './rating-labels';
+
+export { calculateAverageRating } from './rating-labels';
 
 /**
  * Check if an assessment is overdue
@@ -70,14 +72,6 @@ export function calculateProgress(group: AssessmentGroup | AssessmentByAspect): 
     if (group.total_standards === 0) return 0;
     return Math.round((group.completed_standards / group.total_standards) * 100);
 }
-
-/**
- * Calculate average rating from assessment standards
- */
-export function calculateAverageRating(standards: AssessmentStandard[]): number | null {
-    return calculatePolarityAwareAverage(standards);
-}
-
 /** @deprecated Prefer getRatingLabel from @/utils/rating-labels with standardType */
 export function getRatingLabel(rating: number | null, standardType?: AssessmentStandard['standard_type']): string {
     return getPolarityRatingLabel(rating, standardType);
