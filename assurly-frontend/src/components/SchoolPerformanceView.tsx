@@ -79,6 +79,7 @@ import {
 import { calculateAverageRating } from "@/utils/rating-labels";
 import { FilterBar } from "@/components/ui/filter-bar";
 import { AspectCategoryBadge } from "@/components/AspectCategoryBadge";
+import { loadDashboardPrefs, saveDashboardPrefs } from "@/lib/dashboard-prefs";
 import { getSchools, getAspects } from "@/services/assessment-service";
 import { assessmentService } from "@/services/enhanced-assessment-service";
 import { requestCache } from "@/lib/request-cache";
@@ -164,7 +165,9 @@ export function SchoolPerformanceView({ assessments, refreshAssessments, isLoadi
   });
   const [invitationSheetOpen, setInvitationSheetOpen] = useState(false);
   const [expandedSchools, setExpandedSchools] = useState<Set<string>>(new Set());
-  const [selectedTerm, setSelectedTerm] = useState<string>("");
+  const [selectedTerm, setSelectedTerm] = useState<string>(
+    () => loadDashboardPrefs().selectedTerm ?? ""
+  );
   const [sortConfig, setSortConfig] = useState<{ key: string; direction: SortDirection }>({
     key: "",
     direction: null
@@ -173,7 +176,9 @@ export function SchoolPerformanceView({ assessments, refreshAssessments, isLoadi
   const [schoolsLoading, setSchoolsLoading] = useState(true);
   const [aspects, setAspects] = useState<Aspect[]>([]);
   const [aspectsLoading, setAspectsLoading] = useState(true);
-  const [dashboardView, setDashboardView] = useState<"school" | "trust">("school");
+  const [dashboardView, setDashboardView] = useState<"school" | "trust">(
+    () => loadDashboardPrefs().dashboardView ?? "school"
+  );
   const [schoolsDashboard, setSchoolsDashboard] = useState<SchoolsDashboardResponse | null>(null);
   const [dashboardLoading, setDashboardLoading] = useState(false);
   const [dashboardError, setDashboardError] = useState<string | null>(null);
@@ -360,19 +365,18 @@ export function SchoolPerformanceView({ assessments, refreshAssessments, isLoadi
     return terms;
   }, [assessments]);
 
-  // Always keep selection on the latest term when the term set refreshes.
-  // Users can still change the dropdown, but any data refresh that changes the
-  // available term list will snap back to the latest.
+  // Default to latest term only when nothing is saved or the saved term is invalid.
   useEffect(() => {
-    if (availableTerms.length > 0) {
-      const firstTerm = availableTerms[0];
-      if (selectedTerm !== firstTerm) setSelectedTerm(firstTerm);
-    }
-  }, [availableTerms]);
-  
-  // Term selection (dropdown)
+    if (availableTerms.length === 0) return;
+    if (selectedTerm && availableTerms.includes(selectedTerm)) return;
+    const nextTerm = availableTerms[0];
+    setSelectedTerm(nextTerm);
+    saveDashboardPrefs({ selectedTerm: nextTerm });
+  }, [availableTerms, selectedTerm]);
+
   const handleTermChange = (term: string) => {
     setSelectedTerm(term);
+    saveDashboardPrefs({ selectedTerm: term });
   };
 
   // Filter assessments by selected term
@@ -1044,6 +1048,7 @@ export function SchoolPerformanceView({ assessments, refreshAssessments, isLoadi
                     onValueChange={(v) => {
                       const next = v as "school" | "trust";
                       setDashboardView(next);
+                      saveDashboardPrefs({ dashboardView: next });
                       // Clear school filter whenever the view changes to avoid filtering out newly fetched rows.
                       if (filters.school.length > 0 || optimisticFilters.school.length > 0) {
                         handleSchoolFilterChange([]);
@@ -1052,7 +1057,7 @@ export function SchoolPerformanceView({ assessments, refreshAssessments, isLoadi
                   >
                     <TabsList className="h-10">
                       <TabsTrigger value="school">Schools</TabsTrigger>
-                      <TabsTrigger value="trust">Central Team</TabsTrigger>
+                      <TabsTrigger value="trust">Trust</TabsTrigger>
                     </TabsList>
                   </Tabs>
                 <Select value={selectedTerm} onValueChange={handleTermChange}>

@@ -20,6 +20,25 @@ export type VersionRelease = {
 
 export const VERSION_HISTORY: VersionRelease[] = [
   {
+    version: "1.40",
+    buildDate: "2026-06-01",
+    entries: [
+      {
+        title: "Assessment header, labels, and dashboard persistence",
+        description:
+          "Clearer assessment context on detail pages, renamed assurance labels, and dashboard filters that stick when navigating back from an assessment.",
+        bullets: [
+          "Strategic/Operational badge on assessment header; status and completion moved to the right",
+          "Schools/Trust toggle and term selection persist when returning from an assessment",
+          "Central Team tab renamed to Trust",
+          "Admin overview shows per-standard action counts with highlight when actions exist",
+          "Assurance rating labels updated: Not assured, Partially assured, Assured (Highly assured unchanged)",
+          "Risk RAG colours aligned with assurance (higher score = greener)",
+        ],
+      },
+    ],
+  },
+  {
     version: "1.39",
     buildDate: "2026-05-31",
     entries: [

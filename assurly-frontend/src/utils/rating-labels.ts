@@ -5,9 +5,9 @@ export type RatedValue = 1 | 2 | 3 | 4;
 export const RATING_OPTIONS: RatedValue[] = [1, 2, 3, 4];
 
 const ASSURANCE_LABELS: Record<RatedValue, string> = {
-  1: 'Inadequate',
-  2: 'Needs work',
-  3: 'Good',
+  1: 'Not assured',
+  2: 'Partially assured',
+  3: 'Assured',
   4: 'Highly assured',
 };
 
@@ -20,7 +20,7 @@ const RISK_LABELS: Record<RatedValue, string> = {
 
 const ASSURANCE_DESCRIPTIONS: Record<RatedValue, string> = {
   1: 'Significant concern requiring immediate action',
-  2: 'Areas identified for development',
+  2: 'Areas required for action',
   3: 'Performance meeting expected standards',
   4: 'Practices exceeding expectations',
 };

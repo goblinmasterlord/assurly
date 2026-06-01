@@ -50,7 +50,9 @@ import {
   User,
   XCircle,
 } from "lucide-react";
-import { type Rating, type Standard, type Assessment, type FileAttachment, type StandardType } from "@/types/assessment";
+import { type Rating, type Standard, type Assessment, type FileAttachment, type StandardType, type Aspect, type AspectCategory } from "@/types/assessment";
+import { getAspects } from "@/services/assessment-service";
+import { AspectCategoryBadge } from "@/components/AspectCategoryBadge";
 import {
   Tooltip,
   TooltipContent,
@@ -223,6 +225,22 @@ export function AssessmentDetailPage() {
   const relatedAssessments: Assessment[] = [];
   
   const [activeStandard, setActiveStandard] = useState<Standard | null>(null);
+  const [aspects, setAspects] = useState<Aspect[]>([]);
+
+  useEffect(() => {
+    getAspects()
+      .then(setAspects)
+      .catch((err) => console.error("Failed to load aspects:", err));
+  }, []);
+
+  const aspectCategory = useMemo((): AspectCategory | undefined => {
+    if (!assessment) return undefined;
+    const code = (assessment.aspect_code || assessment.category || "").toUpperCase();
+    const meta = aspects.find(
+      (a) => a.aspect_code.toUpperCase() === code
+    );
+    return meta?.aspect_category;
+  }, [assessment, aspects]);
 
   // Update activeStandard when assessment loads
   useEffect(() => {
@@ -880,39 +898,15 @@ export function AssessmentDetailPage() {
               </div>
             </div>
             
-            {/* Status and Progress */}
-            <div className="flex items-center gap-4 mt-4">
-              <Badge 
-                className={cn(
-                  "px-3 py-1 text-sm font-medium border",
-                  assessment.status === "completed" && "bg-emerald-100 text-emerald-700 border-emerald-200",
-                  assessment.status === "in_progress" && "bg-blue-100 text-blue-700 border-blue-200",
-                  assessment.status === "not_started" && "bg-slate-100 text-slate-700 border-slate-200",
-                  isOverdue(assessment) && "bg-red-100 text-red-700 border-red-200"
-                )}
-              >
-                {formatStatus(assessment.status)}
-              </Badge>
-              
-              <div className="flex items-center gap-2">
-                <div className="w-16 h-2 bg-slate-100 rounded-full overflow-hidden">
-                  <div
-                    className={cn(
-                      "h-full transition-all duration-300",
-                      progressPercentage === 100 ? "bg-emerald-500" : "bg-slate-400"
-                    )}
-                    style={{ width: `${progressPercentage}%` }}
-                  />
-                </div>
-                <span className="text-sm font-medium text-slate-700">
-                  {completedCount}/{totalCount}
-                </span>
+            {aspectCategory && (
+              <div className="mt-4">
+                <AspectCategoryBadge category={aspectCategory} />
               </div>
-            </div>
+            )}
           </div>
           
           {/* Metadata Grid */}
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 lg:gap-6 min-w-0 lg:min-w-[400px]">
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4 lg:gap-6 min-w-0 lg:min-w-[480px]">
             {assessment.assignedTo && assessment.assignedTo.length > 0 && (
               <div className="flex items-center gap-2">
                 <div className="h-8 w-8 rounded-lg bg-slate-100 flex items-center justify-center flex-shrink-0">
@@ -967,6 +961,53 @@ export function AssessmentDetailPage() {
                     : "Never"
                   }
                 </p>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <div className="h-8 w-8 rounded-lg bg-slate-100 flex items-center justify-center flex-shrink-0">
+                <CheckCircle className="h-4 w-4 text-slate-600" />
+              </div>
+              <div className="min-w-0">
+                <p className="text-xs font-medium text-slate-500 uppercase tracking-wide">
+                  Status
+                </p>
+                <Badge
+                  className={cn(
+                    "mt-0.5 px-2 py-0.5 text-xs font-medium border",
+                    assessment.status === "completed" && "bg-emerald-100 text-emerald-700 border-emerald-200",
+                    assessment.status === "in_progress" && "bg-blue-100 text-blue-700 border-blue-200",
+                    assessment.status === "not_started" && "bg-slate-100 text-slate-700 border-slate-200",
+                    isOverdue(assessment) && "bg-red-100 text-red-700 border-red-200"
+                  )}
+                >
+                  {formatStatus(assessment.status)}
+                </Badge>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <div className="h-8 w-8 rounded-lg bg-slate-100 flex items-center justify-center flex-shrink-0">
+                <ClipboardCheck className="h-4 w-4 text-slate-600" />
+              </div>
+              <div className="min-w-0">
+                <p className="text-xs font-medium text-slate-500 uppercase tracking-wide">
+                  Completion
+                </p>
+                <div className="flex items-center gap-2 mt-0.5">
+                  <div className="w-14 h-2 bg-slate-100 rounded-full overflow-hidden">
+                    <div
+                      className={cn(
+                        "h-full transition-all duration-300",
+                        progressPercentage === 100 ? "bg-emerald-500" : "bg-slate-400"
+                      )}
+                      style={{ width: `${progressPercentage}%` }}
+                    />
+                  </div>
+                  <span className="text-sm font-medium text-slate-900">
+                    {completedCount}/{totalCount}
+                  </span>
+                </div>
               </div>
             </div>
           </div>
@@ -1699,6 +1740,7 @@ export function AssessmentDetailPage() {
                         <TableHead className="w-20 text-center font-semibold text-slate-600">Status</TableHead>
                         <TableHead className="w-80 font-semibold text-slate-600">Comments</TableHead>
                         <TableHead className="w-20 font-semibold text-slate-600">Files</TableHead>
+                        <TableHead className="w-20 text-center font-semibold text-slate-600">Actions</TableHead>
                         <TableHead className="w-36 font-semibold text-slate-600">Updated by</TableHead>
                         <TableHead className="w-24 text-right font-semibold text-slate-600">Updated</TableHead>
                       </TableRow>
@@ -1774,6 +1816,26 @@ export function AssessmentDetailPage() {
                             <span className="text-sm text-slate-500">
                               {standard.id ? (attachments[standard.id]?.length || 0) : 0}
                             </span>
+                          </TableCell>
+
+                          <TableCell className="text-center">
+                            {(() => {
+                              const actionCount = standard.id
+                                ? (actions[standard.id]?.length ?? 0)
+                                : 0;
+                              return (
+                                <span
+                                  className={cn(
+                                    "inline-flex min-w-[1.5rem] justify-center rounded-full px-2 py-0.5 text-sm font-semibold tabular-nums",
+                                    actionCount > 0
+                                      ? "bg-amber-100 text-amber-800 border border-amber-200"
+                                      : "text-slate-400"
+                                  )}
+                                >
+                                  {actionCount}
+                                </span>
+                              );
+                            })()}
                           </TableCell>
 
                           <TableCell>
