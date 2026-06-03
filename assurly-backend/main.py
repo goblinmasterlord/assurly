@@ -6,12 +6,16 @@ from pydantic import BaseModel, EmailStr, Field, validator
 from typing import List, Literal, Optional
 import pymysql
 import os
+import logging
+import random
 from datetime import datetime, date
 from decimal import Decimal
 import uuid
 
+logger = logging.getLogger(__name__)
+
 # Import authentication modules
-from auth_config import validate_config
+from auth_config import SUPER_ADMIN_EMAILS, validate_config
 from auth_models import (
     MagicLinkRequest, 
     MagicLinkResponse, 
@@ -264,6 +268,12 @@ class ActionUpdate(BaseModel):
     text: Optional[str] = Field(default=None, min_length=1)
     is_completed: Optional[bool] = None
     sort_order: Optional[int] = None
+
+# Internal admin tooling — mock data generate/wipe (super-admin only)
+class MockDataRequest(BaseModel):
+    mat_id: str
+    confirm_mat_id: str
+    term_ids: List[str] = Field(min_length=1)
 
 # ================================
 # ASPECT & STANDARD MODELS (MAT-Specific)
@@ -549,6 +559,32 @@ async def verify_mat_admin(
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Only MAT Administrators can perform this action"
+        )
+    return current_user
+
+
+async def verify_super_admin(
+    request: Request,
+    current_user: UserResponse = Depends(get_current_user)
+) -> UserResponse:
+    """
+    Dependency for super-admin tooling endpoints (e.g. /api/admin/mock-data/*).
+    Allow-list is sourced from the SUPER_ADMIN_EMAILS env var (comma-separated,
+    case-insensitive). Unauthorised attempts are logged at WARNING so probing
+    is visible in logs.
+    """
+    if current_user.email.lower() not in SUPER_ADMIN_EMAILS:
+        logger.warning(
+            "Unauthorised super-admin attempt",
+            extra={
+                "user_id": current_user.user_id,
+                "email": current_user.email,
+                "path": str(request.url.path),
+            },
+        )
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Super admin access required",
         )
     return current_user
 
@@ -3808,6 +3844,262 @@ async def delete_assessment_action(
         connection.commit()
         connection.close()
         return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ================================
+# ADMIN TOOLING — MOCK DATA (super-admin only)
+# ================================
+#
+# Internal tooling for populating / wiping assessment data so the dashboard
+# and analytics screens have something to render. Gated by SUPER_ADMIN_EMAILS
+# (see auth_config.py). Triggered via Swagger; not exposed in the frontend.
+
+
+@app.post("/api/admin/mock-data/generate", tags=["Admin"])
+async def generate_mock_data(
+    body: MockDataRequest,
+    current_user: UserResponse = Depends(verify_super_admin),
+):
+    """
+    UPSERT uniformly random ratings (1–4) for every active
+    (school × mat_standard × term) combination in the target MAT.
+
+    Overwrites `rating` and `evidence_comments` on existing rows; inserts
+    new rows where none exist (natural key: `uk_assessment` on
+    `school_id, mat_standard_id, unique_term_id`).
+
+    Rows are tagged in `evidence_comments` with a `[MOCK YYYY-MM-DD]` marker
+    so they are visually identifiable in the UI.
+    """
+    if body.confirm_mat_id != body.mat_id:
+        raise HTTPException(status_code=400, detail="confirm_mat_id must match mat_id")
+
+    try:
+        connection = get_db_connection()
+        cursor = connection.cursor()
+
+        cursor.execute("SELECT mat_id FROM mats WHERE mat_id = %s", (body.mat_id,))
+        if not cursor.fetchone():
+            connection.close()
+            raise HTTPException(status_code=404, detail=f"MAT not found: {body.mat_id}")
+
+        placeholders = ",".join(["%s"] * len(body.term_ids))
+        cursor.execute(
+            f"SELECT unique_term_id, academic_year FROM terms WHERE unique_term_id IN ({placeholders})",
+            body.term_ids,
+        )
+        term_to_year = {r["unique_term_id"]: r["academic_year"] for r in cursor.fetchall()}
+        missing_terms = [t for t in body.term_ids if t not in term_to_year]
+        if missing_terms:
+            connection.close()
+            raise HTTPException(status_code=400, detail=f"Invalid term_ids: {missing_terms}")
+
+        deleted_pattern = "%-deleted-%"
+        cursor.execute(
+            """
+            SELECT s.school_id, ms.mat_standard_id
+            FROM schools s
+            CROSS JOIN mat_standards ms
+            WHERE s.mat_id = %s
+              AND s.is_active = 1
+              AND ms.mat_id = %s
+              AND ms.is_active = 1
+              AND ms.mat_standard_id NOT LIKE %s
+            """,
+            (body.mat_id, body.mat_id, deleted_pattern),
+        )
+        grid = cursor.fetchall()
+        if not grid:
+            connection.close()
+            raise HTTPException(
+                status_code=400,
+                detail=f"No active schools × standards found for MAT {body.mat_id}",
+            )
+
+        marker = f"[MOCK {datetime.utcnow().strftime('%Y-%m-%d')}] Generated mock data"
+        upsert = """
+            INSERT INTO assessments
+              (id, school_id, mat_standard_id, unique_term_id, academic_year,
+               rating, evidence_comments, status,
+               submitted_by, submitted_at, last_updated, updated_by)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, 'completed',
+                    %s, NOW(), NOW(), %s)
+            ON DUPLICATE KEY UPDATE
+              rating = VALUES(rating),
+              evidence_comments = VALUES(evidence_comments),
+              status = VALUES(status),
+              submitted_by = VALUES(submitted_by),
+              submitted_at = NOW(),
+              last_updated = NOW(),
+              updated_by = VALUES(updated_by)
+        """
+
+        rows_per_term: dict = {}
+        total = 0
+        for term_id in body.term_ids:
+            academic_year = term_to_year[term_id]
+            values = [
+                (
+                    str(uuid.uuid4()),
+                    row["school_id"],
+                    row["mat_standard_id"],
+                    term_id,
+                    academic_year,
+                    random.randint(1, 4),
+                    marker,
+                    current_user.user_id,
+                    current_user.user_id,
+                )
+                for row in grid
+            ]
+            cursor.executemany(upsert, values)
+            rows_per_term[term_id] = len(values)
+            total += len(values)
+
+        connection.commit()
+        connection.close()
+
+        logger.info(
+            "Mock data generated",
+            extra={
+                "user_id": current_user.user_id,
+                "mat_id": body.mat_id,
+                "terms": body.term_ids,
+                "rows_upserted": total,
+            },
+        )
+
+        return JSONResponse(
+            content={
+                "mat_id": body.mat_id,
+                "terms_generated": body.term_ids,
+                "rows_upserted": total,
+                "rows_per_term": rows_per_term,
+            },
+            status_code=200,
+        )
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.delete("/api/admin/mock-data/wipe", tags=["Admin"])
+async def wipe_mock_data(
+    body: MockDataRequest,
+    current_user: UserResponse = Depends(verify_super_admin),
+):
+    """
+    Hard-delete every `assessments` row for the target MAT × terms.
+
+    Does NOT inspect the `[MOCK …]` marker — every row in scope is removed.
+    `assessment_actions` rows cascade via `fk_actions_assessment` ON DELETE
+    CASCADE. `standard_evidence` rows are keyed on `(mat_standard_id,
+    school_id, unique_term_id)` with no FK to `assessments.id`, so they
+    survive this wipe (evidence is treated as a separately tracked artefact).
+    """
+    if body.confirm_mat_id != body.mat_id:
+        raise HTTPException(status_code=400, detail="confirm_mat_id must match mat_id")
+
+    try:
+        connection = get_db_connection()
+        cursor = connection.cursor()
+
+        cursor.execute("SELECT mat_id FROM mats WHERE mat_id = %s", (body.mat_id,))
+        if not cursor.fetchone():
+            connection.close()
+            raise HTTPException(status_code=404, detail=f"MAT not found: {body.mat_id}")
+
+        placeholders = ",".join(["%s"] * len(body.term_ids))
+        cursor.execute(
+            f"SELECT unique_term_id FROM terms WHERE unique_term_id IN ({placeholders})",
+            body.term_ids,
+        )
+        found_terms = {r["unique_term_id"] for r in cursor.fetchall()}
+        missing_terms = [t for t in body.term_ids if t not in found_terms]
+        if missing_terms:
+            connection.close()
+            raise HTTPException(status_code=400, detail=f"Invalid term_ids: {missing_terms}")
+
+        rows_per_term: dict = {}
+        total_assessments = 0
+        total_actions_cascaded = 0
+
+        for term_id in body.term_ids:
+            # Count actions that will cascade-delete — cursor.rowcount on the
+            # DELETE only reports the direct (assessments) rowcount, not
+            # children pulled via the FK CASCADE.
+            cursor.execute(
+                """
+                SELECT COUNT(*) AS cnt
+                FROM assessment_actions aa
+                JOIN assessments a ON a.id = aa.assessment_id
+                JOIN schools s ON s.school_id = a.school_id
+                WHERE s.mat_id = %s
+                  AND a.unique_term_id = %s
+                """,
+                (body.mat_id, term_id),
+            )
+            actions_cnt = int(cursor.fetchone()["cnt"])
+
+            cursor.execute(
+                """
+                DELETE a FROM assessments a
+                JOIN schools s ON s.school_id = a.school_id
+                WHERE s.mat_id = %s
+                  AND a.unique_term_id = %s
+                """,
+                (body.mat_id, term_id),
+            )
+            deleted = cursor.rowcount
+
+            rows_per_term[term_id] = deleted
+            total_assessments += deleted
+            total_actions_cascaded += actions_cnt
+
+        cursor.execute(
+            f"""
+            SELECT COUNT(*) AS cnt
+            FROM standard_evidence
+            WHERE mat_id = %s
+              AND unique_term_id IN ({placeholders})
+            """,
+            (body.mat_id, *body.term_ids),
+        )
+        evidence_remaining = int(cursor.fetchone()["cnt"])
+
+        connection.commit()
+        connection.close()
+
+        logger.info(
+            "Mock data wiped",
+            extra={
+                "user_id": current_user.user_id,
+                "mat_id": body.mat_id,
+                "terms": body.term_ids,
+                "rows_deleted": total_assessments,
+                "cascaded_actions_deleted": total_actions_cascaded,
+                "evidence_rows_remaining": evidence_remaining,
+            },
+        )
+
+        return JSONResponse(
+            content={
+                "mat_id": body.mat_id,
+                "terms_wiped": body.term_ids,
+                "rows_deleted": total_assessments,
+                "rows_per_term": rows_per_term,
+                "cascaded_actions_deleted": total_actions_cascaded,
+                "evidence_rows_remaining": evidence_remaining,
+            },
+            status_code=200,
+        )
 
     except HTTPException:
         raise

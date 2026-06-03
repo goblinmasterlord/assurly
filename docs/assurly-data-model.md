@@ -449,6 +449,8 @@ The core operational table. One row per (school, mat_standard, term). Rated 1–
 
 **UPSERT pattern.** Assessments are often created-or-updated via a single endpoint. The `(school_id, mat_standard_id, unique_term_id)` triple uniquely identifies the logical assessment. The endpoint either inserts a new UUID-keyed row or updates the existing one matching this triple.
 
+**Mock-data marker.** Rows whose `evidence_comments` start with `[MOCK YYYY-MM-DD]` were written by the super-admin tooling endpoints (see API contract §"Admin tooling — mock data"). The marker has no functional meaning — it's a visual signal in the UI so reviewers can distinguish generated demo data from real assessments. The wipe tool does **not** filter on the marker; it removes every row in the targeted MAT × term scope.
+
 **Current data:** 1000 rows, spanning 2023-24 to 2025-26, across 5 schools. 990 `completed`, 10 `not_started`.
 
 ### `FIXED` 2026-05-28 — `actions` column dropped, replaced by `assessment_actions` child table (REQ-002 rework)

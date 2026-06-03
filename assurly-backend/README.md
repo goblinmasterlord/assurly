@@ -144,6 +144,12 @@ SMTP_USERNAME=your-email@gmail.com
 SMTP_PASSWORD=your-gmail-app-password
 EMAIL_FROM=noreply@assurly.com
 EMAIL_FROM_NAME=Assurly Platform
+
+# Super-admin allow-list — comma-separated emails authorised for
+# internal tooling endpoints under /api/admin/* (mock-data
+# generate/wipe). Case-insensitive; whitespace trimmed. Leave unset
+# to deny everyone — there is no DB-level super-admin role.
+SUPER_ADMIN_EMAILS=larry@example.com,tom@example.com
 ```
 
 ### Access Points
