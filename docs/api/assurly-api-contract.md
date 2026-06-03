@@ -1975,14 +1975,6 @@ Wiping a scope with no rows returns `rows_deleted: 0` and is not an error.
 
 The following endpoints exist in `main.py` but should not be called by the frontend. They are documented here for completeness and to guide cleanup.
 
-### `POST /api/assessments/{assessment_id}/submit` — DEPRECATED
-
-References columns (`standard_id`, `term_id`) that no longer exist on the `assessments` table. Will fail at runtime. Frontend should use `PUT /api/assessments/{assessment_id}` for single updates or `POST /api/assessments/bulk-update` for batch updates.
-
-### `GET /api/debug/assessment-parsing/{id}` — DEPRECATED
-
-Debug-only endpoint. References non-existent columns (`standard_id`, `term_id`). No auth required. Recommend removal.
-
 ### `GET /api/users/me` — DEPRECATED
 
 Returns a hardcoded `permissions` array and an empty `active_assessments` TODO. Never called by the frontend (`auth-service.ts` calls `/api/auth/me` instead). Different response shape from `UserResponse`. Recommend removal.
@@ -2030,3 +2022,4 @@ Admin/cron utility. No auth required (security concern). Not called by the front
 | v2.0 | 2026-05-30 | `GET /api/dashboard/schools` (§27) now returns two new per-school fields alongside `current_score`: `assurance_score` (raw average of assurance-type ratings) and `risk_score` (raw average of risk-type ratings). Both are `number \| null` — null when no standards of that type exist for the school. All three scores read "higher is better" on a 1–4 scale; `current_score` remains the only polarity-corrected one. Additive change — no existing field shape modified. |
 | v2.1 | 2026-05-30 | `GET /api/dashboard/schools` (§27): simplified `current_score` and `intervention_required` to plain rating-based formulas. `current_score` is now `AVG(rating)` over all standards (was: risk ratings inverted via `5 - rating` before averaging). `intervention_required` now counts standards with `rating <= 2` (was: a polarity-branched check that flagged risk ratings >= 3). Both formulas were carrying obsolete polarity logic — under the current label convention (rating 4 = best for both `assurance` and `risk`, see `rating-labels.ts` and data-model bible §2.5), the inversion and branching produced wrong numbers. No shape changes; values shift toward the directionally correct semantics. |
 | v2.2 | 2026-05-30 | Added two super-admin tooling endpoints: `POST /api/admin/mock-data/generate` and `DELETE /api/admin/mock-data/wipe` (see new "Admin tooling — mock data" section). Both gated by the `SUPER_ADMIN_EMAILS` env-var allow-list, not the existing MAT-administrator role. Generate UPSERTs random ratings across the active grid; wipe hard-deletes assessments for a MAT × term(s) with `assessment_actions` cascading and `standard_evidence` surviving by FK design. No frontend exposure — Swagger only. |
+| v2.3 | 2026-05-30 | Removed two deprecated endpoints: `POST /api/assessments/{assessment_id}/submit` and `GET /api/debug/assessment-parsing/{id}`. Both referenced `assessments` columns (`standard_id`, `term_id`) renamed in the v2 schema rework; calls would have raised AttributeError or SQL errors. Frontend was not using either. Dropped from the "Deprecated endpoints" section. Pydantic models `StandardRatingSubmission` and `AssessmentSubmission` (only used by the removed submit endpoint) also deleted. No active functionality affected. |
