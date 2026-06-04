@@ -1844,10 +1844,9 @@ Authorization: Bearer <token>
       "max_rating": 4,
       "rating_distribution": {
         "inadequate": 12,
-        "requires_improvement": 45,
+        "concerning": 45,
         "good": 98,
-        "outstanding": 43,
-        "exceptional": 0
+        "strong": 43
       }
     }
   ]
@@ -1858,10 +1857,10 @@ Authorization: Bearer <token>
 |---|---|---|
 | `summary.trend_direction` | string | `"improving"`, `"declining"`, `"stable"`, or `"no_data"`. |
 | `summary.improvement` | number | Delta between first and last term's average. |
-| `trends[].rating_distribution` | object | Counts per rating value. Key names are legacy Ofsted labels — see Known Issues #5, #6. `exceptional` is always `0` (see Known Issues #5). |
+| `trends[].rating_distribution` | object | Counts per rating value on the 1–4 scale. Keys: `inadequate` (rating 1), `concerning` (rating 2), `good` (rating 3), `strong` (rating 4). `inadequate` aligns with the dashboard's `intervention_required` semantic (rating 1 only). `concerning` (rating 2) is tracked for trend richness but is NOT the headline "Requires Attention" metric. Key names are polarity-neutral and apply to both `assurance` and `risk` standards — see Known Issues #6 for the planned integer-keyed migration. |
 
 **Frontend notes:**
-- `rating_distribution` uses legacy label keys (`inadequate`, `requires_improvement`, `good`, `outstanding`, `exceptional`). Map these to rating integers (`1`, `2`, `3`, `4`) for display. The `exceptional` key is always `0` and should be ignored. These labels will be replaced with integer keys when REQ-004 ships.
+- `rating_distribution` uses polarity-neutral string keys (`inadequate`, `concerning`, `good`, `strong`) covering the live 1–4 rating scale. Map these to rating integers (`1`, `2`, `3`, `4`) for display if you need numeric keys. These string labels will be replaced with integer keys when REQ-004 ships.
 
 ---
 
@@ -1993,8 +1992,8 @@ Admin/cron utility. No auth required (security concern). Not called by the front
 | 2 | `POST /api/assessments/{assessment_id}/submit` (main.py ~L3124) | References `standard_id` and `term_id` columns that no longer exist on `assessments`. Will raise `OperationalError` at runtime. | **Broken** — endpoint is dead | Mark deprecated. Frontend uses `PUT /api/assessments/{assessment_id}`. |
 | 3 | `GET /api/debug/assessment-parsing/{id}` (main.py ~L3066) | Same `standard_id`/`term_id` column issue. | **Broken** — debug only | Standalone removal |
 | 4 | `GET /api/users/me` (main.py ~L2810) | Dead code. Hardcoded permissions array `["complete_assessments", "view_school_data"]` and `active_assessments: []` TODO. Never called by frontend. Different shape from `UserResponse`. | **Cosmetic** | Standalone removal |
-| 5 | `GET /api/analytics/trends` (main.py ~L3454) | Returns `exceptional_count` counting `rating = 5` rows. DB constraint `chk_rating_range` makes `rating = 5` impossible. Field always returns `0`. | **Cosmetic** | REQ-004 |
-| 6 | `GET /api/analytics/trends` response (main.py ~L3508-3514) | `rating_distribution` uses Ofsted-derived string keys (`inadequate`, `requires_improvement`, `good`, `outstanding`, `exceptional`). These labels have been retired. Should use integer keys (`1`, `2`, `3`, `4`). | **Cosmetic** | REQ-004 |
+| 5 | `GET /api/analytics/trends` | **Resolved 2026-06-04** (changelog v2.5). The dead `exceptional_count` / `exceptional` bucket counting impossible `rating = 5` rows has been dropped. | Resolved | — |
+| 6 | `GET /api/analytics/trends` response | `rating_distribution` still uses string keys (`inadequate`, `concerning`, `good`, `strong`). Keys are now polarity-neutral and aligned with the live 1–4 scale (as of v2.5), but the planned REQ-004 migration to integer keys (`1`, `2`, `3`, `4`) is still future work. | **Cosmetic** | REQ-004 |
 | 7 | `StandardRatingSubmission.rating` Pydantic comment (main.py ~L232) | Comment says `"1-5 or null"`. Correct range is `1-4` per `chk_rating_range`. | **Stale comment** | REQ-004 |
 | 8 | `POST /api/auth/cleanup-expired-tokens` (main.py ~L731) | No auth requirement on an admin/cron endpoint. Anyone can call it. | **Low security** | Standalone |
 | 9 | `GET /api/terms` (main.py ~L2402) | No auth requirement. Only unprotected data endpoint. Terms are public reference data so risk is low, but inconsistent with other endpoints. | **Low** | Standalone |
@@ -2024,3 +2023,4 @@ Admin/cron utility. No auth required (security concern). Not called by the front
 | v2.2 | 2026-05-30 | Added two super-admin tooling endpoints: `POST /api/admin/mock-data/generate` and `DELETE /api/admin/mock-data/wipe` (see new "Admin tooling — mock data" section). Both gated by the `SUPER_ADMIN_EMAILS` env-var allow-list, not the existing MAT-administrator role. Generate UPSERTs random ratings across the active grid; wipe hard-deletes assessments for a MAT × term(s) with `assessment_actions` cascading and `standard_evidence` surviving by FK design. No frontend exposure — Swagger only. |
 | v2.3 | 2026-05-30 | Removed two deprecated endpoints: `POST /api/assessments/{assessment_id}/submit` and `GET /api/debug/assessment-parsing/{id}`. Both referenced `assessments` columns (`standard_id`, `term_id`) renamed in the v2 schema rework; calls would have raised AttributeError or SQL errors. Frontend was not using either. Dropped from the "Deprecated endpoints" section. Pydantic models `StandardRatingSubmission` and `AssessmentSubmission` (only used by the removed submit endpoint) also deleted. No active functionality affected. |
 | v2.4 | 2026-06-04 | `GET /api/dashboard/schools` (§27): `intervention_required` threshold tightened from `rating <= 2` to `rating = 1`. Product decision — the headline "Requires Attention" metric should flag only genuinely critical standards ("Inadequate" / "Critical risk"), not also "Needs work" / "Major risk". Per-school values will drop accordingly (a school with 3 rating-2 standards and 1 rating-1 standard previously returned 4; now returns 1). Field shape unchanged. No other dashboard fields touched. |
+| v2.5 | 2026-06-04 | `GET /api/analytics/trends` `rating_distribution` realigned with the v2.4 intervention semantic and the live 1–4 scale. Dropped `exceptional` (counted impossible `rating = 5`, always `0` — see Known Issues #5, now resolved). Renamed `requires_improvement` → `concerning` (rating 2 is tracked for trend richness but is NOT the headline "Requires Attention" metric — that's `inadequate` / rating 1 only, matching `intervention_required`). Renamed `outstanding` → `strong` to match the polarity-neutral band vocabulary in `assurly-frontend/src/utils/performance-bands.ts`. Kept `inadequate` (rating 1) and `good` (rating 3). Final shape: `{inadequate, concerning, good, strong}`. SQL bucket aliases renamed in lockstep (`requires_improvement_count` → `concerning_count`, `outstanding_count` → `strong_count`, `exceptional_count` dropped). Frontend type `RatingDistribution` updated to match. Frontend has no live consumer of `rating_distribution` field shape (the type is declared but no component reads it), so this is a contract-only change with no UI impact. |

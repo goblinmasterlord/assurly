@@ -3950,10 +3950,9 @@ async def get_trends(
                 MIN(a.rating) as min_rating,
                 MAX(a.rating) as max_rating,
                 COUNT(CASE WHEN a.rating = 1 THEN 1 END) as inadequate_count,
-                COUNT(CASE WHEN a.rating = 2 THEN 1 END) as requires_improvement_count,
+                COUNT(CASE WHEN a.rating = 2 THEN 1 END) as concerning_count,
                 COUNT(CASE WHEN a.rating = 3 THEN 1 END) as good_count,
-                COUNT(CASE WHEN a.rating = 4 THEN 1 END) as outstanding_count,
-                COUNT(CASE WHEN a.rating = 5 THEN 1 END) as exceptional_count
+                COUNT(CASE WHEN a.rating = 4 THEN 1 END) as strong_count
             FROM assessments a
             JOIN schools s ON a.school_id = s.school_id
             JOIN mat_standards ms ON a.mat_standard_id = ms.mat_standard_id
@@ -4009,10 +4008,9 @@ async def get_trends(
                 "max_rating": row['max_rating'],
                 "rating_distribution": {
                     "inadequate": row['inadequate_count'],
-                    "requires_improvement": row['requires_improvement_count'],
+                    "concerning": row['concerning_count'],
                     "good": row['good_count'],
-                    "outstanding": row['outstanding_count'],
-                    "exceptional": row['exceptional_count']
+                    "strong": row['strong_count']
                 }
             })
 

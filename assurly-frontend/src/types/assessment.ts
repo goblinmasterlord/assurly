@@ -311,10 +311,9 @@ export interface TermTrend {
 
 export interface RatingDistribution {
     inadequate: number;
-    requires_improvement: number;
+    concerning: number;
     good: number;
-    outstanding: number;
-    exceptional: number;
+    strong: number;
 }
 
 // ============================================================================
