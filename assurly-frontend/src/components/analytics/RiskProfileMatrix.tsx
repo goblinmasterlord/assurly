@@ -302,7 +302,7 @@ export function RiskProfileMatrix({
                 </th>
               ))}
               <th className="min-w-[88px] px-2 py-2 text-center font-semibold text-foreground border-l border-slate-200 bg-muted/30">
-                School avg
+                Trust avg
               </th>
             </tr>
           </thead>
@@ -360,7 +360,7 @@ export function RiskProfileMatrix({
                 <td className="p-0.5 border-l border-slate-200">
                   <AggregateCell
                     value={standardAverages[row.matStandardId]}
-                    tooltip={`${row.standardName} — school average`}
+                    tooltip={`${row.standardName} — trust average`}
                   />
                 </td>
               </tr>
@@ -371,13 +371,13 @@ export function RiskProfileMatrix({
                   "sticky left-0 z-10 bg-muted/20 px-3 py-2 font-semibold border-r border-slate-200"
                 )}
               >
-                Trust average
+                School avg
               </td>
               {matrixSchools.map((school) => (
                 <td key={school.schoolId} className="p-0.5">
                   <AggregateCell
                     value={schoolAverages[school.schoolId]}
-                    tooltip={`${school.schoolName} — trust average (risk standards)`}
+                    tooltip={`${school.schoolName} — school average (risk standards)`}
                   />
                 </td>
               ))}
@@ -393,8 +393,9 @@ export function RiskProfileMatrix({
       </div>
       <p className="mt-3 text-xs text-muted-foreground flex items-center gap-1.5">
         <Grid3x3 className="h-3.5 w-3.5 shrink-0" />
-        Ratings for the selected term. Row and column averages exclude unrated
-        cells. Uses the aspect category filter on Ratings by Aspects above.
+        Ratings for the selected term. Trust avg column and School avg row
+        exclude unrated cells. Uses the aspect category filter on Ratings by
+        Aspects above.
       </p>
     </TooltipProvider>
   );
