@@ -81,6 +81,10 @@ import { FilterBar } from "@/components/ui/filter-bar";
 import { AspectCategoryBadge } from "@/components/AspectCategoryBadge";
 import { loadDashboardPrefs, saveDashboardPrefs } from "@/lib/dashboard-prefs";
 import { getSchools, getAspects } from "@/services/assessment-service";
+import {
+  REQUIRES_ATTENTION_LABEL,
+  REQUIRES_ATTENTION_SUBTITLE,
+} from "@/lib/dashboard-labels";
 import { assessmentService } from "@/services/enhanced-assessment-service";
 import { requestCache } from "@/lib/request-cache";
 import type { Aspect } from "@/types/assessment";
@@ -1131,7 +1135,7 @@ export function SchoolPerformanceView({ assessments, refreshAssessments, isLoadi
             },
             {
               type: 'checkbox',
-              label: 'Requires attention only',
+              label: `${REQUIRES_ATTENTION_LABEL} only`,
               value: criticalFilter,
               onChange: setCriticalFilter,
               id: 'critical-filter'
@@ -1172,7 +1176,7 @@ export function SchoolPerformanceView({ assessments, refreshAssessments, isLoadi
                     <TableHead className="text-center">SUBMITTED RATINGS</TableHead>
                     <TableHead className="text-center">OVERALL SCORE</TableHead>
                     <TableHead className="text-center">PREVIOUS 3 TERMS</TableHead>
-                    <TableHead className="text-center">REQUIRES ATTENTION</TableHead>
+                    <TableHead className="text-center">{REQUIRES_ATTENTION_LABEL.toUpperCase()}</TableHead>
                     <TableHead className="text-center">LAST UPDATED</TableHead>
                   </TableRow>
                 </TableHeader>
@@ -1225,7 +1229,7 @@ export function SchoolPerformanceView({ assessments, refreshAssessments, isLoadi
                     currentSort={sortConfig}
                     onSort={handleSort}
                   >
-                    REQUIRES ATTENTION
+                    {REQUIRES_ATTENTION_LABEL.toUpperCase()}
                   </SortableTableHead>
                   <SortableTableHead 
                     className="text-center"
@@ -1452,7 +1456,7 @@ export function SchoolPerformanceView({ assessments, refreshAssessments, isLoadi
                                     <TableHead className="text-center">STATUS</TableHead>
                                     <TableHead className="text-center">CURRENT SCORE</TableHead>
                                     <TableHead className="text-center">PREVIOUS 3 TERMS</TableHead>
-                                    <TableHead className="text-center">REQUIRES ATTENTION</TableHead>
+                                    <TableHead className="text-center">{REQUIRES_ATTENTION_LABEL.toUpperCase()}</TableHead>
                                     <TableHead className="text-center">COMPLETION RATE</TableHead>
                                     <TableHead className="text-center pr-6">ACTIONS</TableHead>
                                   </TableRow>
@@ -1610,9 +1614,9 @@ export function SchoolPerformanceView({ assessments, refreshAssessments, isLoadi
                                             </TooltipTrigger>
                                             <TooltipContent side="top" align="center" className="max-w-xs">
                                               <div className="space-y-2">
-                                                <p className="font-medium text-sm">Requires attention</p>
+                                                <p className="font-medium text-sm">{REQUIRES_ATTENTION_LABEL}</p>
                                                 <p className="text-xs leading-relaxed">
-                                                  Standards rated 1 or 2 — showing critical or needs-improvement performance.
+                                                  {REQUIRES_ATTENTION_SUBTITLE} — critical performance requiring action.
                                                 </p>
                                               </div>
                                             </TooltipContent>

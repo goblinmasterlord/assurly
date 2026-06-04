@@ -20,6 +20,22 @@ export type VersionRelease = {
 
 export const VERSION_HISTORY: VersionRelease[] = [
   {
+    version: "1.42",
+    buildDate: "2026-06-03",
+    entries: [
+      {
+        title: "Analytics Trust/School view and aspect ratings chart",
+        description:
+          "Analytics aligns with the main dashboard selector and restores a filterable aspect ratings bar chart.",
+        bullets: [
+          "Schools/Trust toggle drives dashboard, trends, and per-aspect ratings",
+          "Ratings by Aspects bar chart with All / Strategic / Operational filter",
+          "Requires Attention label and subtitle unified with the dashboard",
+        ],
+      },
+    ],
+  },
+  {
     version: "1.41",
     buildDate: "2026-06-03",
     entries: [

@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Progress } from "@/components/ui/progress";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   BarChart3,
   Users,
@@ -16,16 +16,23 @@ import {
 import {
   LineChart,
   Line,
+  BarChart,
+  Bar,
   XAxis,
   YAxis,
   CartesianGrid,
   Tooltip,
   ResponsiveContainer,
+  Cell,
 } from "recharts";
 import { useAssessments, useSchools } from "@/hooks/use-assessments";
-import type { Assessment, Aspect, TrendData } from "@/types/assessment";
+import type { Assessment, Aspect, AspectCategory, TrendData } from "@/types/assessment";
 import type { SchoolsDashboardResponse } from "@/types/dashboard";
 import { calculateAverageRating } from "@/utils/rating-labels";
+import {
+  REQUIRES_ATTENTION_LABEL,
+  REQUIRES_ATTENTION_SUBTITLE,
+} from "@/lib/dashboard-labels";
 import { TermStepper } from "@/components/ui/term-stepper";
 import { assessmentService } from "@/services/enhanced-assessment-service";
 import { parseUniqueTerm } from "@/lib/data-transformers";
@@ -66,6 +73,14 @@ const TERM_ID_TO_NAME: Record<string, string> = {
 };
 
 const TERM_TRENDS_LIMIT = 5;
+
+type DashboardView = "school" | "trust";
+type AspectCategoryFilter = "all" | AspectCategory;
+
+const ASPECT_FILTER_EMPTY_MESSAGE: Record<AspectCategory, string> = {
+  strategic: "No strategic aspects configured for this MAT",
+  operational: "No operational aspects configured for this MAT",
+};
 
 function compressAcademicYear(year: string): string {
   if (/^\d{4}-\d{2}$/.test(year)) return year;
@@ -133,6 +148,7 @@ function getSchoolPerformanceLabel(
 interface AspectAreaRating {
   aspectCode: string;
   category: string;
+  aspectCategory?: AspectCategory;
   score: number;
   schoolCount: number;
 }
@@ -141,6 +157,9 @@ export function AnalyticsPage() {
   const { assessments, isLoading: assessmentsLoading } = useAssessments();
   const { schools, isLoading: schoolsLoading } = useSchools();
   const [selectedTerm, setSelectedTerm] = useState<string>("");
+  const [dashboardView, setDashboardView] = useState<DashboardView>("school");
+  const [aspectCategoryFilter, setAspectCategoryFilter] =
+    useState<AspectCategoryFilter>("all");
   const [aspects, setAspects] = useState<Aspect[]>([]);
   const [aspectsLoading, setAspectsLoading] = useState(true);
   const [schoolsDashboard, setSchoolsDashboard] = useState<SchoolsDashboardResponse | null>(null);
@@ -150,10 +169,27 @@ export function AnalyticsPage() {
   const [aspectAreaRatings, setAspectAreaRatings] = useState<AspectAreaRating[]>([]);
   const [aspectRatingsLoading, setAspectRatingsLoading] = useState(false);
 
-  const operationalSchools = useMemo(
-    () => schools.filter((s) => !s.is_central_office),
-    [schools]
+  const viewSchools = useMemo(
+    () =>
+      dashboardView === "trust"
+        ? schools.filter((s) => s.is_central_office)
+        : schools.filter((s) => !s.is_central_office),
+    [schools, dashboardView]
   );
+
+  const viewSchoolIds = useMemo(() => {
+    const ids = new Set<string>();
+    viewSchools.forEach((s) => {
+      const id = s.school_id || s.id;
+      if (id) ids.add(id);
+    });
+    return ids;
+  }, [viewSchools]);
+
+  const centralOfficeSchoolId = useMemo(() => {
+    const central = schools.find((s) => s.is_central_office);
+    return central?.school_id || central?.id;
+  }, [schools]);
 
   const availableTerms = useMemo(() => {
     const termSet = new Set<string>();
@@ -187,9 +223,11 @@ export function AnalyticsPage() {
   const termFilteredAssessments = useMemo(() => {
     if (!selectedUniqueTermId) return [];
     return assessments.filter(
-      (a) => a.unique_term_id === selectedUniqueTermId
+      (a) =>
+        a.unique_term_id === selectedUniqueTermId &&
+        viewSchoolIds.has(a.school_id || a.school?.id || "")
     );
-  }, [assessments, selectedUniqueTermId]);
+  }, [assessments, selectedUniqueTermId, viewSchoolIds]);
 
   const loadDashboard = useCallback(async () => {
     if (!selectedUniqueTermId) {
@@ -200,7 +238,7 @@ export function AnalyticsPage() {
     try {
       const data = await assessmentService.getSchoolsDashboard(
         selectedUniqueTermId,
-        "school"
+        dashboardView
       );
       setSchoolsDashboard(data);
     } catch (err) {
@@ -209,7 +247,7 @@ export function AnalyticsPage() {
     } finally {
       setDashboardLoading(false);
     }
-  }, [selectedUniqueTermId]);
+  }, [selectedUniqueTermId, dashboardView]);
 
   useEffect(() => {
     void loadDashboard();
@@ -218,8 +256,16 @@ export function AnalyticsPage() {
   useEffect(() => {
     let cancelled = false;
     setTrendsLoading(true);
+
+    const filters: {
+      school_id?: string;
+    } = {};
+    if (dashboardView === "trust" && centralOfficeSchoolId) {
+      filters.school_id = centralOfficeSchoolId;
+    }
+
     assessmentService
-      .getAnalyticsTrends()
+      .getAnalyticsTrends(filters)
       .then((data) => {
         if (!cancelled) setTrendsData(data);
       })
@@ -233,7 +279,7 @@ export function AnalyticsPage() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [dashboardView, centralOfficeSchoolId]);
 
   useEffect(() => {
     let cancelled = false;
@@ -256,7 +302,7 @@ export function AnalyticsPage() {
   }, []);
 
   useEffect(() => {
-    if (!selectedUniqueTermId || aspects.length === 0 || operationalSchools.length === 0) {
+    if (!selectedUniqueTermId || aspects.length === 0 || viewSchools.length === 0) {
       setAspectAreaRatings([]);
       return;
     }
@@ -274,7 +320,7 @@ export function AnalyticsPage() {
           sortedAspects.map(async (aspect) => {
             const schoolScores: number[] = [];
             await Promise.all(
-              operationalSchools.map(async (school) => {
+              viewSchools.map(async (school) => {
                 const schoolId = school.school_id || school.id;
                 if (!schoolId) return;
                 try {
@@ -299,6 +345,7 @@ export function AnalyticsPage() {
             return {
               aspectCode: aspect.aspect_code,
               category: aspect.aspect_name,
+              aspectCategory: aspect.aspect_category,
               score,
               schoolCount: schoolScores.length,
             };
@@ -315,7 +362,20 @@ export function AnalyticsPage() {
     return () => {
       cancelled = true;
     };
-  }, [selectedUniqueTermId, aspects, operationalSchools]);
+  }, [selectedUniqueTermId, aspects, viewSchools]);
+
+  const filteredAspectAreaRatings = useMemo(() => {
+    if (aspectCategoryFilter === "all") return aspectAreaRatings;
+    return aspectAreaRatings.filter(
+      (r) => r.aspectCategory === aspectCategoryFilter
+    );
+  }, [aspectAreaRatings, aspectCategoryFilter]);
+
+  const aspectsConfiguredInFilter = useMemo(() => {
+    if (aspectCategoryFilter === "all") return aspects.length;
+    return aspects.filter((a) => a.aspect_category === aspectCategoryFilter)
+      .length;
+  }, [aspects, aspectCategoryFilter]);
 
   const trustAssurlyScore = useMemo(() => {
     const scores = (schoolsDashboard?.schools ?? [])
@@ -441,7 +501,37 @@ export function AnalyticsPage() {
       .slice(0, 5);
   }, [termFilteredAssessments]);
 
-  const totalSchools = operationalSchools.length;
+  const totalSchools = viewSchools.length;
+  const assurlyScoreSubtitle =
+    dashboardView === "trust"
+      ? "Central office average (1–4 scale)"
+      : "Schools average (1–4 scale)";
+  const totalSchoolsSubtitle =
+    dashboardView === "trust"
+      ? "Central office for this trust"
+      : "Across the Multi-Academy Trust";
+  const rankingsTitle =
+    dashboardView === "trust"
+      ? "Trust Performance"
+      : "School Performance Rankings";
+  const rankingsDescription =
+    dashboardView === "trust"
+      ? "Central office performance and completion for the selected term"
+      : "Overall performance and completion status by school";
+
+  const aspectRatingsEmptyMessage = useMemo(() => {
+    if (aspectCategoryFilter !== "all" && aspectsConfiguredInFilter === 0) {
+      return ASPECT_FILTER_EMPTY_MESSAGE[aspectCategoryFilter];
+    }
+    if (filteredAspectAreaRatings.length === 0) {
+      return "No aspect ratings for this term yet";
+    }
+    return null;
+  }, [
+    aspectCategoryFilter,
+    aspectsConfiguredInFilter,
+    filteredAspectAreaRatings.length,
+  ]);
 
   const isLoading =
     assessmentsLoading ||
@@ -473,13 +563,24 @@ export function AnalyticsPage() {
             Comprehensive insights and performance metrics across your Multi-Academy Trust
           </p>
         </div>
-        {availableTerms.length > 0 && (
-          <TermStepper
-            terms={availableTerms}
-            currentTerm={selectedTerm}
-            onTermChange={setSelectedTerm}
-          />
-        )}
+        <div className="flex flex-col space-y-2 md:flex-row md:items-center md:space-y-0 md:space-x-3">
+          <Tabs
+            value={dashboardView}
+            onValueChange={(v) => setDashboardView(v as DashboardView)}
+          >
+            <TabsList className="h-10">
+              <TabsTrigger value="school">Schools</TabsTrigger>
+              <TabsTrigger value="trust">Trust</TabsTrigger>
+            </TabsList>
+          </Tabs>
+          {availableTerms.length > 0 && (
+            <TermStepper
+              terms={availableTerms}
+              currentTerm={selectedTerm}
+              onTermChange={setSelectedTerm}
+            />
+          )}
+        </div>
       </div>
 
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4 mb-8">
@@ -490,9 +591,7 @@ export function AnalyticsPage() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">{totalSchools}</div>
-            <p className="text-xs text-muted-foreground">
-              Across the Multi-Academy Trust
-            </p>
+            <p className="text-xs text-muted-foreground">{totalSchoolsSubtitle}</p>
           </CardContent>
         </Card>
 
@@ -511,13 +610,13 @@ export function AnalyticsPage() {
 
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Requires attention</CardTitle>
+            <CardTitle className="text-sm font-medium">{REQUIRES_ATTENTION_LABEL}</CardTitle>
             <AlertTriangle className="h-4 w-4 text-amber-600" />
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">{totalInterventionRequired}</div>
             <p className="text-xs text-muted-foreground">
-              Standards rated 1 or 2
+              {REQUIRES_ATTENTION_SUBTITLE}
             </p>
           </CardContent>
         </Card>
@@ -531,108 +630,136 @@ export function AnalyticsPage() {
             <div className="text-2xl font-bold">
               {trustAssurlyScore != null ? trustAssurlyScore.toFixed(2) : "—"}
             </div>
-            <p className="text-xs text-muted-foreground">
-              Trust-wide average (1–4 scale)
-            </p>
+            <p className="text-xs text-muted-foreground">{assurlyScoreSubtitle}</p>
           </CardContent>
         </Card>
       </div>
 
-      <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3 mb-8">
-        <Card className="lg:col-span-2">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <BarChart3 className="h-5 w-5" />
-              Term-over-Term Performance
-            </CardTitle>
-            <CardDescription>
-              Trust-wide average rating across the most recent {TERM_TRENDS_LIMIT} terms
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
+      <Card className="mb-8">
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <BarChart3 className="h-5 w-5" />
+            Term-over-Term Performance
+          </CardTitle>
+          <CardDescription>
+            Average rating across the most recent {TERM_TRENDS_LIMIT} terms
+            {dashboardView === "trust" ? " (central office)" : " (all schools)"}
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="h-80">
+            <ResponsiveContainer width="100%" height="100%">
+              <LineChart data={termTrends}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
+                <XAxis dataKey="term" stroke="#64748b" fontSize={12} />
+                <YAxis domain={[1, 4]} stroke="#64748b" fontSize={12} />
+                <Tooltip
+                  contentStyle={{
+                    backgroundColor: "white",
+                    border: "1px solid #e2e8f0",
+                    borderRadius: "6px",
+                  }}
+                  formatter={(value: number) => [value.toFixed(2), "Score"]}
+                />
+                <Line
+                  type="monotone"
+                  dataKey="score"
+                  stroke={CHART_COLORS.primary}
+                  strokeWidth={3}
+                  dot={{ fill: CHART_COLORS.primary, strokeWidth: 2, r: 6 }}
+                />
+              </LineChart>
+            </ResponsiveContainer>
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card className="mb-8">
+        <CardHeader className="space-y-4">
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+            <div>
+              <CardTitle className="flex items-center gap-2">
+                <Award className="h-5 w-5" />
+                Ratings by Aspects
+              </CardTitle>
+              <CardDescription>
+                Average rating per assessment area for the selected term and view
+              </CardDescription>
+            </div>
+            <Tabs
+              value={aspectCategoryFilter}
+              onValueChange={(v) =>
+                setAspectCategoryFilter(v as AspectCategoryFilter)
+              }
+            >
+              <TabsList className="h-9">
+                <TabsTrigger value="all">All</TabsTrigger>
+                <TabsTrigger value="strategic">Strategic</TabsTrigger>
+                <TabsTrigger value="operational">Operational</TabsTrigger>
+              </TabsList>
+            </Tabs>
+          </div>
+        </CardHeader>
+        <CardContent>
+          {aspectRatingsEmptyMessage ? (
+            <p className="text-sm text-muted-foreground text-center py-12">
+              {aspectRatingsEmptyMessage}
+            </p>
+          ) : (
             <div className="h-80">
               <ResponsiveContainer width="100%" height="100%">
-                <LineChart data={termTrends}>
+                <BarChart
+                  data={filteredAspectAreaRatings}
+                  margin={{ top: 20, right: 30, left: 20, bottom: 60 }}
+                >
                   <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
-                  <XAxis dataKey="term" stroke="#64748b" fontSize={12} />
-                  <YAxis domain={[1, 4]} stroke="#64748b" fontSize={12} />
+                  <XAxis
+                    dataKey="category"
+                    stroke="#64748b"
+                    fontSize={11}
+                    angle={-45}
+                    textAnchor="end"
+                    height={80}
+                  />
+                  <YAxis domain={[0, 4]} stroke="#64748b" fontSize={12} />
                   <Tooltip
                     contentStyle={{
                       backgroundColor: "white",
                       border: "1px solid #e2e8f0",
                       borderRadius: "6px",
                     }}
-                    formatter={(value: number) => [value.toFixed(2), "Score"]}
+                    formatter={(value: number) => [
+                      `${value.toFixed(1)}/4.0`,
+                      "Average Rating",
+                    ]}
                   />
-                  <Line
-                    type="monotone"
-                    dataKey="score"
-                    stroke={CHART_COLORS.primary}
-                    strokeWidth={3}
-                    dot={{ fill: CHART_COLORS.primary, strokeWidth: 2, r: 6 }}
-                  />
-                </LineChart>
-              </ResponsiveContainer>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Award className="h-5 w-5" />
-              Assessment Area Ratings
-            </CardTitle>
-            <CardDescription>
-              Trust-wide average rating per assessment area
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-4">
-              {aspectAreaRatings.length > 0 ? (
-                aspectAreaRatings.map((cat, index) => {
-                  const color =
-                    ASPECT_CHART_PALETTE[index % ASPECT_CHART_PALETTE.length];
-                  return (
-                    <div key={cat.aspectCode} className="space-y-2">
-                      <div className="flex justify-between text-sm">
-                        <span className="font-medium">{cat.category}</span>
-                        <span className="text-muted-foreground">
-                          {cat.score > 0 ? `${cat.score.toFixed(1)}/4.0` : "—"}
-                        </span>
-                      </div>
-                      <Progress
-                        value={cat.score > 0 ? (cat.score / 4) * 100 : 0}
-                        className="h-2"
-                        style={
-                          {
-                            "--progress-foreground": color,
-                          } as React.CSSProperties
+                  <Bar dataKey="score" radius={[4, 4, 0, 0]}>
+                    {filteredAspectAreaRatings.map((entry, index) => (
+                      <Cell
+                        key={entry.aspectCode}
+                        fill={
+                          ASPECT_CHART_PALETTE[
+                            index % ASPECT_CHART_PALETTE.length
+                          ]
                         }
                       />
-                    </div>
-                  );
-                })
-              ) : (
-                <p className="text-sm text-muted-foreground text-center py-6">
-                  No aspect ratings for this term yet
-                </p>
-              )}
+                    ))}
+                  </Bar>
+                </BarChart>
+              </ResponsiveContainer>
             </div>
-          </CardContent>
-        </Card>
-      </div>
+          )}
+        </CardContent>
+      </Card>
 
       <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
         <Card className="lg:col-span-2">
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <Users className="h-5 w-5" />
-              School Performance Rankings
+              {rankingsTitle}
             </CardTitle>
-            <CardDescription>
-              Overall performance and completion status by school
-            </CardDescription>
+            <CardDescription>{rankingsDescription}</CardDescription>
           </CardHeader>
           <CardContent>
             <Table>
