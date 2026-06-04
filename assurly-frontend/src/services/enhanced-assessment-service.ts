@@ -24,6 +24,7 @@ import {
   updateAspect as apiUpdateAspect,
   deleteAspect as apiDeleteAspect,
   getTerms as apiGetTerms,
+  getAnalyticsTrends as apiGetAnalyticsTrends,
 } from '@/services/assessment-service';
 import { getSchoolsDashboard as apiGetSchoolsDashboard } from '@/services/dashboard-service';
 import type { 
@@ -33,6 +34,7 @@ import type {
   Aspect,
   School,
   Term,
+  TrendData,
   Rating,
   DeleteStandardResponse,
   DeleteAspectResponse
@@ -407,6 +409,29 @@ export class EnhancedAssessmentService {
     return requestCache.subscribe('schools', callback);
   }
 
+  // ===== ANALYTICS OPERATIONS =====
+
+  /**
+   * Get trust-wide rating trends over time
+   */
+  async getAnalyticsTrends(filters?: {
+    school_id?: string;
+    aspect_code?: string;
+    aspect_category?: 'strategic' | 'operational';
+    standard_type?: 'assurance' | 'risk';
+    from_term?: string;
+    to_term?: string;
+  }): Promise<TrendData> {
+    const cacheKey = filters
+      ? `analytics_trends_${JSON.stringify(filters)}`
+      : 'analytics_trends';
+
+    return requestCache.get(
+      cacheKey as any,
+      () => apiGetAnalyticsTrends(filters)
+    );
+  }
+
   // ===== TERMS OPERATIONS =====
 
   /**
@@ -464,6 +489,7 @@ export class EnhancedAssessmentService {
     requestCache.invalidate('standards');
     requestCache.invalidate('aspects');
     requestCache.invalidate('terms');
+    requestCache.invalidateByPrefix('analytics_trends');
 
     // Preload fresh data
     await this.preloadCriticalData();

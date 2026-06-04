@@ -1,452 +1,455 @@
-import React, { useMemo } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Progress } from "@/components/ui/progress";
-import { 
-  BarChart3, 
-  TrendingUp, 
-  TrendingDown,
-  Users, 
+import {
+  BarChart3,
+  Users,
   School as SchoolIcon,
   ClipboardCheck,
   AlertTriangle,
-  Calendar,
   FileText,
   Target,
-  Award
+  Award,
 } from "lucide-react";
 import {
   LineChart,
   Line,
-  BarChart,
-  Bar,
   XAxis,
   YAxis,
   CartesianGrid,
   Tooltip,
   ResponsiveContainer,
-  Cell,
-  PieChart,
-  Pie
 } from "recharts";
 import { useAssessments, useSchools } from "@/hooks/use-assessments";
-import type { Assessment, AssessmentCategory, School } from "@/types/assessment";
+import type { Assessment, Aspect, TrendData } from "@/types/assessment";
+import type { SchoolsDashboardResponse } from "@/types/dashboard";
 import { calculateAverageRating } from "@/utils/rating-labels";
 import { TermStepper } from "@/components/ui/term-stepper";
+import { assessmentService } from "@/services/enhanced-assessment-service";
+import { parseUniqueTerm } from "@/lib/data-transformers";
 
-// Professional education sector color scheme
 const CHART_COLORS = {
-  primary: '#1e40af', // Blue
-  secondary: '#64748b', // Slate
-  success: '#16a34a', // Green
-  warning: '#d97706', // Amber
-  danger: '#dc2626', // Red
-  info: '#0ea5e9', // Sky blue
-  muted: '#94a3b8' // Light slate
+  primary: "#1e40af",
+  muted: "#94a3b8",
 };
 
-// Harmonious colors for each assessment category
-const CATEGORY_COLORS: Partial<Record<AssessmentCategory, string>> = {
-  'education': '#3b82f6', // Blue
-  'finance': '#10b981', // Emerald
-  'hr': '#8b5cf6', // Violet
-  'estates': '#f59e0b', // Amber
-  'governance': '#ef4444', // Red
-  'it': '#06b6d4', // Cyan
-  'is': '#84cc16' // Lime
-};
-
-const RATING_COLORS = {
-  1: '#dc2626', // Critical - Red
-  2: '#d97706', // Needs improvement - Amber
-  3: '#16a34a', // Healthy - Green
-  4: '#1e40af', // Strong - Blue
-};
-
-const ASSESSMENT_CATEGORIES: AssessmentCategory[] = [
-  'education',
-  'finance', 
-  'hr',
-  'estates',
-  'governance',
-  'it',
-  'is'
+const ASPECT_CHART_PALETTE = [
+  "#3b82f6",
+  "#10b981",
+  "#8b5cf6",
+  "#f59e0b",
+  "#ef4444",
+  "#06b6d4",
+  "#84cc16",
+  "#6366f1",
 ];
 
-// Helper to convert backend category codes to display names
-const getCategoryDisplayName = (category: AssessmentCategory): string => {
-  const displayNames: Partial<Record<AssessmentCategory, string>> = {
-    'education': 'Education',
-    'finance': 'Finance &\nProcurement',
-    'hr': 'Human\nResources',
-    'estates': 'Estates',
-    'governance': 'Governance',
-    'it': 'IT & Info\nServices',
-    'is': 'Information\nStandards'
-  };
-  return displayNames[category] || category;
+const RATING_COLORS = {
+  1: "#dc2626",
+  2: "#d97706",
+  3: "#16a34a",
+  4: "#1e40af",
 };
 
-interface AnalyticsData {
-  totalSchools: number;
-  activeAssessments: number;
-  completionRate: number;
-  averageScore: number;
-  previousAverageScore: number;
-  schoolsRequiringIntervention: number;
-  complianceStatus: number;
-  termTrends: Array<{
-    term: string;
-    score: number;
-  }>;
-  categoryPerformance: Array<{
-    category: string;
-    score: number;
-    assessments: number;
-  }>;
-  schoolPerformance: Array<{
-    school: string;
-    overallScore: number;
-    completedAssessments: number;
-    totalAssessments: number;
-    status: string;
-    interventionRequired: boolean;
-  }>;
-  recentActivity: Array<{
-    type: string;
-    school: string;
-    assessment: string;
-    timestamp: string;
-    status: string;
-  }>;
+const TERM_NAME_TO_ID: Record<string, string> = {
+  Autumn: "T1",
+  Spring: "T2",
+  Summer: "T3",
+};
+
+const TERM_ID_TO_NAME: Record<string, string> = {
+  T1: "Autumn",
+  T2: "Spring",
+  T3: "Summer",
+};
+
+const TERM_TRENDS_LIMIT = 5;
+
+function compressAcademicYear(year: string): string {
+  if (/^\d{4}-\d{2}$/.test(year)) return year;
+  const match = year.match(/^(\d{4})-(\d{4})$/);
+  if (!match) return year;
+  return `${match[1]}-${match[2].slice(-2)}`;
+}
+
+function expandAcademicYearShort(year: string): string {
+  if (/^\d{4}-\d{2}$/.test(year)) {
+    const [start, end] = year.split("-");
+    return `${start}-20${end}`;
+  }
+  return year;
+}
+
+function termLabelToUniqueTermId(termLabel: string): string | undefined {
+  if (!termLabel) return undefined;
+  const [termName, academicYearLong] = termLabel.split(" ");
+  if (!termName || !academicYearLong) return undefined;
+  const termId = TERM_NAME_TO_ID[termName];
+  if (!termId) return undefined;
+  return `${termId}-${compressAcademicYear(academicYearLong)}`;
+}
+
+function uniqueTermIdToLabel(uniqueTermId: string): string {
+  try {
+    const { termId, academicYear } = parseUniqueTerm(uniqueTermId);
+    const termName = TERM_ID_TO_NAME[termId] || termId;
+    return `${termName} ${expandAcademicYearShort(academicYear)}`;
+  } catch {
+    return uniqueTermId;
+  }
+}
+
+function compareUniqueTermIds(a: string, b: string): number {
+  try {
+    const pa = parseUniqueTerm(a);
+    const pb = parseUniqueTerm(b);
+    const yearA = parseInt(pa.academicYear.split("-")[0], 10);
+    const yearB = parseInt(pb.academicYear.split("-")[0], 10);
+    if (yearA !== yearB) return yearA - yearB;
+    const order: Record<string, number> = { T1: 1, T2: 2, T3: 3 };
+    return (order[pa.termId] || 0) - (order[pb.termId] || 0);
+  } catch {
+    return a.localeCompare(b);
+  }
+}
+
+function getSchoolPerformanceLabel(
+  score: number | null,
+  dashStatus: string
+): string {
+  if (score == null || score === 0) {
+    if (dashStatus === "in_progress") return "In Progress";
+    if (dashStatus === "completed") return "Healthy";
+    return "Not Started";
+  }
+  if (score < 1.5) return "Critical";
+  if (score < 2.0) return "Needs improvement";
+  if (score >= 3.5) return "Strong";
+  return "Healthy";
+}
+
+interface AspectAreaRating {
+  aspectCode: string;
+  category: string;
+  score: number;
+  schoolCount: number;
 }
 
 export function AnalyticsPage() {
   const { assessments, isLoading: assessmentsLoading } = useAssessments();
   const { schools, isLoading: schoolsLoading } = useSchools();
-  const [selectedTerm, setSelectedTerm] = React.useState<string>("Autumn 2025-2026");
+  const [selectedTerm, setSelectedTerm] = useState<string>("");
+  const [aspects, setAspects] = useState<Aspect[]>([]);
+  const [aspectsLoading, setAspectsLoading] = useState(true);
+  const [schoolsDashboard, setSchoolsDashboard] = useState<SchoolsDashboardResponse | null>(null);
+  const [dashboardLoading, setDashboardLoading] = useState(false);
+  const [trendsData, setTrendsData] = useState<TrendData | null>(null);
+  const [trendsLoading, setTrendsLoading] = useState(false);
+  const [aspectAreaRatings, setAspectAreaRatings] = useState<AspectAreaRating[]>([]);
+  const [aspectRatingsLoading, setAspectRatingsLoading] = useState(false);
 
-  const isLoading = assessmentsLoading || schoolsLoading;
-  
-  // Log assessment data structure for debugging
-  React.useEffect(() => {
-    if (assessments.length > 0) {
-      console.log('[Analytics] Sample assessment structure:', {
-        id: assessments[0].id,
-        hasStandards: !!assessments[0].standards,
-        standardsCount: assessments[0].standards?.length || 0,
-        completedStandards: assessments[0].completedStandards,
-        totalStandards: assessments[0].totalStandards,
-        overallScore: assessments[0].overallScore
-      });
-    }
-  }, [assessments]);
+  const operationalSchools = useMemo(
+    () => schools.filter((s) => !s.is_central_office),
+    [schools]
+  );
 
-  // Extract available terms from assessments
   const availableTerms = useMemo(() => {
     const termSet = new Set<string>();
-    assessments.forEach(assessment => {
-      if (assessment.term && assessment.academicYear) {
+    assessments.forEach((assessment) => {
+      if (assessment.unique_term_id) {
+        termSet.add(uniqueTermIdToLabel(assessment.unique_term_id));
+      } else if (assessment.term && assessment.academicYear) {
         termSet.add(`${assessment.term} ${assessment.academicYear}`);
       }
     });
-    
-    // Convert to array and sort (newest first)
-    // Academic year order: Autumn (Sept) → Spring (Jan) → Summer (May)
-    const terms = Array.from(termSet).sort((a, b) => {
-      const [termA, yearA] = a.split(' ');
-      const [termB, yearB] = b.split(' ');
-      
-      // Parse academic years (e.g., "2025-2026" → start year 2025)
-      const yearNumA = parseInt(yearA.split('-')[0]);
-      const yearNumB = parseInt(yearB.split('-')[0]);
-      
-      // Compare years first (descending - newer years first)
-      if (yearNumA !== yearNumB) {
-        return yearNumB - yearNumA;
-      }
-      
-      // Same academic year - order by term position (Autumn=Sept, Spring=Jan, Summer=May)
-      // Higher number = later in academic year, so we want reverse order for newest first
-      const termOrder: Record<string, number> = { 'Autumn': 1, 'Spring': 2, 'Summer': 3 };
-      return (termOrder[termB] || 0) - (termOrder[termA] || 0);
+
+    return Array.from(termSet).sort((a, b) => {
+      const idA = termLabelToUniqueTermId(a);
+      const idB = termLabelToUniqueTermId(b);
+      if (idA && idB) return compareUniqueTermIds(idB, idA);
+      return b.localeCompare(a);
     });
-    
-    return terms;
   }, [assessments]);
 
-  // Auto-select term
-  React.useEffect(() => {
-    if (availableTerms.length > 0 && !availableTerms.includes(selectedTerm)) {
-      // Try to find Autumn 2025-2026, otherwise use first available
-      const defaultTerm = availableTerms.find(t => t === "Autumn 2025-2026") || availableTerms[0];
-      setSelectedTerm(defaultTerm);
-    }
+  useEffect(() => {
+    if (availableTerms.length === 0) return;
+    if (selectedTerm && availableTerms.includes(selectedTerm)) return;
+    setSelectedTerm(availableTerms[0]);
   }, [availableTerms, selectedTerm]);
 
-  // Filter assessments by selected term
+  const selectedUniqueTermId = useMemo(
+    () => termLabelToUniqueTermId(selectedTerm),
+    [selectedTerm]
+  );
+
   const termFilteredAssessments = useMemo(() => {
-    if (!selectedTerm) return [];
-    const [term, academicYear] = selectedTerm.split(" ");
-    return assessments.filter(assessment => 
-      assessment.term === term && assessment.academicYear === academicYear
+    if (!selectedUniqueTermId) return [];
+    return assessments.filter(
+      (a) => a.unique_term_id === selectedUniqueTermId
     );
-  }, [assessments, selectedTerm]);
+  }, [assessments, selectedUniqueTermId]);
 
-  // Calculate analytics data from real assessment data
-  const analyticsData: AnalyticsData = useMemo(() => {
-    if (termFilteredAssessments.length === 0 || schools.length === 0) {
-      // Return minimal data structure if no data available
-      return {
-        totalSchools: 0,
-        activeAssessments: 0,
-        completionRate: 0,
-        averageScore: 0,
-        previousAverageScore: 0,
-        schoolsRequiringIntervention: 0,
-        complianceStatus: 0,
-        termTrends: [],
-        categoryPerformance: [],
-        schoolPerformance: [],
-        recentActivity: []
-      };
+  const loadDashboard = useCallback(async () => {
+    if (!selectedUniqueTermId) {
+      setSchoolsDashboard(null);
+      return;
     }
-    
-    // Use term-filtered assessments for current term calculations
-    const currentTermAssessments = termFilteredAssessments;
+    setDashboardLoading(true);
+    try {
+      const data = await assessmentService.getSchoolsDashboard(
+        selectedUniqueTermId,
+        "school"
+      );
+      setSchoolsDashboard(data);
+    } catch (err) {
+      console.error("Failed to load analytics dashboard:", err);
+      setSchoolsDashboard(null);
+    } finally {
+      setDashboardLoading(false);
+    }
+  }, [selectedUniqueTermId]);
 
-    // Helper: Calculate average score from standards ratings
-    // NOTE: Assessment summaries don't include standards array, use overallScore field
-    const calculateAssessmentScore = (assessment: Assessment): number => {
-      if (assessment.standards && assessment.standards.length > 0) {
-        return calculateAverageRating(assessment.standards) ?? 0;
-      }
+  useEffect(() => {
+    void loadDashboard();
+  }, [loadDashboard]);
 
-      return assessment.overallScore || 0;
+  useEffect(() => {
+    let cancelled = false;
+    setTrendsLoading(true);
+    assessmentService
+      .getAnalyticsTrends()
+      .then((data) => {
+        if (!cancelled) setTrendsData(data);
+      })
+      .catch((err) => {
+        console.error("Failed to load analytics trends:", err);
+        if (!cancelled) setTrendsData(null);
+      })
+      .finally(() => {
+        if (!cancelled) setTrendsLoading(false);
+      });
+    return () => {
+      cancelled = true;
     };
-    
-    // Helper: Check if assessment is effectively complete (all standards rated)
-    // NOTE: Assessment summaries from list endpoint don't include standards array
-    // We need to use completedStandards and totalStandards fields instead
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    const fetchAspects = async () => {
+      setAspectsLoading(true);
+      try {
+        const data = await assessmentService.getAspects();
+        if (!cancelled) setAspects(data);
+      } catch (err) {
+        console.error("Failed to load aspects:", err);
+        if (!cancelled) setAspects([]);
+      } finally {
+        if (!cancelled) setAspectsLoading(false);
+      }
+    };
+    void fetchAspects();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!selectedUniqueTermId || aspects.length === 0 || operationalSchools.length === 0) {
+      setAspectAreaRatings([]);
+      return;
+    }
+
+    let cancelled = false;
+    setAspectRatingsLoading(true);
+
+    const loadAspectRatings = async () => {
+      try {
+        const sortedAspects = [...aspects].sort(
+          (a, b) => a.sort_order - b.sort_order
+        );
+
+        const ratings = await Promise.all(
+          sortedAspects.map(async (aspect) => {
+            const schoolScores: number[] = [];
+            await Promise.all(
+              operationalSchools.map(async (school) => {
+                const schoolId = school.school_id || school.id;
+                if (!schoolId) return;
+                try {
+                  const data = await assessmentService.getAssessmentsByAspect(
+                    aspect.aspect_code,
+                    schoolId,
+                    selectedUniqueTermId
+                  );
+                  const avg = calculateAverageRating(data.standards);
+                  if (avg != null) schoolScores.push(avg);
+                } catch {
+                  // School may not have this aspect for the term
+                }
+              })
+            );
+
+            const score =
+              schoolScores.length > 0
+                ? schoolScores.reduce((sum, s) => sum + s, 0) / schoolScores.length
+                : 0;
+
+            return {
+              aspectCode: aspect.aspect_code,
+              category: aspect.aspect_name,
+              score,
+              schoolCount: schoolScores.length,
+            };
+          })
+        );
+
+        if (!cancelled) setAspectAreaRatings(ratings);
+      } finally {
+        if (!cancelled) setAspectRatingsLoading(false);
+      }
+    };
+
+    void loadAspectRatings();
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedUniqueTermId, aspects, operationalSchools]);
+
+  const trustAssurlyScore = useMemo(() => {
+    const scores = (schoolsDashboard?.schools ?? [])
+      .map((s) => s.current_score)
+      .filter((s): s is number => s != null);
+    if (scores.length === 0) return null;
+    const avg = scores.reduce((sum, s) => sum + s, 0) / scores.length;
+    return Math.round(avg * 100) / 100;
+  }, [schoolsDashboard]);
+
+  const totalInterventionRequired = useMemo(() => {
+    return (schoolsDashboard?.schools ?? []).reduce(
+      (sum, s) => sum + (s.intervention_required ?? 0),
+      0
+    );
+  }, [schoolsDashboard]);
+
+  const activeAssessments = useMemo(() => {
+    return termFilteredAssessments.filter(
+      (a) => a.status === "in_progress" || a.status === "not_started"
+    ).length;
+  }, [termFilteredAssessments]);
+
+  const completionRate = useMemo(() => {
+    const rows = schoolsDashboard?.schools ?? [];
+    if (rows.length > 0) {
+      const completed = rows.reduce((sum, s) => sum + s.completed_standards, 0);
+      const total = rows.reduce((sum, s) => sum + s.total_standards, 0);
+      return total > 0 ? (completed / total) * 100 : 0;
+    }
+    const completed = termFilteredAssessments.filter(
+      (a) => a.status === "completed"
+    ).length;
+    return termFilteredAssessments.length > 0
+      ? (completed / termFilteredAssessments.length) * 100
+      : 0;
+  }, [schoolsDashboard, termFilteredAssessments]);
+
+  const termTrends = useMemo(() => {
+    const trends = trendsData?.trends ?? [];
+    const withRatings = trends
+      .filter((t) => t.average_rating != null)
+      .sort((a, b) => compareUniqueTermIds(a.unique_term_id, b.unique_term_id));
+
+    const recent = withRatings.slice(-TERM_TRENDS_LIMIT);
+
+    return recent.map((t) => ({
+      term: uniqueTermIdToLabel(t.unique_term_id),
+      score: t.average_rating as number,
+    }));
+  }, [trendsData]);
+
+  const schoolPerformance = useMemo(() => {
+    if (!schoolsDashboard?.schools?.length) return [];
+
+    return [...schoolsDashboard.schools]
+      .map((dash) => {
+        const score = dash.current_score;
+        return {
+          school: dash.school_name,
+          overallScore: score ?? 0,
+          completedAssessments: dash.completed_standards,
+          totalAssessments: dash.total_standards,
+          status: getSchoolPerformanceLabel(score, dash.status),
+          interventionRequired: (dash.intervention_required ?? 0) > 0,
+        };
+      })
+      .sort((a, b) => b.overallScore - a.overallScore);
+  }, [schoolsDashboard]);
+
+  const recentActivity = useMemo(() => {
+    const categoryNames: Record<string, string> = {
+      education: "Education",
+      finance: "Finance & Procurement",
+      hr: "Human Resources",
+      estates: "Estates",
+      governance: "Governance",
+      it: "IT",
+      is: "Information Standards",
+    };
+
     const isAssessmentComplete = (assessment: Assessment): boolean => {
-      // Check if we have the standards array (from detailed endpoint)
-      if (assessment.standards && assessment.standards.length > 0) {
-        const ratedStandards = assessment.standards.filter(s => s.rating !== null);
-        return ratedStandards.length === assessment.standards.length;
+      if (
+        assessment.completedStandards !== undefined &&
+        assessment.totalStandards !== undefined
+      ) {
+        return (
+          assessment.completedStandards === assessment.totalStandards &&
+          assessment.totalStandards > 0
+        );
       }
-      
-      // Fallback to summary fields (from list endpoint)
-      if (assessment.completedStandards !== undefined && assessment.totalStandards !== undefined) {
-        return assessment.completedStandards === assessment.totalStandards && assessment.totalStandards > 0;
-      }
-      
       return false;
     };
 
-    // Helper: Determine if school needs intervention (any completed assessment with avg score < 2.0)
-    const needsIntervention = (schoolAssessments: Assessment[]): boolean => {
-      return schoolAssessments.some(a => {
-        // Count both explicitly completed AND assessments that are 100% filled (all standards rated)
-        const isComplete = a.status === 'completed' || isAssessmentComplete(a);
-        if (!isComplete) return false;
-        const score = calculateAssessmentScore(a);
-        return score < 2.0;
-      });
-    };
-
-    // Helper: Get status label for school
-    const getSchoolStatus = (avgScore: number, hasOverdue: boolean, inProgress: number, notStarted: number, totalAssessments: number): string => {
-      // If there are no assessments at all, it's truly not started
-      if (totalAssessments === 0) return 'Not Started';
-      
-      // If all assessments are "Not Started" status
-      if (notStarted === totalAssessments) return 'Not Started';
-      
-      // If there are assessments in progress but none completed yet
-      if (avgScore === 0 && inProgress > 0) return 'In Progress';
-      
-      // If we have a score, evaluate it
-      if (avgScore > 0) {
-        if (avgScore < 1.5) return 'Critical';
-        if (avgScore < 2.0 || hasOverdue) return 'Needs improvement';
-        if (avgScore >= 3.5) return 'Strong';
-        return 'Healthy';
-      }
-      
-      // Default to Not Started if no score and no progress
-      return 'Not Started';
-    };
-
-    // 1. Calculate basic metrics
-    const totalSchools = schools.length;
-    const activeAssessments = currentTermAssessments.filter(a => a.status === 'in_progress' || a.status === 'not_started').length;
-    const completedAssessments = currentTermAssessments.filter(a => a.status === 'completed').length;
-    const completionRate = currentTermAssessments.length > 0 
-      ? (completedAssessments / currentTermAssessments.length) * 100 
-      : 0;
-
-    // 2. Calculate current average score from completed assessments (including 100% filled)
-    const completedWithRatings = currentTermAssessments.filter(a => 
-      a.status === 'completed' || isAssessmentComplete(a)
-    );
-    const currentScores = completedWithRatings.map(calculateAssessmentScore).filter(s => s > 0);
-    const averageScore = currentScores.length > 0
-      ? currentScores.reduce((sum, s) => sum + s, 0) / currentScores.length
-      : 0;
-
-    // 3. Calculate previous term average for comparison
-    const previousTermAssessments = assessments.filter(a => a.term === 'Spring' && a.academicYear === '2024-2025');
-    const previousCompleted = previousTermAssessments.filter(a => a.status === 'completed');
-    const previousScores = previousCompleted.map(calculateAssessmentScore).filter(s => s > 0);
-    const previousAverageScore = previousScores.length > 0
-      ? previousScores.reduce((sum, s) => sum + s, 0) / previousScores.length
-      : averageScore - 0.2; // Fallback if no historical data
-
-    // 4. Calculate term trends (group by term/year)
-    const termMap = new Map<string, number[]>();
-    assessments.forEach(assessment => {
-      const isComplete = assessment.status === 'completed' || isAssessmentComplete(assessment);
-      if (isComplete && assessment.term && assessment.academicYear) {
-        const key = `${assessment.term} ${assessment.academicYear.split('-')[0].slice(-2)}-${assessment.academicYear.split('-')[1].slice(-2)}`;
-        const score = calculateAssessmentScore(assessment);
-        if (score > 0) {
-          if (!termMap.has(key)) termMap.set(key, []);
-          termMap.get(key)!.push(score);
-        }
-      }
-    });
-    
-    const termTrends = Array.from(termMap.entries())
-      .map(([term, scores]) => ({
-        term,
-        score: scores.reduce((sum, s) => sum + s, 0) / scores.length
-      }))
-      .sort((a, b) => {
-        // Sort chronologically
-        const termOrder = { 'Autumn': 1, 'Spring': 2, 'Summer': 3 };
-        const [termA, yearA] = a.term.split(' ');
-        const [termB, yearB] = b.term.split(' ');
-        if (yearA !== yearB) return yearA.localeCompare(yearB);
-        return (termOrder[termA as keyof typeof termOrder] || 0) - (termOrder[termB as keyof typeof termOrder] || 0);
-      });
-
-    // 5. Calculate category performance
-    const categoryMap = new Map<AssessmentCategory, { scores: number[], count: number }>();
-    ASSESSMENT_CATEGORIES.forEach(cat => categoryMap.set(cat, { scores: [], count: 0 }));
-    
-    currentTermAssessments.forEach(assessment => {
-      if (!assessment.category) return;
-      const catData = categoryMap.get(assessment.category);
-      if (catData) {
-        catData.count++;
-        // Count both explicitly completed AND assessments that are 100% filled
-        const isComplete = assessment.status === 'completed' || isAssessmentComplete(assessment);
-        if (isComplete) {
-          const score = calculateAssessmentScore(assessment);
-          if (score > 0) catData.scores.push(score);
-        }
-      }
-    });
-
-    const categoryPerformance = ASSESSMENT_CATEGORIES.map(cat => {
-      const catData = categoryMap.get(cat)!;
-      const avgScore = catData.scores.length > 0
-        ? catData.scores.reduce((sum, s) => sum + s, 0) / catData.scores.length
-        : 0;
-      return {
-        category: getCategoryDisplayName(cat),
-        score: avgScore,
-        assessments: catData.count
-      };
-    });
-
-    // 6. Calculate school performance
-    const schoolMap = new Map<string, Assessment[]>();
-    schools.forEach(school => schoolMap.set(school.id!, []));
-    currentTermAssessments.forEach(assessment => {
-      const schoolId = assessment.school?.id || assessment.school_id;
-      if (!schoolId) return;
-      const schoolAssessments = schoolMap.get(schoolId);
-      if (schoolAssessments) schoolAssessments.push(assessment);
-    });
-
-    const schoolPerformance = schools.map(school => {
-      const schoolAssessments = schoolMap.get(school.id!) || [];
-      // Count both explicitly completed AND assessments that are 100% filled
-      const completed = schoolAssessments.filter(a => 
-        a.status === 'completed' || isAssessmentComplete(a)
-      );
-      const inProgress = schoolAssessments.filter(a => 
-        a.status === 'in_progress' && !isAssessmentComplete(a)
-      ).length;
-      const notStarted = schoolAssessments.filter(a => a.status === 'not_started').length;
-      const hasOverdue = schoolAssessments.some(a => a.status === 'not_started');
-      
-      const scores = completed.map(calculateAssessmentScore).filter(s => s > 0);
-      const overallScore = scores.length > 0
-        ? Number((scores.reduce((sum, s) => sum + s, 0) / scores.length).toFixed(1))
-        : 0;
-
-      return {
-        school: school.name!,
-        overallScore,
-        completedAssessments: completed.length,
-        totalAssessments: schoolAssessments.length,
-        status: getSchoolStatus(overallScore, hasOverdue, inProgress, notStarted, schoolAssessments.length),
-        interventionRequired: needsIntervention(schoolAssessments)
-      };
-    }).sort((a, b) => b.overallScore - a.overallScore); // Sort by score descending
-
-    // 7. Calculate schools requiring intervention
-    const schoolsRequiringIntervention = schoolPerformance.filter(s => s.interventionRequired).length;
-
-    // 8. Generate recent activity from assessment updates
-    const recentActivity = currentTermAssessments
-      .filter(a => a.lastUpdated && a.lastUpdated !== '-')
-      .map(a => {
-        const isComplete = a.status === 'completed' || isAssessmentComplete(a);
-        const type = isComplete ? 'Assessment Completed' :
-                    a.status === 'in_progress' ? 'Assessment Updated' :
-                    'Assessment Started';
-        
-        // Format category name for display
-        const categoryNames: Record<string, string> = {
-          'education': 'Education',
-          'finance': 'Finance & Procurement',
-          'hr': 'Human Resources',
-          'estates': 'Estates',
-          'governance': 'Governance',
-          'it': 'IT',
-          'is': 'Information Standanrds'
-        };
+    return termFilteredAssessments
+      .filter((a) => a.lastUpdated && a.lastUpdated !== "-")
+      .map((a) => {
+        const isComplete =
+          a.status === "completed" || isAssessmentComplete(a);
+        const type = isComplete
+          ? "Assessment Completed"
+          : a.status === "in_progress"
+            ? "Assessment Updated"
+            : "Assessment Started";
 
         return {
           type,
-          school: a.school?.name || '',
-          assessment: categoryNames[a.category!] || a.category || '',
-          timestamp: a.last_updated || a.lastUpdated || '',
-          status: a.status
+          school: a.school?.name || a.school_name || "",
+          assessment:
+            a.aspect_name ||
+            categoryNames[a.category ?? ""] ||
+            a.category ||
+            "",
+          timestamp: a.last_updated || a.lastUpdated || "",
+          status: a.status,
         };
       })
-      .sort((a, b) => new Date(b.timestamp || 0).getTime() - new Date(a.timestamp || 0).getTime())
-      .slice(0, 5); // Show top 5 most recent
+      .sort(
+        (a, b) =>
+          new Date(b.timestamp || 0).getTime() -
+          new Date(a.timestamp || 0).getTime()
+      )
+      .slice(0, 5);
+  }, [termFilteredAssessments]);
 
-    return {
-      totalSchools,
-      activeAssessments,
-      completionRate,
-      averageScore,
-      previousAverageScore,
-      schoolsRequiringIntervention,
-      complianceStatus: completionRate,
-      termTrends,
-      categoryPerformance,
-      schoolPerformance,
-      recentActivity
-    };
-  }, [termFilteredAssessments, assessments, schools]);
+  const totalSchools = operationalSchools.length;
+
+  const isLoading =
+    assessmentsLoading ||
+    schoolsLoading ||
+    aspectsLoading ||
+    dashboardLoading ||
+    trendsLoading ||
+    aspectRatingsLoading;
 
   if (isLoading) {
     return (
@@ -461,12 +464,8 @@ export function AnalyticsPage() {
     );
   }
 
-  const scoreChange = analyticsData.averageScore - analyticsData.previousAverageScore;
-  const isImproving = scoreChange >= 0;
-
   return (
     <div className="container max-w-7xl py-6 md:py-10">
-      {/* Header */}
       <div className="flex flex-col space-y-4 md:flex-row md:items-center md:justify-between md:space-y-0 mb-8">
         <div>
           <h1 className="text-3xl font-bold tracking-tight">Analytics Dashboard</h1>
@@ -483,15 +482,14 @@ export function AnalyticsPage() {
         )}
       </div>
 
-      {/* KPI Cards */}
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-5 mb-8">
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4 mb-8">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Total Schools</CardTitle>
             <SchoolIcon className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{analyticsData.totalSchools}</div>
+            <div className="text-2xl font-bold">{totalSchools}</div>
             <p className="text-xs text-muted-foreground">
               Across the Multi-Academy Trust
             </p>
@@ -504,28 +502,9 @@ export function AnalyticsPage() {
             <ClipboardCheck className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{analyticsData.activeAssessments}</div>
+            <div className="text-2xl font-bold">{activeAssessments}</div>
             <p className="text-xs text-muted-foreground">
-              {analyticsData.completionRate.toFixed(0)}% completion rate
-            </p>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Average Performance Rating</CardTitle>
-            {isImproving ? (
-              <TrendingUp className="h-4 w-4 text-green-600" />
-            ) : (
-              <TrendingDown className="h-4 w-4 text-red-600" />
-            )}
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{analyticsData.averageScore.toFixed(1)}</div>
-            <p className={`text-xs ${
-              isImproving ? 'text-green-600' : 'text-red-600'
-            }`}>
-              {isImproving ? '+' : ''}{scoreChange.toFixed(1)} from previous term
+              {completionRate.toFixed(0)}% standards completion
             </p>
           </CardContent>
         </Card>
@@ -536,9 +515,9 @@ export function AnalyticsPage() {
             <AlertTriangle className="h-4 w-4 text-amber-600" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{analyticsData.schoolsRequiringIntervention}</div>
+            <div className="text-2xl font-bold">{totalInterventionRequired}</div>
             <p className="text-xs text-muted-foreground">
-              Schools below threshold
+              Standards rated 1 or 2
             </p>
           </CardContent>
         </Card>
@@ -549,18 +528,17 @@ export function AnalyticsPage() {
             <Target className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{analyticsData.complianceStatus.toFixed(0)}%</div>
+            <div className="text-2xl font-bold">
+              {trustAssurlyScore != null ? trustAssurlyScore.toFixed(2) : "—"}
+            </div>
             <p className="text-xs text-muted-foreground">
-              Assessment completion
+              Trust-wide average (1–4 scale)
             </p>
           </CardContent>
         </Card>
       </div>
 
-      {/* Main Content Grid */}
       <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3 mb-8">
-        
-        {/* Term Performance Trend */}
         <Card className="lg:col-span-2">
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
@@ -568,35 +546,27 @@ export function AnalyticsPage() {
               Term-over-Term Performance
             </CardTitle>
             <CardDescription>
-              Assessment scoring trends across the last 3 terms
+              Trust-wide average rating across the most recent {TERM_TRENDS_LIMIT} terms
             </CardDescription>
           </CardHeader>
           <CardContent>
             <div className="h-80">
               <ResponsiveContainer width="100%" height="100%">
-                <LineChart data={analyticsData.termTrends}>
+                <LineChart data={termTrends}>
                   <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
-                  <XAxis 
-                    dataKey="term" 
-                    stroke="#64748b"
-                    fontSize={12}
-                  />
-                  <YAxis 
-                    domain={[1, 4]}
-                    stroke="#64748b"
-                    fontSize={12}
-                  />
-                  <Tooltip 
+                  <XAxis dataKey="term" stroke="#64748b" fontSize={12} />
+                  <YAxis domain={[1, 4]} stroke="#64748b" fontSize={12} />
+                  <Tooltip
                     contentStyle={{
-                      backgroundColor: 'white',
-                      border: '1px solid #e2e8f0',
-                      borderRadius: '6px'
+                      backgroundColor: "white",
+                      border: "1px solid #e2e8f0",
+                      borderRadius: "6px",
                     }}
-                    formatter={(value: number) => [value.toFixed(1), 'Score']}
+                    formatter={(value: number) => [value.toFixed(2), "Score"]}
                   />
-                  <Line 
-                    type="monotone" 
-                    dataKey="score" 
+                  <Line
+                    type="monotone"
+                    dataKey="score"
                     stroke={CHART_COLORS.primary}
                     strokeWidth={3}
                     dot={{ fill: CHART_COLORS.primary, strokeWidth: 2, r: 6 }}
@@ -607,100 +577,53 @@ export function AnalyticsPage() {
           </CardContent>
         </Card>
 
-        {/* Assessment Area Performance */}
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <Award className="h-5 w-5" />
-              Assessment Completion
+              Assessment Area Ratings
             </CardTitle>
             <CardDescription>
-              Progress across assessment areas
+              Trust-wide average rating per assessment area
             </CardDescription>
           </CardHeader>
           <CardContent>
             <div className="space-y-4">
-              {analyticsData.categoryPerformance.map((cat, index) => {
-                const category = ASSESSMENT_CATEGORIES[index];
-                const color = CATEGORY_COLORS[category] || CHART_COLORS.muted;
-                return (
-                  <div key={cat.category} className="space-y-2">
-                    <div className="flex justify-between text-sm">
-                      <span className="font-medium">{cat.category}</span>
-                      <span className="text-muted-foreground">{cat.score.toFixed(1)}/4.0</span>
+              {aspectAreaRatings.length > 0 ? (
+                aspectAreaRatings.map((cat, index) => {
+                  const color =
+                    ASPECT_CHART_PALETTE[index % ASPECT_CHART_PALETTE.length];
+                  return (
+                    <div key={cat.aspectCode} className="space-y-2">
+                      <div className="flex justify-between text-sm">
+                        <span className="font-medium">{cat.category}</span>
+                        <span className="text-muted-foreground">
+                          {cat.score > 0 ? `${cat.score.toFixed(1)}/4.0` : "—"}
+                        </span>
+                      </div>
+                      <Progress
+                        value={cat.score > 0 ? (cat.score / 4) * 100 : 0}
+                        className="h-2"
+                        style={
+                          {
+                            "--progress-foreground": color,
+                          } as React.CSSProperties
+                        }
+                      />
                     </div>
-                    <Progress 
-                      value={(cat.score / 4) * 100} 
-                      className="h-2"
-                      style={{ 
-                        "--progress-foreground": color 
-                      } as React.CSSProperties}
-                    />
-                  </div>
-                );
-              })}
+                  );
+                })
+              ) : (
+                <p className="text-sm text-muted-foreground text-center py-6">
+                  No aspect ratings for this term yet
+                </p>
+              )}
             </div>
           </CardContent>
         </Card>
       </div>
 
-      {/* Assessment Area Performance Chart */}
-      <div className="grid gap-6 md:grid-cols-1 mb-8">
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <BarChart3 className="h-5 w-5" />
-              Assessment Area Performance Breakdown
-            </CardTitle>
-            <CardDescription>
-              Average performance ratings across all 6 assessment areas
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="h-80">
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={analyticsData.categoryPerformance} margin={{ top: 20, right: 30, left: 20, bottom: 60 }}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
-                  <XAxis 
-                    dataKey="category" 
-                    stroke="#64748b"
-                    fontSize={11}
-                    angle={-45}
-                    textAnchor="end"
-                    height={80}
-                  />
-                  <YAxis 
-                    domain={[0, 4]}
-                    stroke="#64748b"
-                    fontSize={12}
-                  />
-                  <Tooltip 
-                    contentStyle={{
-                      backgroundColor: 'white',
-                      border: '1px solid #e2e8f0',
-                      borderRadius: '6px'
-                    }}
-                    formatter={(value: number) => [`${value.toFixed(1)}/4.0`, 'Average Performance Rating']}
-                  />
-                  <Bar dataKey="score" radius={[4, 4, 0, 0]}>
-                    {analyticsData.categoryPerformance.map((entry, index) => {
-                      // Get category from ASSESSMENT_CATEGORIES array to match with colors
-                      const category = ASSESSMENT_CATEGORIES[index];
-                      const color = CATEGORY_COLORS[category] || CHART_COLORS.muted;
-                      return <Cell key={`cell-${index}`} fill={color} />;
-                    })}
-                  </Bar>
-                </BarChart>
-              </ResponsiveContainer>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* School Performance Table and Recent Activity */}
       <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-        
-        {/* School Performance Rankings */}
         <Card className="lg:col-span-2">
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
@@ -722,19 +645,28 @@ export function AnalyticsPage() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {analyticsData.schoolPerformance.map((school) => (
+                {schoolPerformance.map((school) => (
                   <TableRow key={school.school}>
                     <TableCell className="font-medium">{school.school}</TableCell>
                     <TableCell>
                       <div className="flex items-center gap-2">
-                        <span className="font-mono">{school.overallScore || 'N/A'}</span>
+                        <span className="font-mono">
+                          {school.overallScore > 0
+                            ? school.overallScore.toFixed(2)
+                            : "N/A"}
+                        </span>
                         {school.overallScore > 0 && (
-                          <div 
-                            className="w-3 h-3 rounded-full" 
-                            style={{ 
-                              backgroundColor: school.overallScore >= 3.5 ? RATING_COLORS[4] :
-                                             school.overallScore >= 2.5 ? RATING_COLORS[3] :
-                                             school.overallScore >= 1.5 ? RATING_COLORS[2] : RATING_COLORS[1]
+                          <div
+                            className="w-3 h-3 rounded-full"
+                            style={{
+                              backgroundColor:
+                                school.overallScore >= 3.5
+                                  ? RATING_COLORS[4]
+                                  : school.overallScore >= 2.5
+                                    ? RATING_COLORS[3]
+                                    : school.overallScore >= 1.5
+                                      ? RATING_COLORS[2]
+                                      : RATING_COLORS[1],
                             }}
                           />
                         )}
@@ -744,21 +676,37 @@ export function AnalyticsPage() {
                       <div className="text-sm">
                         {school.completedAssessments}/{school.totalAssessments}
                         <div className="w-full bg-muted rounded-full h-1.5 mt-1">
-                          <div 
+                          <div
                             className="bg-primary h-1.5 rounded-full transition-all"
-                            style={{ 
-                              width: `${school.totalAssessments > 0 ? (school.completedAssessments / school.totalAssessments) * 100 : 0}%` 
+                            style={{
+                              width: `${
+                                school.totalAssessments > 0
+                                  ? (school.completedAssessments /
+                                      school.totalAssessments) *
+                                    100
+                                  : 0
+                              }%`,
                             }}
                           />
                         </div>
                       </div>
                     </TableCell>
                     <TableCell>
-                      <Badge 
-                        variant={school.status === 'Critical' ? 'destructive' : 
-                                school.status === 'Needs improvement' ? 'secondary' :
-                                school.status === 'Strong' ? 'default' : 'outline'}
-                        className={school.status === 'Strong' ? 'bg-green-100 text-green-800 hover:bg-green-200' : ''}
+                      <Badge
+                        variant={
+                          school.status === "Critical"
+                            ? "destructive"
+                            : school.status === "Needs improvement"
+                              ? "secondary"
+                              : school.status === "Strong"
+                                ? "default"
+                                : "outline"
+                        }
+                        className={
+                          school.status === "Strong"
+                            ? "bg-green-100 text-green-800 hover:bg-green-200"
+                            : ""
+                        }
                       >
                         {school.status}
                       </Badge>
@@ -770,7 +718,6 @@ export function AnalyticsPage() {
           </CardContent>
         </Card>
 
-        {/* Recent Activity */}
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
@@ -783,8 +730,8 @@ export function AnalyticsPage() {
           </CardHeader>
           <CardContent>
             <div className="space-y-4">
-              {analyticsData.recentActivity.length > 0 ? (
-                analyticsData.recentActivity.map((activity, index) => (
+              {recentActivity.length > 0 ? (
+                recentActivity.map((activity, index) => (
                   <div key={index} className="flex items-start space-x-3 text-sm">
                     <div className="flex-shrink-0 w-2 h-2 rounded-full bg-blue-500 mt-2" />
                     <div className="flex-1">

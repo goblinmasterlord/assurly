@@ -20,6 +20,23 @@ export type VersionRelease = {
 
 export const VERSION_HISTORY: VersionRelease[] = [
   {
+    version: "1.41",
+    buildDate: "2026-06-03",
+    entries: [
+      {
+        title: "Analytics wired to dashboard and trends APIs",
+        description:
+          "The Analytics page now uses the same backend score and trend data as the main dashboard instead of deriving ratings from assessment list summaries.",
+        bullets: [
+          "Assurly Score and Requires attention cards use GET /api/dashboard/schools",
+          "Term-over-term chart uses GET /api/analytics/trends",
+          "Assessment area ratings load per-aspect from the by-aspect endpoint",
+          "Removed duplicate Average Performance Rating card and consolidated duplicate charts",
+        ],
+      },
+    ],
+  },
+  {
     version: "1.40",
     buildDate: "2026-06-01",
     entries: [
