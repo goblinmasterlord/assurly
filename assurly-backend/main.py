@@ -1340,7 +1340,7 @@ async def get_schools_dashboard(
         # labels (see assurly-frontend/src/utils/rating-labels.ts and
         # data-model bible §2.5), so per-type transformations aren't needed:
         # current_score is a plain average, and intervention_required flags
-        # any rating <= 2 regardless of standard_type.
+        # only rating == 1 (genuinely critical) regardless of standard_type.
         # Soft-deleted standards are excluded via mat_standards.is_active and
         # the '-deleted-' archive-rename marker.
         current_query = """
@@ -1362,7 +1362,7 @@ async def get_schools_dashboard(
                 ROUND(AVG(CASE WHEN ms.standard_type = 'assurance' THEN a.rating END), 2) AS assurance_score,
                 ROUND(AVG(CASE WHEN ms.standard_type = 'risk'      THEN a.rating END), 2) AS risk_score,
 
-                SUM(CASE WHEN a.rating <= 2 THEN 1 ELSE 0 END) AS intervention_required,
+                SUM(CASE WHEN a.rating = 1 THEN 1 ELSE 0 END) AS intervention_required,
 
                 COUNT(CASE WHEN ms.mat_standard_id IS NOT NULL AND a.rating IS NOT NULL THEN 1 END) AS completed_standards,
                 COUNT(ms.mat_standard_id) AS total_standards,
