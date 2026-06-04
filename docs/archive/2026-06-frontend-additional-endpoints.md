@@ -1,3 +1,16 @@
+> **ARCHIVED 2026-06-04 — historical design doc, not current spec.**
+>
+> This file was an early design sketch for four endpoints (`GET /api/assessments/by-aspect/{aspect_code}`, `GET /api/standards/{mat_standard_id}`, `PUT /api/standards/{mat_standard_id}`, `GET /api/analytics/trends`). It predates the v2 schema rework and the v2.5 trends-bucket realignment, so response shapes and SQL here are STALE:
+>
+> - Trends `rating_distribution` is shown with the old keys (`requires_improvement`, `outstanding`); the live shape is `{inadequate, concerning, good, strong}` (4 buckets, polarity-neutral names — see API contract v2.5 changelog).
+> - Bucket SQL aliases use the old names (`requires_improvement_count`, `outstanding_count`).
+>
+> For current API specs see [`docs/api/assurly-api-contract.md`](../api/assurly-api-contract.md). For the schema see [`docs/assurly-data-model.md`](../assurly-data-model.md).
+>
+> Kept for historical reference: the `PUT /api/standards/{mat_standard_id}` section includes a fleshed-out version-history handler skeleton (close/clone version rows, `standard_edit_log` insertion) that informed the live implementation.
+
+---
+
 Frontend endpoint specifications:
 
 1. GET /api/assessments/by-aspect/{aspect_code}

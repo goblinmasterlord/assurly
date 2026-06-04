@@ -74,7 +74,7 @@ export function SchoolPerformanceTableSkeleton() {
             </div>
           </TableCell>
           
-          {/* Requires attention */}
+          {/* Requires Attention */}
           <TableCell className="text-center">
             <Skeleton className="h-6 w-8 rounded-full" />
           </TableCell>
