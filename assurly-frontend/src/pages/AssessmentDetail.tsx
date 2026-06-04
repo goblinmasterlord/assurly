@@ -184,6 +184,40 @@ const EvidenceCell = ({ evidence }: { evidence: string }) => {
   );
 };
 
+const ADMIN_STANDARD_DESC_MAX = 50;
+
+function AdminStandardDescription({ description }: { description?: string | null }) {
+  const full = (description ?? "").trim();
+  if (!full) return null;
+
+  const isTruncated = full.length > ADMIN_STANDARD_DESC_MAX;
+  const display = isTruncated
+    ? `${full.slice(0, ADMIN_STANDARD_DESC_MAX)}...`
+    : full;
+
+  return (
+    <p className="text-sm text-slate-500 leading-snug flex items-center gap-1">
+      <span className="truncate">{display}</span>
+      {isTruncated && (
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <button
+              type="button"
+              className="inline-flex shrink-0 text-slate-400 hover:text-slate-600 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary rounded-sm"
+              aria-label="View full standard description"
+            >
+              <Info className="h-3.5 w-3.5" />
+            </button>
+          </TooltipTrigger>
+          <TooltipContent className="max-w-sm whitespace-pre-wrap">
+            {full}
+          </TooltipContent>
+        </Tooltip>
+      )}
+    </p>
+  );
+}
+
 export function AssessmentDetailPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
@@ -1587,6 +1621,7 @@ export function AssessmentDetailPage() {
       
       {/* Admin View - Completed Assessment Overview */}
       {isAdminView && assessment.standards && (
+        <TooltipProvider delayDuration={200}>
         <div className="space-y-6">
           {/* Compact Metrics Bar */}
           <Card className="border-slate-200/60">
@@ -1769,9 +1804,11 @@ export function AssessmentDetailPage() {
                               <h4 className="font-medium text-slate-900 leading-tight">
                                 {standard.title}
                               </h4>
-                              <p className="text-sm text-slate-500 leading-relaxed">
-                                {standard.description}
-                              </p>
+                              <AdminStandardDescription
+                                description={
+                                  standard.description ?? standard.standard_description
+                                }
+                              />
                             </div>
                           </TableCell>
 
@@ -1870,6 +1907,7 @@ export function AssessmentDetailPage() {
               ))}
           </Card>
         </div>
+        </TooltipProvider>
       )}
       
       {/* Submission Success Dialog */}
