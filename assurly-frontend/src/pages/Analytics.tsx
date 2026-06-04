@@ -12,6 +12,7 @@ import {
   FileText,
   Target,
   Award,
+  Grid3x3,
 } from "lucide-react";
 import {
   LineChart,
@@ -34,6 +35,7 @@ import {
   REQUIRES_ATTENTION_SUBTITLE,
 } from "@/lib/dashboard-labels";
 import { TermStepper } from "@/components/ui/term-stepper";
+import { RiskProfileMatrix } from "@/components/analytics/RiskProfileMatrix";
 import { assessmentService } from "@/services/enhanced-assessment-service";
 import { parseUniqueTerm } from "@/lib/data-transformers";
 
@@ -885,6 +887,29 @@ export function AnalyticsPage() {
           </CardContent>
         </Card>
       </div>
+
+      <Card className="mt-8 border-t-4 border-t-slate-200">
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Grid3x3 className="h-5 w-5" />
+            Risk Profile
+          </CardTitle>
+          <CardDescription>
+            Risk-standard ratings across every school for the selected term.
+            Filtered by the aspect category selector on Ratings by Aspects
+            above (Strategic / Operational / All). This matrix always shows all
+            MAT schools and is not affected by the Schools / Trust view toggle.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <RiskProfileMatrix
+            aspects={aspects}
+            schools={schools}
+            selectedUniqueTermId={selectedUniqueTermId}
+            aspectCategoryFilter={aspectCategoryFilter}
+          />
+        </CardContent>
+      </Card>
     </div>
   );
 }

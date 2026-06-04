@@ -18,6 +18,14 @@ const BADGE_CLASSES: Record<RagColour, string> = {
   grey: 'bg-slate-100 text-slate-700 border border-slate-200',
 };
 
+const CELL_BG_CLASSES: Record<RagColour, string> = {
+  green: 'bg-emerald-100',
+  'amber-green': 'bg-lime-100',
+  amber: 'bg-amber-100',
+  red: 'bg-red-100',
+  grey: 'bg-slate-100',
+};
+
 export function getRagColour(
   rating: number | null,
   _standardType?: StandardType
@@ -32,4 +40,12 @@ export function getRagBadgeClasses(
   standardType?: StandardType
 ): string {
   return BADGE_CLASSES[getRagColour(rating, standardType)];
+}
+
+/** Background-only RAG classes for matrix cells and similar layouts. */
+export function getRagCellClasses(
+  rating: number | null,
+  standardType?: StandardType
+): string {
+  return CELL_BG_CLASSES[getRagColour(rating, standardType)];
 }

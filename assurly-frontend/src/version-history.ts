@@ -20,6 +20,23 @@ export type VersionRelease = {
 
 export const VERSION_HISTORY: VersionRelease[] = [
   {
+    version: "1.43",
+    buildDate: "2026-06-04",
+    entries: [
+      {
+        title: "Analytics Risk Profile matrix",
+        description:
+          "Trust-wide snapshot of risk-standard ratings by school on the Analytics page.",
+        bullets: [
+          "Risk Profile matrix below existing charts (standard rows × school columns)",
+          "RAG cell colouring and tooltips; trust and school average row/column",
+          "Shares Strategic / Operational / All filter with Ratings by Aspects",
+          "Matrix always includes all MAT schools; independent of Schools / Trust toggle",
+        ],
+      },
+    ],
+  },
+  {
     version: "1.42",
     buildDate: "2026-06-03",
     entries: [
