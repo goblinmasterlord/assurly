@@ -1,7 +1,7 @@
 # Assurly — Milestone Plan
 
 **Suggested path:** `docs/milestones/assurly-milestone-plan.md`
-**Version:** 2.2
+**Version:** 2.3
 **Date:** 25 August 2026
 **Status:** Approved. M1 open.
 **Owner:** Product Owner
@@ -18,7 +18,7 @@ This is the **plan of record** for the current development programme: twenty-one
 
 1. `docs/api/assurly-api-contract.md` — authoritative for all request/response shapes
 2. `docs/assurly-data-model.md` — authoritative for schema
-3. `docs/project_structure.md` — authoritative for file layout and module boundaries
+3. `docs/project-structure.md` — file layout and module boundaries. **Currently descriptive, not authoritative** — it is out of date and is being refreshed under DOC-002. Verify layout against the repository itself until then.
 4. This document — authoritative for scope, sequencing and priority
 5. The active per-milestone implementation brief — authoritative for the change in hand
 
@@ -36,11 +36,13 @@ Applies to Claude Code (backend) and Cursor (frontend) on every session in this 
 |---|---|---|
 | 1 | `docs/api/assurly-api-contract.md` | Authoritative API contract |
 | 2 | `docs/assurly-data-model.md` | Authoritative schema and field semantics |
-| 3 | `docs/project_structure.md` | Where code lives and what it may touch |
+| 3 | `docs/project-structure.md` | Where code lives and what it may touch. Descriptive only until DOC-002 lands. |
 | 4 | This plan — the active milestone only | Scope, boundaries, open questions |
 | 5 | The active implementation brief | The work itself |
 
 The agent confirms in its first response which documents it has read and which contract version it is working against.
+
+**If a required document is missing, or its path does not match what is written here, stop and ask.** Do not substitute a similarly named file and proceed on the assumption it is the same document, even where that assumption is reasonable.
 
 ### 2.2 Session workflow
 
@@ -63,6 +65,30 @@ Backend ships and is verified before the corresponding frontend work opens. Fron
 - "Requires Attention" flags **rating 1 only**.
 - Fixed terminology: "Risk Profile" (never "Risk Register"); performance bands are Strong / Healthy / Needs Improvement / Critical; aspect categories are `operational` and `strategic`.
 - No terminology, threshold or polarity change without explicit sign-off from the Product Owner.
+
+### 2.5 Development log
+
+Git records what changed. The development log records why, and is the source material for the release notes published in the application's built-in version history.
+
+**One file per session. Never a shared append-only file** — concurrent agents editing a single log is the same conflict trap as the API contract, and it is the file most likely to be edited on every single session.
+
+Path: `docs/dev-log/YYYY-MM-DD-<layer>-<req-id>.md` — for example `docs/dev-log/2026-08-26-backend-req-010.md`
+
+Template: `docs/dev-log/_template.md`. Every session closes with an entry, **including audit and discovery sessions** — a session that deliberately changed nothing is worth recording, and often more informative than one that did.
+
+Entries are compiled into `docs/development-log.md` at each milestone close. Agents do not write to that file.
+
+**Agents do not write release notes.** Version history copy is user-facing, read by school and trust staff, and is written by the product owner from the compiled log. Write the dev log entry for an engineer picking the work up cold, not for a customer.
+
+### 2.6 Versioning
+
+Current release 1.43. This programme is Sprint 2.0.
+
+- Requirement ships: patch bump — 1.43.1, 1.43.2 and so on
+- Milestone closes: minor bump — M1 close is 1.44.0
+- Sprint closes: 2.0.0, declared by the product owner, never by an agent
+
+Record every bump in the dev log entry that caused it.
 
 ---
 
@@ -133,7 +159,7 @@ Settled. Applicability is **per school, per term, carried forward**:
 
 ### M1 — Stabilise
 
-**Definition of done:** All seven requirements verified in production; AUD-001 reported; regression notes in the changelog; API contract updated wherever a response shape changed.
+**Definition of done:** All seven requirements verified in production; AUD-001 reported; DOC-001 and DOC-002 complete; regression notes in the changelog; API contract updated wherever a response shape changed.
 
 ---
 
@@ -152,6 +178,28 @@ Settled. Applicability is **per school, per term, carried forward**:
 **Output:** A written finding, not a fix. Any work arising lands in M3 or M5 and is scoped there.
 
 **Do not:** build a term scheduling capability, add date columns, or change how the current term is determined. This task is read-only.
+
+---
+
+#### DOC-001 — Contract housekeeping
+**Type:** Housekeeping. Documentation only, no application code. Run before implementation work opens.
+
+Three defects in the contracts themselves, surfaced during M1 onboarding:
+
+1. **`assurly-api-contract.md` header reads `Version: v1`** while its own change log runs to v2.5. The change log is authoritative on version. Correct the header to match, and check whether anything else in the header block is equally stale.
+2. **`PROJECT_STRUCTURE.md` is dated 4 January 2026 and no longer describes the repository.** It references API specification files that no longer exist and root-level files that are not present. It is demoted to descriptive pending DOC-002 and must not be relied on for file layout in the meantime.
+3. **Documentation filenames move to lowercase hyphenated form**, matching their siblings: `PROJECT_STRUCTURE.md` becomes `project-structure.md`. A case-only rename on a case-insensitive filesystem will silently do nothing under a plain `git mv` — use a two-step rename via a temporary filename, and confirm the change is actually staged before committing.
+
+Update every internal reference to the renamed file, including this plan.
+
+---
+
+#### DOC-002 — Refresh the project structure document
+**Type:** Housekeeping. **Runs at M1 close, not at M1 open.**
+
+Regenerate `project-structure.md` against the repository as it stands once M1 has shipped. Doing it beforehand means doing it twice, since M1 will move files.
+
+Until it lands, the repository itself is the reference for file layout.
 
 ---
 
@@ -540,6 +588,8 @@ Not scheduled. Not to be picked up opportunistically.
 | REQ | Milestone | Status | Backend | Frontend | Docs |
 |---|---|---|---|---|---|
 | AUD-001 | M1 | Ready — discovery only | ☐ | — | ☐ |
+| DOC-001 | M1 | Ready — docs only | ☐ | — | ☐ |
+| DOC-002 | M1 | Held to M1 close | ☐ | — | ☐ |
 | REQ-006 | M1 | Ready | ☐ | ☐ | ☐ |
 | REQ-007 | M1 | Ready | ☐ | ☐ | ☐ |
 | REQ-008 | M1 | Ready | ☐ | ☐ | ☐ |
@@ -568,6 +618,7 @@ Not scheduled. Not to be picked up opportunistically.
 
 | Version | Date | Change |
 |---|---|---|
+| 2.3 | 25 August 2026 | Development log and versioning conventions added (§2.5, §2.6). DOC-001 and DOC-002 added to M1 following contract discrepancies found during onboarding. `PROJECT_STRUCTURE.md` demoted from authoritative to descriptive pending refresh, and documentation filenames standardised to lowercase hyphenated form. |
 | 2.2 | 25 August 2026 | Applicability model settled: per school, per term, carried forward, non-retrospective, frozen at term close. AUD-001 added to M1 to establish whether a term and date model exists before M3 and M5 are scoped. Denominator-change visibility written into REQ-018, REQ-019 and REQ-023. No open questions remain. |
 | 2.1 | 25 August 2026 | Remaining decisions closed: evidence limits waived for the early adopter phase; closed terms superadmin-only; navigation shell promoted ahead of analytics. Milestones renumbered — navigation shell is M6, analytics M7, Actions and Interventions M8. Term date scheduling gap recorded against REQ-015. One open assumption remains on applicability retrospection. |
 | 2.0 | 24 August 2026 | Decisions applied. Role model settled and promoted to M2 as a prerequisite. Lifecycle model set to editable-until-term-close. Three defects added to M1. Navigation shell, Actions and Interventions consolidated into M7. Within-trust benchmarking restored to scope. Renumbered throughout. |
