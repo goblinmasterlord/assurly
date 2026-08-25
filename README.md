@@ -373,7 +373,7 @@ python gmail_creds_test.py
 ### Getting Started
 - **Frontend README**: [assurly-frontend/README.md](assurly-frontend/README.md)
 - **Backend README**: [assurly-backend/README.md](assurly-backend/README.md)
-- **Project Structure**: [docs/api/PROJECT_STRUCTURE.md](docs/api/PROJECT_STRUCTURE.md)
+- **Project Structure**: [docs/project-structure.md](docs/project-structure.md)
 - **V4 Quick Start**: [docs/api/V4_QUICK_START.md](docs/api/V4_QUICK_START.md)
 
 ### API Documentation

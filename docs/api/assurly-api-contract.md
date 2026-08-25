@@ -2,6 +2,7 @@
 
 **Status:** Authoritative. Both backend (Claude Code) and frontend (Cursor) reference this doc.
 **Version:** v2.5
+**Last updated:** 4 June 2026
 **Backend base URL:** `http://localhost:8000` (local) / `https://assurly-frontend-400616570417.europe-west2.run.app` (Cloud Run production)
 
 This document defines every HTTP endpoint the frontend calls. If the frontend needs a shape that isn't here, the fix is to **update this doc first**, then code follows. If the backend diverges from what's here, it's a backend bug.

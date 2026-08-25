@@ -1,3 +1,15 @@
+> ## ⚠️ This document is out of date and is not authoritative
+>
+> It was last updated on 4 January 2026 and no longer describes the repository. It
+> references files and directories that have since moved, been archived, or been deleted.
+>
+> **Where this document and the repository disagree, the repository wins.** Verify file
+> layout against the repository itself, not against this page.
+>
+> It is **descriptive only** — a historical snapshot retained for orientation — and is
+> pending a full refresh under **DOC-002**, which runs at the close of milestone M1. Do not
+> rely on it for file layout, module boundaries or import paths until that refresh lands.
+
 # Assurly Project Structure & Organization
 
 **Last Updated**: January 4, 2026   
@@ -19,7 +31,7 @@ Assurly/
 ├── docs/                      # Shared documentation
 │
 ├── README.md                  # Main project overview
-├── PROJECT_STRUCTURE.md       # This file - project organization guide
+├── project-structure.md       # This file - project organization guide
 ├── TESTING_CHECKLIST.md       # Testing procedures
 ├── BUGFIX_SUMMARY.md         # Bug fixes summary
 ├── V4_MIGRATION_SUMMARY.md   # Migration notes

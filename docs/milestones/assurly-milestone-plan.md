@@ -187,7 +187,7 @@ Settled. Applicability is **per school, per term, carried forward**:
 Three defects in the contracts themselves, surfaced during M1 onboarding:
 
 1. **`assurly-api-contract.md` header reads `Version: v1`** while its own change log runs to v2.5. The change log is authoritative on version. Correct the header to match, and check whether anything else in the header block is equally stale.
-2. **`PROJECT_STRUCTURE.md` is dated 4 January 2026 and no longer describes the repository.** It references API specification files that no longer exist and root-level files that are not present. It is demoted to descriptive pending DOC-002 and must not be relied on for file layout in the meantime.
+2. **`project-structure.md` is dated 4 January 2026 and no longer describes the repository.** It references API specification files that no longer exist and root-level files that are not present. It is demoted to descriptive pending DOC-002 and must not be relied on for file layout in the meantime.
 3. **Documentation filenames move to lowercase hyphenated form**, matching their siblings: `PROJECT_STRUCTURE.md` becomes `project-structure.md`. A case-only rename on a case-insensitive filesystem will silently do nothing under a plain `git mv` — use a two-step rename via a temporary filename, and confirm the change is actually staged before committing.
 
 Update every internal reference to the renamed file, including this plan.
@@ -588,7 +588,7 @@ Not scheduled. Not to be picked up opportunistically.
 | REQ | Milestone | Status | Backend | Frontend | Docs |
 |---|---|---|---|---|---|
 | AUD-001 | M1 | Ready — discovery only | ☐ | — | ☐ |
-| DOC-001 | M1 | Ready — docs only | ☐ | — | ☐ |
+| DOC-001 | M1 | Complete | ☑ | — | ☑ |
 | DOC-002 | M1 | Held to M1 close | ☐ | — | ☐ |
 | REQ-006 | M1 | Ready | ☐ | ☐ | ☐ |
 | REQ-007 | M1 | Ready | ☐ | ☐ | ☐ |
