@@ -587,7 +587,7 @@ Not scheduled. Not to be picked up opportunistically.
 
 | REQ | Milestone | Status | Backend | Frontend | Docs |
 |---|---|---|---|---|---|
-| AUD-001 | M1 | Ready — discovery only | ☐ | — | ☐ |
+| AUD-001 | M1 | Complete — findings reported | ☑ | — | ☑ |
 | DOC-001 | M1 | Complete | ☑ | — | ☑ |
 | DOC-002 | M1 | Held to M1 close | ☐ | — | ☐ |
 | REQ-006 | M1 | Ready | ☐ | ☐ | ☐ |
