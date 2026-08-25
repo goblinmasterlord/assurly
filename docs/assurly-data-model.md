@@ -68,12 +68,20 @@ Different entities use different deletion semantics. This is intentional:
 
 ### 2.5 RAG polarity
 
-A rating of 4 does not universally mean "good". Polarity depends on `mat_standards.standard_type`:
+Rating semantics depend on `mat_standards.standard_type`. Both polarities read "higher is better" — but the label set differs:
 
-- `standard_type = 'assurance'`: higher is better. `4` = green, `1` = red.
-- `standard_type = 'risk'`: higher is worse. `4` = red, `1` = green.
+- `standard_type = 'assurance'`: rating 4 = "Highly assured" (best), rating 1 = "Inadequate" (worst).
+- `standard_type = 'risk'`: rating 4 = "No risk or mitigated" (best), rating 1 = "Critical risk" (worst).
 
-This is applied both client-side (React utility) and potentially server-side (views/endpoints — audit pending). Any code computing RAG colour MUST take `standard_type` as input.
+Canonical labels live in `assurly-frontend/src/utils/rating-labels.ts`. Any code rendering a rating to a user MUST take `standard_type` as input to pick the right label set. RAG colour mapping is uniform across both types (high rating = green, low rating = red) because the label semantics absorb the polarity.
+
+**Dashboard score fields** (`GET /api/dashboard/schools` — see API contract §27):
+
+- `current_score` is `ROUND(AVG(a.rating), 2)` across every standard for the school + term, regardless of `standard_type`. No per-type transformation — the label convention above means a single plain average is meaningful across mixed types.
+- `assurance_score` and `risk_score` are the same average restricted to one type each (`AVG(CASE WHEN standard_type = X THEN rating END)`), 2dp, `null` when the school has no standards of that type.
+- All three read "higher is better" directly against the rating's label.
+
+**Intervention flag** (`intervention_required` in the same endpoint) counts standards with `rating = 1` — the lowest rung (Inadequate for assurance; Critical risk for risk). Rating 2 ("Needs work" / "Major risk") is excluded: the flag is reserved for genuinely urgent cases, not anything below "Good".
 
 ### 2.6 Rating scale
 
@@ -242,7 +250,7 @@ Platform-level (default) aspects. Read-only templates used during MAT onboarding
 | `aspect_code` | `varchar(20)` | NOT NULL | — | **UNIQUE**. Same as `aspect_id` today. |
 | `aspect_name` | `varchar(255)` | NOT NULL | — | |
 | `aspect_description` | `text` | NULL | — | |
-| `aspect_category` | `enum('ofsted', 'operational')` | NULL | `'operational'` | |
+| `aspect_category` | `enum('operational', 'strategic')` | NULL | `'operational'` | |
 | `sort_order` | `int` | NULL | `0` | |
 | `created_at` | `timestamp` | NULL | `CURRENT_TIMESTAMP` | |
 
@@ -287,7 +295,7 @@ A MAT's working copy of aspects. Populated from `aspects` at onboarding; the MAT
 | `aspect_code` | `varchar(20)` | NOT NULL | — | The MAT's code for this aspect. May differ from `source_aspect_id`. |
 | `aspect_name` | `varchar(255)` | NOT NULL | — | |
 | `aspect_description` | `text` | NULL | — | |
-| `aspect_category` | `enum('ofsted', 'operational')` | NULL | `'operational'` | |
+| `aspect_category` | `enum('operational', 'strategic')` | NULL | `'operational'` | |
 | `sort_order` | `int` | NULL | `0` | |
 | `is_custom` | `tinyint(1)` | NULL | `0` | `1` = created from scratch by the MAT; `0` = adopted default. |
 | `is_modified` | `tinyint(1)` | NULL | `0` | `1` = MAT has edited fields since adoption. Purely informational. |
@@ -426,7 +434,6 @@ The core operational table. One row per (school, mat_standard, term). Rated 1–
 | `academic_year` | `varchar(9)` | NOT NULL | — | Denormalised from `unique_term_id` for query performance. |
 | `rating` | `int` | NULL | — | **1–4 only**, enforced by CHECK constraint `chk_rating_range`. NULL until the assessment is started. See §2.6. |
 | `evidence_comments` | `text` | NULL | — | Free-text commentary supporting the rating. |
-| `actions` | `text` | NULL | — | Free-text next-steps / remediation notes. Added April 2026 (REQ-002). |
 | `status` | `enum('not_started', 'in_progress', 'completed', 'approved')` | NULL | `'not_started'` | |
 | `due_date` | `date` | NULL | — | |
 | `submitted_at` | `timestamp` | NULL | — | |
@@ -442,7 +449,13 @@ The core operational table. One row per (school, mat_standard, term). Rated 1–
 
 **UPSERT pattern.** Assessments are often created-or-updated via a single endpoint. The `(school_id, mat_standard_id, unique_term_id)` triple uniquely identifies the logical assessment. The endpoint either inserts a new UUID-keyed row or updates the existing one matching this triple.
 
+**Mock-data marker.** Rows whose `evidence_comments` start with `[MOCK YYYY-MM-DD]` were written by the super-admin tooling endpoints (see API contract §"Admin tooling — mock data"). The marker has no functional meaning — it's a visual signal in the UI so reviewers can distinguish generated demo data from real assessments. The wipe tool does **not** filter on the marker; it removes every row in the targeted MAT × term scope.
+
 **Current data:** 1000 rows, spanning 2023-24 to 2025-26, across 5 schools. 990 `completed`, 10 `not_started`.
+
+### `FIXED` 2026-05-28 — `actions` column dropped, replaced by `assessment_actions` child table (REQ-002 rework)
+
+`assessments.actions` (the free-text column added in April 2026) has been dropped. Actions are now modelled as a checklist of items in a new child table — see §17 `assessment_actions`. The dashboard read-path now exposes an integer `outstanding_actions_count` aggregate instead of the most-recent-actions-text correlated subquery; the assessment detail endpoints no longer surface actions inline.
 
 ### `FIXED` 2026-04-20 — `updated_by` type normalised
 
@@ -497,45 +510,65 @@ All original issues now closed. Additional cleanup performed during the hardenin
 
 ---
 
-## 17. In-flight schema changes (April 2026)
+## 17. Auxiliary tables — evidence and actions
 
-Work currently underway that will modify the schema. Do not rely on these until they ship.
+Two child tables hang off the assessment grain. Both shipped between April and May 2026 and are live in production.
 
-### `standard_evidence` — new table (REQ-003)
+### `standard_evidence`
 
-Will hold uploaded files and external URLs attached to assessments. File blobs live in GCS; this table holds metadata.
+Holds uploaded files and external URLs attached to assessment cells. File blobs live in GCS; this table holds metadata only. Shipped April 2026 (REQ-003).
 
-```sql
-CREATE TABLE standard_evidence (
-  id                CHAR(36)     NOT NULL,
-  mat_id            CHAR(36)     NOT NULL,
-  mat_standard_id   CHAR(36)     NOT NULL,
-  school_id         CHAR(36)     NOT NULL,
-  unique_term_id    VARCHAR(20)  NOT NULL,
-  evidence_type     ENUM('file', 'url') NOT NULL,
-  file_path         VARCHAR(1000) NULL,   -- GCS object path; NULL when evidence_type='url'
-  url               VARCHAR(2000) NULL,   -- External URL; NULL when evidence_type='file'
-  original_filename VARCHAR(500)  NULL,
-  uploaded_by       CHAR(36)     NOT NULL,
-  created_at        TIMESTAMP    DEFAULT CURRENT_TIMESTAMP,
-  PRIMARY KEY (id),
-  FOREIGN KEY (mat_id)          REFERENCES mats(mat_id),
-  FOREIGN KEY (mat_standard_id) REFERENCES mat_standards(mat_standard_id),
-  FOREIGN KEY (school_id)       REFERENCES schools(school_id),
-  FOREIGN KEY (unique_term_id)  REFERENCES terms(unique_term_id),
-  FOREIGN KEY (uploaded_by)     REFERENCES users(user_id)
-);
-```
+**Grain:** one row per evidence item. Multiple items may attach to the same `(mat_standard_id, school_id, unique_term_id)` triple — same grain as `assessments`.
+
+| Column | Type | Nullable | Default | Notes |
+|---|---|---|---|---|
+| `id` | `char(36)` | NOT NULL | — | **PK**. UUID v4. |
+| `mat_id` | `char(36)` | NOT NULL | — | **FK** → `mats.mat_id`. Denormalised for MAT-isolation filtering on read. |
+| `mat_standard_id` | `char(36)` | NOT NULL | — | **FK** → `mat_standards.mat_standard_id`. |
+| `school_id` | `char(36)` | NOT NULL | — | **FK** → `schools.school_id`. |
+| `unique_term_id` | `varchar(20)` | NOT NULL | — | **FK** → `terms.unique_term_id`. |
+| `evidence_type` | `enum('file', 'url')` | NOT NULL | — | Discriminator between the two variants. |
+| `file_path` | `varchar(1000)` | NULL | — | GCS object path under `{mat_id}/{mat_standard_id}/`. Populated when `evidence_type='file'`, NULL when `='url'`. Internal — do not surface to users. |
+| `url` | `varchar(2000)` | NULL | — | External URL (must start `https://`). Populated when `evidence_type='url'`, NULL when `='file'`. |
+| `original_filename` | `varchar(500)` | NULL | — | Uploader's filename. NULL for URL evidence. |
+| `uploaded_by` | `char(36)` | NOT NULL | — | User ID. **No FK** — by design, mirroring `assessment_actions.created_by`: users are only soft-deleted, never hard-removed, so a dangling reference cannot occur. |
+| `created_at` | `timestamp` | NULL | `CURRENT_TIMESTAMP` | |
+
+**Mutual-exclusion CHECK:** `chk_evidence_type_fields` enforces that exactly one of `(file_path, url)` is populated according to `evidence_type`. See §20.2.
 
 **GCS bucket:** `europe-west2`, keys under `{mat_id}/{mat_standard_id}/{filename}`.
 
-**Gotcha:** evidence is scoped to the `(mat_standard_id, school_id, unique_term_id)` triple — same grain as `assessments`. A `mat_standard` being archive-renamed would orphan its evidence unless the evidence is renamed alongside. Out of scope for REQ-003 but worth flagging.
+**Mutated only via** the four `/evidence/...` endpoints in the API contract (upload, link, list, delete). All four enforce MAT isolation: writes verify the supplied `mat_standard_id` belongs to the caller's MAT; reads/deletes 404 (rather than 403) on cross-MAT access to avoid leaking existence.
 
-**Recommended additions to spec before ship:**
+**Archive-rename behaviour:** `fk_evidence_mat_standard` has `ON UPDATE CASCADE` — when a parent `mat_standard` is archive-renamed (the `-deleted-<unix_ts>` pattern, e.g. `HLT-AC5` → `HLT-AC5-deleted-1768213666`; see §11), the rename propagates to evidence rows automatically. Same convention used on `assessments` and `standard_versions`, so evidence stays linked to its parent's current identity. No orphans.
 
-1. Add an index on `(mat_standard_id, school_id, unique_term_id)` — every read from `GET /evidence/{mat_standard_id}` will filter on all three.
-2. Consider a `CHECK` constraint: `(evidence_type = 'file' AND file_path IS NOT NULL AND url IS NULL) OR (evidence_type = 'url' AND url IS NOT NULL AND file_path IS NULL)`.
-3. `ON DELETE` behaviour: default is `RESTRICT`. Consider `ON DELETE CASCADE` for `school_id` and `mat_standard_id` — if a school or standard is removed, orphaned evidence is useless.
+### `assessment_actions`
+
+Holds checklist items per assessment. Replaces the old free-text `assessments.actions` column (dropped — see §15). One row per item; grain = one parent assessment (i.e. one school × standard × term, the same grain as `assessments` and `standard_evidence`). Shipped May 2026 (REQ-002 rework).
+
+```sql
+CREATE TABLE assessment_actions (
+  id            CHAR(36)    NOT NULL,
+  assessment_id CHAR(36)    NOT NULL,
+  text          TEXT        NOT NULL,
+  is_completed  TINYINT(1)  NOT NULL DEFAULT 0,
+  sort_order    INT         NOT NULL DEFAULT 0,
+  created_at    TIMESTAMP   DEFAULT CURRENT_TIMESTAMP,
+  created_by    CHAR(36)    NULL,   -- no FK (users soft-deleted only)
+  completed_at  TIMESTAMP   NULL,
+  completed_by  CHAR(36)    NULL,   -- no FK
+  PRIMARY KEY (id),
+  KEY idx_actions_assessment (assessment_id, sort_order),
+  FOREIGN KEY (assessment_id) REFERENCES assessments(id) ON DELETE CASCADE
+);
+```
+
+**Notes:**
+
+- `ON DELETE CASCADE` on `assessment_id` — deleting a parent assessment cleans up its actions.
+- `created_by` / `completed_by` are FK-less by design: users are only soft-deleted (`is_active = 0`), never hard-removed, so a dangling reference cannot occur. If users ever become hard-deletable, add `ON DELETE SET NULL` FKs.
+- Mutated only via the four nested CRUD endpoints under `/api/assessments/{assessment_id}/actions`. Endpoints enforce MAT isolation by resolving the composite `assessment_id` to `assessments.id` via a JOIN with `schools` filtered on the session MAT.
+- Dashboard aggregate: `GET /api/dashboard/schools` returns `outstanding_actions_count` per school (count of `is_completed = 0` rows joined through `assessments → schools`, restricted to active, non-archive-renamed standards). The integer-count aggregate replaces the prior text-of-most-recent-action display.
 
 ---
 
@@ -628,12 +661,13 @@ WHERE mat_id = :session_mat_id      -- MAT isolation
 
 ## 20. Appendix — constraint inventory
 
-Full inventory of FK, CHECK, and UNIQUE constraints as of **2026-04-20**. Re-run the diagnostic queries in §20.4 if rebuilding this section.
+Inventory of FK, CHECK, and UNIQUE constraints. Last full sweep from the live DB: **2026-04-20**. Incremental additions since are logged in the §21 changelog and folded into the tables below as they happen. To regenerate the full inventory from scratch, run the diagnostic queries in §20.4.
 
 ### 20.1 Foreign key constraints
 
 | Table | Constraint | Column(s) | References | ON UPDATE | ON DELETE | Notes |
 |---|---|---|---|---|---|---|
+| `assessment_actions` | `fk_actions_assessment` | `assessment_id` | `assessments.id` | NO ACTION | **CASCADE** | Added 2026-05-28 with the new `assessment_actions` table (§17). Deleting a parent assessment cleans up its actions. |
 | `assessments` | `fk_assessments_approved` | `approved_by` | `users.user_id` | NO ACTION | SET NULL | |
 | `assessments` | `fk_assessments_assigned` | `assigned_to` | `users.user_id` | NO ACTION | SET NULL | |
 | `assessments` | `fk_assessments_school` | `school_id` | `schools.school_id` | NO ACTION | **CASCADE** | Deleting a school wipes its assessments. Dormant — no hard deletes used. |
@@ -642,6 +676,10 @@ Full inventory of FK, CHECK, and UNIQUE constraints as of **2026-04-20**. Re-run
 | `assessments` | `fk_assessments_term` | `unique_term_id` | `terms.unique_term_id` | NO ACTION | RESTRICT | |
 | `assessments` | `fk_assessments_updated_by` | `updated_by` | `users.user_id` | CASCADE | SET NULL | Added 2026-04-20. |
 | `assessments` | `fk_assessments_version` | `version_id` | `standard_versions.version_id` | CASCADE | SET NULL | |
+| `standard_evidence` | `fk_evidence_mat` | `mat_id` | `mats.mat_id` | NO ACTION | **CASCADE** | Added April 2026 with the new `standard_evidence` table (§17). Denormalised MAT pointer for fast isolation filtering. |
+| `standard_evidence` | `fk_evidence_mat_standard` | `mat_standard_id` | `mat_standards.mat_standard_id` | CASCADE | **CASCADE** | `ON UPDATE CASCADE` makes evidence follow archive-renames of the parent standard — see §17 archive-rename behaviour. |
+| `standard_evidence` | `fk_evidence_school` | `school_id` | `schools.school_id` | NO ACTION | **CASCADE** | |
+| `standard_evidence` | `fk_evidence_term` | `unique_term_id` | `terms.unique_term_id` | NO ACTION | RESTRICT | Blocks deleting a term that has evidence attached — consistent with `fk_assessments_term`. |
 | `mat_aspects` | `fk_mat_aspects_created_by` | `created_by_user_id` | `users.user_id` | NO ACTION | SET NULL | |
 | `mat_aspects` | `fk_mat_aspects_mat` | `mat_id` | `mats.mat_id` | NO ACTION | CASCADE | |
 | `mat_aspects` | `fk_mat_aspects_source` | `source_aspect_id` | `aspects.aspect_id` | NO ACTION | SET NULL | |
@@ -677,6 +715,7 @@ Full inventory of FK, CHECK, and UNIQUE constraints as of **2026-04-20**. Re-run
 | Table | Constraint | Clause |
 |---|---|---|
 | `assessments` | `chk_rating_range` | `(rating IS NULL OR rating BETWEEN 1 AND 4)` |
+| `standard_evidence` | `chk_evidence_type_fields` | `(evidence_type = 'file' AND file_path IS NOT NULL AND url IS NULL) OR (evidence_type = 'url' AND url IS NOT NULL AND file_path IS NULL)` |
 
 ### 20.3 UNIQUE constraints
 
@@ -746,3 +785,11 @@ ORDER BY tc.TABLE_NAME, tc.CONSTRAINT_NAME;
 | 2026-04-20 | §20.1, §20.3: Dropped duplicate FK `standards_ibfk_1` (had dangerous `ON DELETE CASCADE`) and redundant uniqueness constraint `users.unique_email_per_mat`. |
 | 2026-04-20 | §15, §16: Issue #4 marked resolved. Live re-verification showed 0 orphaned `version_id`s — earlier "29 orphans" finding was an artefact of a stale January 2026 JSON export. Live FK prevents the issue. |
 | 2026-04-20 | §5, §15, §16, §20.1: Fixed issue #3 (`assessments.updated_by` narrowed to `char(36)`, FK `fk_assessments_updated_by` added) and issue #6 (`healing-secondary-academy.school_type` → `'secondary'`). Full `school_type` enum documented. **All six originally-flagged issues now closed.** |
+| 2026-05-21 | §8, §10: Renamed `aspect_category` enum value `'ofsted'` → `'strategic'` on both `aspects` and `mat_aspects`. Enum is now `enum('operational', 'strategic')`; default unchanged (`'operational'`). DB migration applied manually; backend code and API contract brought into alignment. |
+| 2026-05-28 | §15, §17, §20.1: REQ-002 rework. Dropped the `assessments.actions` TEXT column; added new child table `assessment_actions` (one row per checklist item, FK to `assessments.id` ON DELETE CASCADE, index `idx_actions_assessment`). FK `fk_actions_assessment` added to §20.1. DB migration applied manually; backend purged of `a.actions` references, four new CRUD endpoints shipped at `/api/assessments/{assessment_id}/actions`, dashboard now returns `outstanding_actions_count` instead of the old text aggregate. |
+| 2026-05-30 | §17, §20.1, §20.2: Promoted `standard_evidence` (REQ-003) from "in-flight schema changes" to a live table section. Renamed §17 to "Auxiliary tables — evidence and actions" and rewrote the evidence subsection in present-tense (column table, mutation surface, MAT-isolation behaviour, archive-rename gotcha). Added the four `fk_evidence_*` rows to §20.1 (`uploaded_by` deliberately FK-less, mirroring the `assessment_actions.created_by` pattern) and `chk_evidence_type_fields` to §20.2. |
+| 2026-05-30 | §17, §20.1: Verified the four `fk_evidence_*` rules against the live DB and updated the inventory: `fk_evidence_mat` / `fk_evidence_school` are `ON DELETE CASCADE` (not RESTRICT as the previous conservative default suggested), `fk_evidence_mat_standard` is `ON UPDATE CASCADE` + `ON DELETE CASCADE` (so archive-renames propagate to evidence — same pattern as `assessments`/`standard_versions`), `fk_evidence_term` is `ON DELETE RESTRICT`. §17 gotcha rewritten as a confirmed archive-rename-behaviour note. §20.1 preamble reframed: last full sweep date preserved, with incremental additions logged via the changelog. |
+| 2026-05-30 | §2.5: Rewritten to align with the canonical rating labels in `assurly-frontend/src/utils/rating-labels.ts` (rating 4 reads "best" for both `assurance` and `risk`, not just `assurance` as the old text said). Added a dashboard-scores subsection noting that `GET /api/dashboard/schools` now returns `assurance_score` and `risk_score` (raw single-polarity averages) alongside `current_score` (which still applies the `5 - rating` inversion to risk ratings — flagged for review). No schema or constraint changes. |
+| 2026-05-30 | §2.5: Dashboard SQL caught up to the label convention. `current_score` is now a plain `AVG(rating)` (no `5 - rating` inversion) and `intervention_required` flags any standard with `rating <= 2` (no polarity branching). Bible §2.5 updated to drop the "predates the convention / review separately" caveat. No schema or constraint changes — see API contract §27 v2.1 changelog. |
+| 2026-06-04 | §2.5: `intervention_required` threshold tightened from `rating <= 2` to `rating = 1`. Product decision — flag only genuinely critical standards (Inadequate / Critical risk), not also Needs work / Major risk. Backend SQL and bible prose updated; see API contract §27 v2.4 changelog. |
+| 2026-06-04 | `GET /api/analytics/trends` `rating_distribution` realigned with the new `intervention_required` semantic. Dropped the dead `exceptional` bucket (impossible `rating = 5`); renamed `requires_improvement` → `concerning` (rating 2 — concerning but NOT headline-flagged) and `outstanding` → `strong` (matches `performance-bands.ts` vocabulary). Backend SQL aliases renamed in lockstep; frontend `RatingDistribution` type updated. No bible prose changes — trends bucket formulas weren't documented here. See API contract §X (trends) v2.5 changelog. |

@@ -28,7 +28,7 @@ const formSchema = z.object({
     aspect_name: z.string().min(3, 'Name must be at least 3 characters'),
     aspect_code: z.string().min(2, 'Code must be at least 2 characters').max(10, 'Code must be less than 10 characters'),
     aspect_description: z.string().optional(),
-    aspect_category: z.enum(['ofsted', 'operational']).optional(),
+    aspect_category: z.enum(['strategic', 'operational']).optional(),
 });
 
 interface CreateAspectModalProps {
@@ -163,7 +163,7 @@ export function CreateAspectModal({ open, onOpenChange, onSave, aspect }: Create
                                             </SelectTrigger>
                                         </FormControl>
                                         <SelectContent>
-                                            <SelectItem value="ofsted">Ofsted</SelectItem>
+                                            <SelectItem value="strategic">Strategic</SelectItem>
                                             <SelectItem value="operational">Operational</SelectItem>
                                         </SelectContent>
                                     </Select>

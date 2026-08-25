@@ -48,6 +48,9 @@ class RequestCache {
   private cache = new Map<string, CacheEntry<any>>();
   private pendingRequests = new Map<string, Promise<any>>();
   private subscribers = new Map<string, Set<(data: any) => void>>();
+  private prefixInvalidationListeners = new Set<
+    (prefix: string, deletedKeys: string[]) => void
+  >();
 
   // Generate cache key from request parameters
   private generateKey(type: string, params?: Record<string, any>): string {
@@ -210,19 +213,41 @@ class RequestCache {
       this.pendingRequests.delete(key);
       if (DEBUG_CACHE) console.log(`🗑️  Invalidated cache: ${key}`);
     } else {
-      // Invalidate all entries of this type
-      const keysToDelete: string[] = [];
-      for (const key of this.cache.keys()) {
-        if (key.startsWith(`${type}:`)) {
-          keysToDelete.push(key);
-        }
-      }
-      keysToDelete.forEach(key => {
-        this.cache.delete(key);
-        this.pendingRequests.delete(key);
-      });
-      if (DEBUG_CACHE) console.log(`🗑️  Invalidated all cache entries for type: ${type}`);
+      this.invalidateByPrefix(`${type}:`);
     }
+  }
+
+  /** Delete all cache keys whose full key starts with the given prefix. */
+  invalidateByPrefix(prefix: string): void {
+    const keysToDelete: string[] = [];
+    for (const key of this.cache.keys()) {
+      if (key.startsWith(prefix)) {
+        keysToDelete.push(key);
+      }
+    }
+    keysToDelete.forEach((key) => {
+      this.cache.delete(key);
+      this.pendingRequests.delete(key);
+    });
+    if (keysToDelete.length > 0) {
+      if (DEBUG_CACHE) console.log(`🗑️  Invalidated ${keysToDelete.length} cache entries with prefix: ${prefix}`);
+      this.prefixInvalidationListeners.forEach((callback) => {
+        try {
+          callback(prefix, keysToDelete);
+        } catch (error) {
+          console.error('Prefix invalidation listener error:', error);
+        }
+      });
+    }
+  }
+
+  subscribePrefixInvalidation(
+    callback: (prefix: string, deletedKeys: string[]) => void
+  ): () => void {
+    this.prefixInvalidationListeners.add(callback);
+    return () => {
+      this.prefixInvalidationListeners.delete(callback);
+    };
   }
 
   // Preload data into cache

@@ -18,6 +18,8 @@ export interface SchoolDashboardItem {
   total_standards: number;
   completion_rate: string; // e.g. "15/41"
   last_updated: string | null; // ISO8601
+  evidence_count?: number;
+  outstanding_actions_count: number;
 }
 
 export interface SchoolsDashboardResponse {

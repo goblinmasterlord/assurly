@@ -1,4 +1,4 @@
-import React, { useMemo, useState, useEffect, useTransition, useCallback } from "react";
+import React, { useMemo, useState, useEffect, useTransition, useCallback, useRef } from "react";
 import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -18,6 +18,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   Tooltip,
   TooltipContent,
@@ -68,11 +69,37 @@ import {
 } from "@/components/ui/skeleton-loaders";
 import { getAspectDisplayName, calculateSchoolStatus, getStatusColor, getStatusIcon } from "@/lib/assessment-utils";
 import { getStatusLabel } from "@/utils/assessment";
+import {
+  getPerformanceBandBadgeClasses,
+  PERFORMANCE_BAND_LABELS,
+  PERFORMANCE_FILTER_OPTIONS,
+  scoreMatchesPerformanceFilter,
+  type PerformanceBandId,
+} from "@/utils/performance-bands";
+import { calculateAverageRating } from "@/utils/rating-labels";
 import { FilterBar } from "@/components/ui/filter-bar";
+import { AspectCategoryBadge } from "@/components/AspectCategoryBadge";
+import { loadDashboardPrefs, saveDashboardPrefs } from "@/lib/dashboard-prefs";
 import { getSchools, getAspects } from "@/services/assessment-service";
-import { getSchoolsDashboard } from "@/services/dashboard-service";
+import {
+  REQUIRES_ATTENTION_LABEL,
+  REQUIRES_ATTENTION_SUBTITLE,
+} from "@/lib/dashboard-labels";
 import { assessmentService } from "@/services/enhanced-assessment-service";
+import { requestCache } from "@/lib/request-cache";
 import type { Aspect } from "@/types/assessment";
+
+/** Maps request-cache key `aspect_<code>_<school>_<term>:` to UI metrics key `<school>:<code>:<term>`. */
+function aspectCacheKeyToMetricKey(cacheKey: string): string | null {
+  if (!cacheKey.startsWith("aspect_")) return null;
+  const body = cacheKey.endsWith(":") ? cacheKey.slice(0, -1) : cacheKey;
+  const segments = body.slice("aspect_".length).split("_");
+  if (segments.length < 3) return null;
+  const aspectCode = segments[0];
+  const termId = segments[segments.length - 1];
+  const schoolId = segments.slice(1, -1).join("_");
+  return `${schoolId}:${aspectCode}:${termId}`;
+}
 import type { AssessmentByAspect, Rating, AssessmentStatus } from "@/types/assessment";
 import { useOptimisticFilter } from "@/hooks/use-optimistic-filter";
 import { useInlineLoading } from "@/hooks/use-inline-loading";
@@ -142,7 +169,9 @@ export function SchoolPerformanceView({ assessments, refreshAssessments, isLoadi
   });
   const [invitationSheetOpen, setInvitationSheetOpen] = useState(false);
   const [expandedSchools, setExpandedSchools] = useState<Set<string>>(new Set());
-  const [selectedTerm, setSelectedTerm] = useState<string>("");
+  const [selectedTerm, setSelectedTerm] = useState<string>(
+    () => loadDashboardPrefs().selectedTerm ?? ""
+  );
   const [sortConfig, setSortConfig] = useState<{ key: string; direction: SortDirection }>({
     key: "",
     direction: null
@@ -151,6 +180,9 @@ export function SchoolPerformanceView({ assessments, refreshAssessments, isLoadi
   const [schoolsLoading, setSchoolsLoading] = useState(true);
   const [aspects, setAspects] = useState<Aspect[]>([]);
   const [aspectsLoading, setAspectsLoading] = useState(true);
+  const [dashboardView, setDashboardView] = useState<"school" | "trust">(
+    () => loadDashboardPrefs().dashboardView ?? "school"
+  );
   const [schoolsDashboard, setSchoolsDashboard] = useState<SchoolsDashboardResponse | null>(null);
   const [dashboardLoading, setDashboardLoading] = useState(false);
   const [dashboardError, setDashboardError] = useState<string | null>(null);
@@ -169,6 +201,8 @@ export function SchoolPerformanceView({ assessments, refreshAssessments, isLoadi
   };
 
   const [aspectRowMetrics, setAspectRowMetrics] = useState<Record<string, AspectRowMetrics>>({});
+  const loadedAspectMetricKeysRef = useRef<Set<string>>(new Set());
+  const inFlightAspectMetricKeysRef = useRef<Set<string>>(new Set());
 
   const formatStatus = useCallback((status: string): string => {
     // Accept DB formats: not_started / in_progress / completed
@@ -216,28 +250,61 @@ export function SchoolPerformanceView({ assessments, refreshAssessments, isLoadi
   // Fetch schools dashboard summary (bulk dashboard endpoint)
   const selectedUniqueTermId = useMemo(() => termLabelToUniqueTermId(selectedTerm), [selectedTerm]);
 
+  const loadDashboard = useCallback(async () => {
+    setDashboardLoading(true);
+    setDashboardError(null);
+    try {
+      const data = await assessmentService.getSchoolsDashboard(
+        selectedUniqueTermId,
+        dashboardView
+      );
+      setSchoolsDashboard(data);
+    } catch (err: any) {
+      console.error("Failed to load schools dashboard:", err);
+      const message = err?.userMessage || err?.message || "Failed to load dashboard data";
+      setDashboardError(message);
+    } finally {
+      setDashboardLoading(false);
+    }
+  }, [selectedUniqueTermId, dashboardView]);
+
   useEffect(() => {
-    let cancelled = false;
+    void loadDashboard();
+  }, [loadDashboard]);
 
-    const loadDashboard = async () => {
-      setDashboardLoading(true);
-      setDashboardError(null);
-      try {
-        const data = await getSchoolsDashboard(selectedUniqueTermId);
-        if (!cancelled) setSchoolsDashboard(data);
-      } catch (err: any) {
-        console.error("Failed to load schools dashboard:", err);
-        const message = err?.userMessage || err?.message || "Failed to load dashboard data";
-        if (!cancelled) setDashboardError(message);
-      } finally {
-        if (!cancelled) setDashboardLoading(false);
+  // Refetch dashboard / drop invalidated aspect metrics when rating saves clear caches
+  useEffect(() => {
+    return requestCache.subscribePrefixInvalidation((prefix, deletedKeys) => {
+      if (prefix.startsWith("dashboard_schools")) {
+        void loadDashboard();
       }
-    };
+      if (prefix.startsWith("aspect_")) {
+        const metricKeysToDrop = new Set<string>();
+        for (const cacheKey of deletedKeys) {
+          const metricKey = aspectCacheKeyToMetricKey(cacheKey);
+          if (metricKey) metricKeysToDrop.add(metricKey);
+        }
+        if (metricKeysToDrop.size === 0) return;
 
-    loadDashboard();
-    return () => {
-      cancelled = true;
-    };
+        for (const metricKey of metricKeysToDrop) {
+          loadedAspectMetricKeysRef.current.delete(metricKey);
+          inFlightAspectMetricKeysRef.current.delete(metricKey);
+        }
+        setAspectRowMetrics((prev) => {
+          const next = { ...prev };
+          for (const metricKey of metricKeysToDrop) {
+            delete next[metricKey];
+          }
+          return next;
+        });
+      }
+    });
+  }, [loadDashboard]);
+
+  useEffect(() => {
+    loadedAspectMetricKeysRef.current.clear();
+    inFlightAspectMetricKeysRef.current.clear();
+    setAspectRowMetrics({});
   }, [selectedUniqueTermId]);
 
   const dashboardBySchoolId = useMemo(() => {
@@ -246,10 +313,7 @@ export function SchoolPerformanceView({ assessments, refreshAssessments, isLoadi
   }, [schoolsDashboard]);
 
   const computeAvgScore = useCallback((data: AssessmentByAspect): number | null => {
-    const rated = data.standards.filter(s => s.rating !== null) as Array<{ rating: Exclude<Rating, null> }>;
-    if (rated.length === 0) return null;
-    const sum = rated.reduce((acc, s) => acc + (s.rating || 0), 0);
-    return Math.round((sum / rated.length) * 10) / 10;
+    return calculateAverageRating(data.standards);
   }, []);
 
   const computeInterventionRequired = useCallback((data: AssessmentByAspect): number => {
@@ -305,19 +369,18 @@ export function SchoolPerformanceView({ assessments, refreshAssessments, isLoadi
     return terms;
   }, [assessments]);
 
-  // Always keep selection on the latest term when the term set refreshes.
-  // Users can still change the dropdown, but any data refresh that changes the
-  // available term list will snap back to the latest.
+  // Default to latest term only when nothing is saved or the saved term is invalid.
   useEffect(() => {
-    if (availableTerms.length > 0) {
-      const firstTerm = availableTerms[0];
-      if (selectedTerm !== firstTerm) setSelectedTerm(firstTerm);
-    }
-  }, [availableTerms]);
-  
-  // Term selection (dropdown)
+    if (availableTerms.length === 0) return;
+    if (selectedTerm && availableTerms.includes(selectedTerm)) return;
+    const nextTerm = availableTerms[0];
+    setSelectedTerm(nextTerm);
+    saveDashboardPrefs({ selectedTerm: nextTerm });
+  }, [availableTerms, selectedTerm]);
+
   const handleTermChange = (term: string) => {
     setSelectedTerm(term);
+    saveDashboardPrefs({ selectedTerm: term });
   };
 
   // Filter assessments by selected term
@@ -444,31 +507,8 @@ export function SchoolPerformanceView({ assessments, refreshAssessments, isLoadi
     }
   };
 
-  // Helper function - define before usage to avoid temporal dead zone
-  const getPerformanceTrend = (score: number, criticalCount: number) => {
-    if (score >= 3.5 && criticalCount === 0) {
-      return "Excellent";
-    } else if (score >= 3.0 && criticalCount <= 1) {
-      return "Strong";
-    } else if (score >= 2.5 && criticalCount <= 3) {
-      return "Good";
-    } else if (score >= 2.0 && criticalCount <= 5) {
-      return "Satisfactory";
-    } else if (score >= 1.5) {
-      return "Needs Attention";
-    } else {
-      return "Requires Attention";
-    }
-  };
-
   // Create filter options for multi-select components
-  const performanceOptions: MultiSelectOption[] = [
-    { label: "Excellent", value: "excellent" },
-    { label: "Good", value: "good" },
-    { label: "Requires Improvement", value: "requires-improvement" },
-    { label: "Inadequate", value: "inadequate" },
-    { label: "No Data", value: "no-data" }
-  ];
+  const performanceOptions: MultiSelectOption[] = PERFORMANCE_FILTER_OPTIONS;
 
   const statusOptions: MultiSelectOption[] = [
     { label: "Completed", value: "completed" },
@@ -522,20 +562,11 @@ export function SchoolPerformanceView({ assessments, refreshAssessments, isLoadi
     return map;
   }, [aspects]);
 
-  const formatAspectCategory = useCallback((category?: string) => {
-    if (!category) return "—";
-    const normalized = category.replace(/_/g, " ").toLowerCase();
-    return normalized
-      .split(" ")
-      .filter(Boolean)
-      .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
-      .join(" ");
-  }, []);
-  const schoolOptions: MultiSelectOption[] = schools
-    .filter(school => school.name && school.id)
-    .map((school: School) => ({
-      label: school.name!,
-      value: school.id!
+  const schoolOptions: MultiSelectOption[] = (schoolsDashboard?.schools ?? [])
+    .filter((s) => s.school_name && s.school_id)
+    .map((s) => ({
+      label: s.school_name,
+      value: s.school_id,
     }));
 
   // Optimistic filter update handlers
@@ -695,25 +726,41 @@ export function SchoolPerformanceView({ assessments, refreshAssessments, isLoadi
   const schoolPerformanceData = useMemo(() => {
     if (!schoolsDashboard) return schoolPerformanceFromAssessments;
 
-    return schoolPerformanceFromAssessments.map((school) => {
-      const schoolId = school.school?.id || school.school?.school_id || school.school?.code || '';
-      const dash = dashboardBySchoolId.get(schoolId);
-      if (!dash) return school;
+    const bySchoolId = new Map<string, (typeof schoolPerformanceFromAssessments)[number]>();
+    schoolPerformanceFromAssessments.forEach((sp) => {
+      const id = sp.school?.id || sp.school?.school_id || sp.school?.code || '';
+      if (id) bySchoolId.set(id, sp);
+    });
+
+    return schoolsDashboard.schools.map((dash) => {
+      const existing = bySchoolId.get(dash.school_id);
+      const schoolFromApi = schools.find((s) => s.id === dash.school_id || s.school_id === dash.school_id);
+      const dashAny = dash as any;
 
       // The previous_terms[0] is the term immediately before the selected term
-      // This is used for the trend indicator comparison
-      const previousOverallScore = dash.previous_terms?.[0]?.avg_score ?? school.previousOverallScore;
+      const previousOverallScore = dash.previous_terms?.[0]?.avg_score ?? existing?.previousOverallScore;
 
       return {
-        ...school,
-        status: dash.status,
+        school: schoolFromApi || existing?.school || {
+          school_id: dash.school_id,
+          school_name: dash.school_name,
+          id: dash.school_id,
+          name: dash.school_name,
+          code: dash.school_id,
+          school_type: dashAny.school_type,
+          is_central_office: !!dashAny.is_central_office || dashAny.school_type === "central",
+        },
         overallScore: dash.current_score ?? 0,
         previousOverallScore: previousOverallScore ?? undefined,
-        criticalStandardsTotal: dash.intervention_required,
-        lastUpdated: dash.last_updated || school.lastUpdated,
+        status: dash.status,
+        assessmentsByCategory: existing?.assessmentsByCategory ?? [],
+        criticalStandardsTotal: dash.intervention_required ?? existing?.criticalStandardsTotal ?? 0,
+        lastUpdated: dash.last_updated || existing?.lastUpdated || "-",
+        completedAssessments: existing?.completedAssessments ?? 0,
+        totalAssessments: existing?.totalAssessments ?? 0,
       };
     });
-  }, [schoolPerformanceFromAssessments, schoolsDashboard, dashboardBySchoolId]);
+  }, [schoolPerformanceFromAssessments, schoolsDashboard, dashboardBySchoolId, schools]);
 
   const prefetchAspectRowMetricsForSchool = useCallback(async (schoolId: string) => {
     if (!selectedUniqueTermId) return;
@@ -733,37 +780,61 @@ export function SchoolPerformanceView({ assessments, refreshAssessments, isLoadi
       if (!aspectCode) return;
 
       const key = `${schoolId}:${aspectCode}:${selectedUniqueTermId}`;
-      if (aspectRowMetrics[key]) return;
 
-      const current = await assessmentService.getAssessmentsByAspect(aspectCode, schoolId, selectedUniqueTermId);
-      const current_score = computeAvgScore(current);
-      const intervention_required = computeInterventionRequired(current);
-      const last_updated = computeLastUpdated(current);
+      if (
+        loadedAspectMetricKeysRef.current.has(key) ||
+        inFlightAspectMetricKeysRef.current.has(key)
+      ) {
+        return;
+      }
+      inFlightAspectMetricKeysRef.current.add(key);
 
-      const previous_terms = await Promise.all(previousUniqueTerms.map(async (termId) => {
-        const resp = await assessmentService.getAssessmentsByAspect(aspectCode, schoolId, termId);
-        return {
-          term_id: resp.term_id,
-          academic_year: resp.academic_year,
-          avg_score: computeAvgScore(resp),
-        };
-      }));
+      try {
+        const current = await assessmentService.getAssessmentsByAspect(
+          aspectCode,
+          schoolId,
+          selectedUniqueTermId
+        );
+        const current_score = computeAvgScore(current);
+        const intervention_required = computeInterventionRequired(current);
+        const last_updated = computeLastUpdated(current);
 
-      setAspectRowMetrics(prev => ({
-        ...prev,
-        [key]: {
-          status: current.status as any,
-          current_score,
-          previous_terms,
-          intervention_required,
-          completed_standards: current.completed_standards,
-          total_standards: current.total_standards,
-          last_updated,
-        }
-      }));
+        const previous_terms = await Promise.all(
+          previousUniqueTerms.map(async (termId) => {
+            const resp = await assessmentService.getAssessmentsByAspect(
+              aspectCode,
+              schoolId,
+              termId
+            );
+            return {
+              term_id: resp.term_id,
+              academic_year: resp.academic_year,
+              avg_score: computeAvgScore(resp),
+            };
+          })
+        );
+
+        setAspectRowMetrics((prev) => {
+          if (prev[key]) return prev;
+          return {
+            ...prev,
+            [key]: {
+              status: current.status as AspectRowMetrics["status"],
+              current_score,
+              previous_terms,
+              intervention_required,
+              completed_standards: current.completed_standards,
+              total_standards: current.total_standards,
+              last_updated,
+            },
+          };
+        });
+        loadedAspectMetricKeysRef.current.add(key);
+      } finally {
+        inFlightAspectMetricKeysRef.current.delete(key);
+      }
     }));
   }, [
-    aspectRowMetrics,
     availableTerms,
     categoryValueToAspect,
     computeAvgScore,
@@ -801,16 +872,12 @@ export function SchoolPerformanceView({ assessments, refreshAssessments, isLoadi
         (school.school?.name || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
         (school.school?.code && school.school.code.toLowerCase().includes(searchTerm.toLowerCase()));
 
-      const matchesPerformance = activeFilters.performance.length === 0 || activeFilters.performance.some(filter => {
-        switch (filter) {
-          case "excellent": return school.overallScore >= 3.5;
-          case "good": return school.overallScore >= 2.5 && school.overallScore < 3.5;
-          case "requires-improvement": return school.overallScore >= 1.5 && school.overallScore < 2.5;
-          case "inadequate": return school.overallScore < 1.5 && school.overallScore > 0;
-          case "no-data": return school.overallScore === 0;
-          default: return false;
-        }
-      });
+      const matchesPerformance = activeFilters.performance.length === 0 || activeFilters.performance.some(filter =>
+        scoreMatchesPerformanceFilter(
+          school.overallScore,
+          filter as PerformanceBandId | 'no-data'
+        )
+      );
 
       const matchesStatus = activeFilters.status.length === 0 || activeFilters.status.some(status => {
         return school.assessmentsByCategory.some(cat => {
@@ -921,12 +988,7 @@ export function SchoolPerformanceView({ assessments, refreshAssessments, isLoadi
   };
 
 
-  const getScoreBadgeColor = (score: number) => {
-    if (score >= 3.5) return "bg-emerald-50 text-emerald-700 border-emerald-200";
-    if (score >= 2.5) return "bg-indigo-50 text-indigo-700 border-indigo-200";
-    if (score >= 1.5) return "bg-amber-50 text-amber-700 border-amber-200";
-    return "bg-rose-50 text-rose-700 border-rose-200";
-  };
+  const getScoreBadgeColor = getPerformanceBandBadgeClasses;
 
   const getStatusColor = (status: string) => {
     switch (status) {
@@ -985,6 +1047,23 @@ export function SchoolPerformanceView({ assessments, refreshAssessments, isLoadi
               <TermNavigationSkeleton />
             ) : (
               <div className="flex items-center gap-2 w-full md:w-auto">
+                <Tabs
+                    value={dashboardView}
+                    onValueChange={(v) => {
+                      const next = v as "school" | "trust";
+                      setDashboardView(next);
+                      saveDashboardPrefs({ dashboardView: next });
+                      // Clear school filter whenever the view changes to avoid filtering out newly fetched rows.
+                      if (filters.school.length > 0 || optimisticFilters.school.length > 0) {
+                        handleSchoolFilterChange([]);
+                      }
+                    }}
+                  >
+                    <TabsList className="h-10">
+                      <TabsTrigger value="school">Schools</TabsTrigger>
+                      <TabsTrigger value="trust">Trust</TabsTrigger>
+                    </TabsList>
+                  </Tabs>
                 <Select value={selectedTerm} onValueChange={handleTermChange}>
                   <SelectTrigger className="w-full md:w-[220px] h-10">
                     <SelectValue placeholder="Select term" />
@@ -1056,7 +1135,7 @@ export function SchoolPerformanceView({ assessments, refreshAssessments, isLoadi
             },
             {
               type: 'checkbox',
-              label: 'Requires attention only',
+              label: `${REQUIRES_ATTENTION_LABEL} only`,
               value: criticalFilter,
               onChange: setCriticalFilter,
               id: 'critical-filter'
@@ -1097,7 +1176,7 @@ export function SchoolPerformanceView({ assessments, refreshAssessments, isLoadi
                     <TableHead className="text-center">SUBMITTED RATINGS</TableHead>
                     <TableHead className="text-center">OVERALL SCORE</TableHead>
                     <TableHead className="text-center">PREVIOUS 3 TERMS</TableHead>
-                    <TableHead className="text-center">REQUIRES ATTENTION</TableHead>
+                    <TableHead className="text-center">{REQUIRES_ATTENTION_LABEL.toUpperCase()}</TableHead>
                     <TableHead className="text-center">LAST UPDATED</TableHead>
                   </TableRow>
                 </TableHeader>
@@ -1150,7 +1229,7 @@ export function SchoolPerformanceView({ assessments, refreshAssessments, isLoadi
                     currentSort={sortConfig}
                     onSort={handleSort}
                   >
-                    REQUIRES ATTENTION
+                    {REQUIRES_ATTENTION_LABEL.toUpperCase()}
                   </SortableTableHead>
                   <SortableTableHead 
                     className="text-center"
@@ -1160,6 +1239,7 @@ export function SchoolPerformanceView({ assessments, refreshAssessments, isLoadi
                   >
                     COMPLETION RATE
                   </SortableTableHead>
+                  <TableHead className="text-center">OUTSTANDING ACTIONS</TableHead>
                   <SortableTableHead 
                     className="text-center"
                     sortKey="lastUpdated"
@@ -1180,11 +1260,17 @@ export function SchoolPerformanceView({ assessments, refreshAssessments, isLoadi
                 const completedCount = dashboardItem?.completed_standards ?? school.assessmentsByCategory.filter(cat => cat.status === "completed").length;
                 const totalCount = dashboardItem?.total_standards ?? school.assessmentsByCategory.length;
                 const completionPercent = totalCount > 0 ? (completedCount / totalCount) * 100 : 0;
+                const rowStatus = dashboardItem?.status ?? school.status;
+                const isEmptySchool =
+                  totalCount === 0 && rowStatus === 'not_started';
 
                 return (
                   <React.Fragment key={schoolId || index}>
                     <TableRow 
-                      className="cursor-pointer hover:bg-slate-50 transition-colors duration-200 animate-in fade-in-0 slide-in-from-bottom-1"
+                      className={cn(
+                        "cursor-pointer hover:bg-slate-50 transition-colors duration-200 animate-in fade-in-0 slide-in-from-bottom-1",
+                        isEmptySchool && "opacity-[0.55]"
+                      )}
                       style={{ animationDelay: `${index * 80}ms`, animationFillMode: 'both' }}
                       onClick={() => toggleSchoolExpansion(schoolId)}
                     >
@@ -1204,7 +1290,7 @@ export function SchoolPerformanceView({ assessments, refreshAssessments, isLoadi
                           </div>
                           <div className="min-w-0">
                             <p className="font-medium text-sm text-slate-900 leading-tight">{school.school.name}</p>
-                            {school.school.code && (
+                            {!isEmptySchool && school.school.code && (
                               <p className="text-xs text-slate-500 mt-0.5">{school.school.code}</p>
                             )}
                           </div>
@@ -1330,6 +1416,27 @@ export function SchoolPerformanceView({ assessments, refreshAssessments, isLoadi
                           <AnimatedProgress value={completionPercent} className="w-16 h-2" delay={index * 80 + 200} />
                         </div>
                       </TableCell>
+                      <TableCell className="text-center">
+                        {dashboardItem?.outstanding_actions_count != null &&
+                        dashboardItem.outstanding_actions_count > 0 ? (
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <Badge
+                                variant="outline"
+                                className="bg-amber-50 text-amber-700 border-amber-200 tabular-nums"
+                              >
+                                {dashboardItem.outstanding_actions_count}
+                              </Badge>
+                            </TooltipTrigger>
+                            <TooltipContent>
+                              <p>
+                                {dashboardItem.outstanding_actions_count} outstanding action
+                                {dashboardItem.outstanding_actions_count === 1 ? "" : "s"}
+                              </p>
+                            </TooltipContent>
+                          </Tooltip>
+                        ) : null}
+                      </TableCell>
                       <TableCell className="text-center text-sm text-slate-600">
                         {school.lastUpdated !== "-" ? new Date(school.lastUpdated).toLocaleDateString() : "—"}
                       </TableCell>
@@ -1338,7 +1445,7 @@ export function SchoolPerformanceView({ assessments, refreshAssessments, isLoadi
                     {/* Expanded Content */}
                     {isExpanded && (
                       <TableRow>
-                        <TableCell colSpan={8} className="bg-slate-50 p-0">
+                        <TableCell colSpan={9} className="bg-slate-50 p-0">
                           <div className="p-6 border-t">
                             <h4 className="text-sm font-medium text-slate-900 mb-4">Assessment Strategies</h4>
                             <div className="bg-white rounded-lg border">
@@ -1349,7 +1456,7 @@ export function SchoolPerformanceView({ assessments, refreshAssessments, isLoadi
                                     <TableHead className="text-center">STATUS</TableHead>
                                     <TableHead className="text-center">CURRENT SCORE</TableHead>
                                     <TableHead className="text-center">PREVIOUS 3 TERMS</TableHead>
-                                    <TableHead className="text-center">REQUIRES ATTENTION</TableHead>
+                                    <TableHead className="text-center">{REQUIRES_ATTENTION_LABEL.toUpperCase()}</TableHead>
                                     <TableHead className="text-center">COMPLETION RATE</TableHead>
                                     <TableHead className="text-center pr-6">ACTIONS</TableHead>
                                   </TableRow>
@@ -1358,7 +1465,6 @@ export function SchoolPerformanceView({ assessments, refreshAssessments, isLoadi
                                   {school.assessmentsByCategory.map((categoryData, catIndex) => {
                                     const aspectMeta = categoryValueToAspect.get((categoryData.category || '').toLowerCase());
                                     const aspectName = aspectMeta?.aspect_name || getAspectDisplayName(categoryData.category);
-                                    const aspectCategory = formatAspectCategory(aspectMeta?.aspect_category);
                                     const aspectCode = aspectMeta?.aspect_code;
                                     const metricKey = (schoolId && aspectCode && selectedUniqueTermId)
                                       ? `${schoolId}:${aspectCode}:${selectedUniqueTermId}`
@@ -1376,10 +1482,15 @@ export function SchoolPerformanceView({ assessments, refreshAssessments, isLoadi
                                             {getCategoryIcon(categoryData.category)}
                                           </div>
                                           <div className="min-w-0">
-                                            <p className="font-medium text-sm text-slate-900 leading-tight">{aspectName}</p>
-                                            <p className="text-xs text-slate-500 mt-0.5">
-                                              {aspectCategory}
-                                            </p>
+                                            <div className="flex items-center gap-2 flex-wrap">
+                                              <p className="font-medium text-sm text-slate-900 leading-tight">{aspectName}</p>
+                                              {aspectMeta?.aspect_category && (
+                                                <AspectCategoryBadge
+                                                  category={aspectMeta.aspect_category}
+                                                  className="text-[10px] h-5 px-1.5 py-0.5"
+                                                />
+                                              )}
+                                            </div>
                                           </div>
                                         </div>
                                       </TableCell>
@@ -1503,9 +1614,9 @@ export function SchoolPerformanceView({ assessments, refreshAssessments, isLoadi
                                             </TooltipTrigger>
                                             <TooltipContent side="top" align="center" className="max-w-xs">
                                               <div className="space-y-2">
-                                                <p className="font-medium text-sm">Requires attention</p>
+                                                <p className="font-medium text-sm">{REQUIRES_ATTENTION_LABEL}</p>
                                                 <p className="text-xs leading-relaxed">
-                                                  This aspect has an overall score of {categoryData.overallScore.toFixed(1)}, indicating that one or more standards are rated as inadequate and require immediate attention.
+                                                  {REQUIRES_ATTENTION_SUBTITLE} — critical performance requiring action.
                                                 </p>
                                               </div>
                                             </TooltipContent>
@@ -1577,25 +1688,25 @@ export function SchoolPerformanceView({ assessments, refreshAssessments, isLoadi
             <div className="flex items-center gap-1.5">
               <div className="w-3 h-2 bg-emerald-500 rounded-sm opacity-60"></div>
               <span className="text-xs text-slate-600">
-                <span className="font-medium text-emerald-700">Outstanding</span> (3.5-4.0)
+                <span className="font-medium text-emerald-700">{PERFORMANCE_BAND_LABELS.strong}</span> (3.5–4.0)
               </span>
             </div>
             <div className="flex items-center gap-1.5">
               <div className="w-3 h-2 bg-indigo-500 rounded-sm opacity-60"></div>
               <span className="text-xs text-slate-600">
-                <span className="font-medium text-indigo-700">Good</span> (2.5-3.4)
+                <span className="font-medium text-indigo-700">{PERFORMANCE_BAND_LABELS.healthy}</span> (2.5–3.4)
               </span>
             </div>
             <div className="flex items-center gap-1.5">
               <div className="w-3 h-2 bg-amber-500 rounded-sm opacity-60"></div>
               <span className="text-xs text-slate-600">
-                <span className="font-medium text-amber-700">Requires Improvement</span> (1.5-2.4)
+                <span className="font-medium text-amber-700">{PERFORMANCE_BAND_LABELS['needs-improvement']}</span> (1.5–2.4)
               </span>
             </div>
             <div className="flex items-center gap-1.5">
               <div className="w-3 h-2 bg-red-500 rounded-sm opacity-60"></div>
               <span className="text-xs text-slate-600">
-                <span className="font-medium text-red-700">Inadequate</span> (1.0-1.4)
+                <span className="font-medium text-red-700">{PERFORMANCE_BAND_LABELS.critical}</span> (1.0–1.4)
               </span>
             </div>
           </div>

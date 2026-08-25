@@ -1,17 +1,21 @@
 from fastapi import FastAPI, HTTPException, Query, Depends, status, Request
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
-from pydantic import BaseModel, EmailStr, validator
-from typing import List, Optional
+from pydantic import BaseModel, EmailStr, Field, validator
+from typing import List, Literal, Optional
 import pymysql
 import os
+import logging
+import random
 from datetime import datetime, date
 from decimal import Decimal
 import uuid
 
+logger = logging.getLogger(__name__)
+
 # Import authentication modules
-from auth_config import validate_config
+from auth_config import SUPER_ADMIN_EMAILS, validate_config
 from auth_models import (
     MagicLinkRequest, 
     MagicLinkResponse, 
@@ -227,16 +231,6 @@ DB_CONFIG = {
 # ================================
 
 # Assessment Models
-class StandardRatingSubmission(BaseModel):
-    mat_standard_id: str  # Changed from standard_id
-    rating: Optional[int] = None  # 1-5 or null for not rated
-    evidence_comments: str = ""
-    submitted_by: str
-
-class AssessmentSubmission(BaseModel):
-    assessment_id: str
-    standards: List[StandardRatingSubmission]
-
 class AssessmentCreateRequest(BaseModel):
     school_ids: List[str]
     mat_aspect_id: str  # Changed from category
@@ -244,6 +238,32 @@ class AssessmentCreateRequest(BaseModel):
     academic_year: str
     due_date: Optional[str] = None
     assigned_to: Optional[List[str]] = None
+
+# Action item models — checklist of items per assessment (REQ-002 rework)
+class ActionItem(BaseModel):
+    id: str
+    text: str
+    is_completed: bool
+    sort_order: int
+    created_at: str
+    created_by: Optional[str] = None
+    completed_at: Optional[str] = None
+    completed_by: Optional[str] = None
+
+class ActionCreate(BaseModel):
+    text: str = Field(min_length=1)
+    sort_order: Optional[int] = None
+
+class ActionUpdate(BaseModel):
+    text: Optional[str] = Field(default=None, min_length=1)
+    is_completed: Optional[bool] = None
+    sort_order: Optional[int] = None
+
+# Internal admin tooling — mock data generate/wipe (super-admin only)
+class MockDataRequest(BaseModel):
+    mat_id: str
+    confirm_mat_id: str
+    term_ids: List[str] = Field(min_length=1)
 
 # ================================
 # ASPECT & STANDARD MODELS (MAT-Specific)
@@ -255,21 +275,21 @@ class MatAspectBase(BaseModel):
     aspect_code: str
     aspect_name: str
     aspect_description: Optional[str] = None
-    aspect_category: str = 'operational'  # 'ofsted' or 'operational'
+    aspect_category: str = 'operational'  # 'strategic' or 'operational'
     sort_order: int = 0
 
 class MatAspectCreate(BaseModel):
     aspect_code: str
     aspect_name: str
     aspect_description: Optional[str] = None
-    aspect_category: str = 'operational'  # 'ofsted' or 'operational'
+    aspect_category: str = 'operational'  # 'strategic' or 'operational'
     sort_order: int = 0
     source_aspect_id: Optional[str] = None  # If copying from default
 
 class MatAspectUpdate(BaseModel):
     aspect_name: Optional[str] = None
     aspect_description: Optional[str] = None
-    aspect_category: Optional[str] = None  # 'ofsted' or 'operational'
+    aspect_category: Optional[str] = None  # 'strategic' or 'operational'
     sort_order: Optional[int] = None
 
 class MatAspectResponse(MatAspectBase):
@@ -532,6 +552,32 @@ async def verify_mat_admin(
         )
     return current_user
 
+
+async def verify_super_admin(
+    request: Request,
+    current_user: UserResponse = Depends(get_current_user)
+) -> UserResponse:
+    """
+    Dependency for super-admin tooling endpoints (e.g. /api/admin/mock-data/*).
+    Allow-list is sourced from the SUPER_ADMIN_EMAILS env var (comma-separated,
+    case-insensitive). Unauthorised attempts are logged at WARNING so probing
+    is visible in logs.
+    """
+    if current_user.email.lower() not in SUPER_ADMIN_EMAILS:
+        logger.warning(
+            "Unauthorised super-admin attempt",
+            extra={
+                "user_id": current_user.user_id,
+                "email": current_user.email,
+                "path": str(request.url.path),
+            },
+        )
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Super admin access required",
+        )
+    return current_user
+
 # ================================
 # YOUR EXISTING HELPER FUNCTIONS (unchanged)
 # ================================
@@ -782,6 +828,8 @@ async def get_assessments(
                 CONCAT(s.school_id, '-', UPPER(ma.aspect_code), '-', a.unique_term_id) as group_id,
                 s.school_id,
                 s.school_name,
+                s.school_type,
+                s.is_central_office,
                 ma.mat_aspect_id,
                 UPPER(ma.aspect_code) as aspect_code,
                 ma.aspect_name,
@@ -821,8 +869,9 @@ async def get_assessments(
             params.append(academic_year)
 
         query += """
-            GROUP BY s.school_id, s.school_name, ma.mat_aspect_id, ma.aspect_code,
-                     ma.aspect_name, a.unique_term_id, a.academic_year
+            GROUP BY s.school_id, s.school_name, s.school_type, s.is_central_office,
+                     ma.mat_aspect_id, ma.aspect_code, ma.aspect_name,
+                     a.unique_term_id, a.academic_year
         """
 
         if status:
@@ -840,6 +889,9 @@ async def get_assessments(
         processed_rows = []
         for row in rows:
             processed_row = process_row_for_json(row)
+
+            # Coerce tinyint(1) to bool for API contract compliance.
+            processed_row['is_central_office'] = bool(row['is_central_office'])
 
             if processed_row.get('due_date'):
                 if isinstance(row['due_date'], (datetime, date)):
@@ -1000,7 +1052,6 @@ async def create_assessments(
 
 @app.get("/api/schools", tags=["Schools"])
 async def get_schools(
-    include_central: bool = False,
     current_mat_id: str = Depends(get_current_mat),
     current_user: UserResponse = Depends(get_current_user)
 ):
@@ -1008,31 +1059,35 @@ async def get_schools(
     Get list of schools for the authenticated user's MAT.
     Enforces MAT isolation - users can only see schools in their own MAT.
     Requires authentication.
-
-    Query Parameters:
-    - include_central: If True, includes central office in results (default: False)
     """
     try:
         connection = get_db_connection()
         cursor = connection.cursor()
 
-        # MAT isolation: only return schools belonging to user's MAT
+        # MAT isolation: only return schools belonging to user's MAT.
+        # All active schools are returned, central office included — the
+        # Trust/School selector needs the full set to bind its options.
         query = """
             SELECT school_id, school_name, school_type, is_central_office, is_active
             FROM schools
             WHERE mat_id = %s AND is_active = TRUE
+            ORDER BY school_name
         """
-
-        if not include_central:
-            query += " AND is_central_office = FALSE"
-
-        query += " ORDER BY school_name"
 
         cursor.execute(query, (current_mat_id,))
         schools = cursor.fetchall()
 
+        # Coerce tinyint(1) columns to bool so the JSON shape is consistent
+        # with /api/dashboard/schools and /api/assessments.
+        processed_schools = []
+        for school in schools:
+            row = dict(school)
+            row['is_central_office'] = bool(row['is_central_office'])
+            row['is_active'] = bool(row['is_active'])
+            processed_schools.append(row)
+
         connection.close()
-        return JSONResponse(content=schools, status_code=200)
+        return JSONResponse(content=processed_schools, status_code=200)
 
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
@@ -1244,23 +1299,30 @@ async def get_standard(
 async def get_schools_dashboard(
     current_mat_id: str = Depends(get_current_mat),
     current_user: UserResponse = Depends(get_current_user),
-    term_id: Optional[str] = Query(None)
+    term_id: Optional[str] = Query(None),
+    view: Literal["school", "trust"] = Query("school")
 ):
     try:
         connection = get_db_connection()
         cursor = connection.cursor()
 
-        # If no term specified, get the most recent term
+        # view -> is_central_office filter (REQ-005). "school" excludes central
+        # office rows; "trust" returns only the central office row.
+        is_central_office_flag = 0 if view == "school" else 1
+
+        # If no term specified, pick the most recent term that has assessments
+        # for the chosen view (school vs trust).
         if not term_id:
             cursor.execute("""
                 SELECT a.unique_term_id
                 FROM assessments a
                 JOIN schools s ON a.school_id = s.school_id
                 WHERE s.mat_id = %s
-                ORDER BY a.academic_year DESC, 
+                  AND s.is_central_office = %s
+                ORDER BY a.academic_year DESC,
                     FIELD(SUBSTRING(a.unique_term_id, 1, 2), 'T3', 'T2', 'T1') DESC
                 LIMIT 1
-            """, (current_mat_id,))
+            """, (current_mat_id, is_central_office_flag))
             row = cursor.fetchone()
             if row:
                 term_id = row['unique_term_id']
@@ -1268,21 +1330,98 @@ async def get_schools_dashboard(
                 connection.close()
                 return JSONResponse(content={'current_term': None, 'schools': []}, status_code=200)
 
-        # Parse the selected term to determine chronological position
+        # Parse the selected term to determine chronological position.
         # term_id format: "T2-2025-26" -> term_num=2, academic_year="2025-26"
         term_parts = term_id.split('-', 1)
-        selected_term_num = int(term_parts[0][1])  # "T2" -> 2
-        selected_academic_year = term_parts[1]      # "2025-26"
+        selected_term_num = int(term_parts[0][1])
+        selected_academic_year = term_parts[1]
 
-        # Main query for current term stats (unchanged)
-        # ... [keep existing current term query] ...
+        # Both polarities read "higher is better" under the deployed rating
+        # labels (see assurly-frontend/src/utils/rating-labels.ts and
+        # data-model bible §2.5), so per-type transformations aren't needed:
+        # current_score is a plain average, and intervention_required flags
+        # only rating == 1 (genuinely critical) regardless of standard_type.
+        # Soft-deleted standards are excluded via mat_standards.is_active and
+        # the '-deleted-' archive-rename marker.
+        current_query = """
+            SELECT
+                s.school_id,
+                s.school_name,
+                s.school_type,
+                s.is_central_office,
 
-        # FIXED: Get previous 3 terms BEFORE the selected term
-        # Terms are "before" if:
-        #   1. Same academic year but lower term number (T1 < T2 < T3)
-        #   2. Earlier academic year
+                CASE
+                    WHEN COUNT(ms.mat_standard_id) = 0 THEN 'not_started'
+                    WHEN COUNT(CASE WHEN ms.mat_standard_id IS NOT NULL AND a.rating IS NOT NULL THEN 1 END) = 0 THEN 'not_started'
+                    WHEN COUNT(CASE WHEN ms.mat_standard_id IS NOT NULL AND a.rating IS NOT NULL THEN 1 END) = COUNT(ms.mat_standard_id) THEN 'completed'
+                    ELSE 'in_progress'
+                END AS status,
+
+                ROUND(AVG(a.rating), 2) AS current_score,
+
+                ROUND(AVG(CASE WHEN ms.standard_type = 'assurance' THEN a.rating END), 2) AS assurance_score,
+                ROUND(AVG(CASE WHEN ms.standard_type = 'risk'      THEN a.rating END), 2) AS risk_score,
+
+                SUM(CASE WHEN a.rating = 1 THEN 1 ELSE 0 END) AS intervention_required,
+
+                COUNT(CASE WHEN ms.mat_standard_id IS NOT NULL AND a.rating IS NOT NULL THEN 1 END) AS completed_standards,
+                COUNT(ms.mat_standard_id) AS total_standards,
+
+                MAX(CASE WHEN ms.mat_standard_id IS NOT NULL THEN a.last_updated END) AS last_updated,
+
+                COALESCE(ev.cnt, 0) AS evidence_count,
+                COALESCE(act.cnt, 0) AS outstanding_actions_count
+
+            FROM schools s
+            LEFT JOIN assessments a
+                ON a.school_id = s.school_id
+                AND a.unique_term_id = %s
+            LEFT JOIN mat_standards ms
+                ON ms.mat_standard_id = a.mat_standard_id
+                AND ms.is_active = 1
+                AND ms.mat_standard_id NOT LIKE %s
+            LEFT JOIN (
+                SELECT school_id, COUNT(*) AS cnt
+                FROM standard_evidence
+                WHERE mat_id = %s
+                  AND unique_term_id = %s
+                GROUP BY school_id
+            ) ev ON ev.school_id = s.school_id
+            LEFT JOIN (
+                SELECT a.school_id, COUNT(*) AS cnt
+                FROM assessment_actions aa
+                JOIN assessments a ON a.id = aa.assessment_id
+                JOIN mat_standards ms ON ms.mat_standard_id = a.mat_standard_id
+                WHERE aa.is_completed = 0
+                  AND a.unique_term_id = %s
+                  AND ms.is_active = 1
+                  AND ms.mat_standard_id NOT LIKE %s
+                GROUP BY a.school_id
+            ) act ON act.school_id = s.school_id
+            WHERE s.mat_id = %s
+              AND s.is_active = 1
+              AND s.is_central_office = %s
+            GROUP BY s.school_id, s.school_name, s.school_type, s.is_central_office
+            ORDER BY s.school_name
+        """
+        deleted_pattern = '%-deleted-%'
+        cursor.execute(current_query, (
+            term_id,                  # main JOIN: assessments term filter
+            deleted_pattern,          # main JOIN: archive-rename exclusion
+            current_mat_id,           # evidence subquery: MAT isolation
+            term_id,                  # evidence subquery: term filter
+            term_id,                  # actions subquery: term filter
+            deleted_pattern,          # actions subquery: archive-rename exclusion
+            current_mat_id,           # WHERE: MAT isolation
+            is_central_office_flag,   # WHERE: trust/school view filter
+        ))
+        schools = cursor.fetchall()
+
+        # Previous 3 terms BEFORE the selected term, per school:
+        #   - earlier academic year (any term), OR
+        #   - same academic year but lower term number (T1 < T2 < T3).
         previous_terms_query = """
-            SELECT 
+            SELECT
                 a.school_id,
                 a.unique_term_id,
                 a.academic_year,
@@ -1292,25 +1431,23 @@ async def get_schools_dashboard(
             WHERE s.mat_id = %s
                 AND a.rating IS NOT NULL
                 AND (
-                    -- Earlier academic year (any term)
                     a.academic_year < %s
                     OR
-                    -- Same academic year but earlier term
                     (a.academic_year = %s AND CAST(SUBSTRING(a.unique_term_id, 2, 1) AS UNSIGNED) < %s)
                 )
             GROUP BY a.school_id, a.unique_term_id, a.academic_year
-            ORDER BY a.academic_year DESC, 
+            ORDER BY a.academic_year DESC,
                 FIELD(SUBSTRING(a.unique_term_id, 1, 2), 'T3', 'T2', 'T1') DESC
         """
         cursor.execute(previous_terms_query, (
-            current_mat_id, 
+            current_mat_id,
             selected_academic_year,
             selected_academic_year,
             selected_term_num
         ))
         previous_data = cursor.fetchall()
 
-        # Organize previous terms by school (limit to 3 most recent per school)
+        # Organise previous terms by school (limit to 3 most recent per school).
         school_trends = {}
         for row in previous_data:
             school_id = row['school_id']
@@ -1320,15 +1457,13 @@ async def get_schools_dashboard(
                 school_trends[school_id].append({
                     'term_id': row['unique_term_id'],
                     'academic_year': row['academic_year'],
-                    'avg_score': float(row['avg_score']) if row['avg_score'] else None
+                    'avg_score': float(row['avg_score']) if row['avg_score'] is not None else None
                 })
 
-        # Build response
         result = []
         for school in schools:
             school_id = school['school_id']
-            
-            # Format last_updated
+
             last_updated = None
             if school['last_updated']:
                 if isinstance(school['last_updated'], datetime):
@@ -1336,18 +1471,27 @@ async def get_schools_dashboard(
                 else:
                     last_updated = str(school['last_updated'])
 
+            completed = int(school['completed_standards'] or 0)
+            total = int(school['total_standards'] or 0)
+
             result.append({
                 'school_id': school_id,
                 'school_name': school['school_name'],
+                'school_type': school['school_type'],
+                'is_central_office': bool(school['is_central_office']),
                 'current_term': term_id,
                 'status': school['status'],
-                'current_score': float(school['current_score']) if school['current_score'] else None,
+                'current_score': float(school['current_score']) if school['current_score'] is not None else None,
+                'assurance_score': float(school['assurance_score']) if school['assurance_score'] is not None else None,
+                'risk_score':      float(school['risk_score'])      if school['risk_score']      is not None else None,
                 'previous_terms': school_trends.get(school_id, []),
-                'intervention_required': school['intervention_required'] or 0,
-                'completed_standards': school['completed_standards'] or 0,
-                'total_standards': school['total_standards'] or 0,
-                'completion_rate': f"{school['completed_standards'] or 0}/{school['total_standards'] or 0}",
-                'last_updated': last_updated
+                'intervention_required': int(school['intervention_required'] or 0),
+                'completed_standards': completed,
+                'total_standards': total,
+                'completion_rate': f"{completed}/{total}",
+                'last_updated': last_updated,
+                'evidence_count': int(school['evidence_count'] or 0),
+                'outstanding_actions_count': int(school['outstanding_actions_count'] or 0),
             })
 
         connection.close()
@@ -1912,7 +2056,7 @@ async def get_aspects(
 ):
     """
     Get list of MAT-specific aspects with standard counts.
-    Optionally filtered by aspect_category ('ofsted' or 'operational').
+    Optionally filtered by aspect_category ('strategic' or 'operational').
     Returns aspects for the authenticated user's MAT, including both default and custom aspects.
     Requires authentication.
     """
@@ -2496,6 +2640,7 @@ async def get_users(
         processed_users = []
         for user in users:
             processed_user = dict(user)
+            processed_user['is_active'] = bool(processed_user['is_active'])
             if processed_user.get('last_login'):
                 processed_user['last_login'] = processed_user['last_login'].strftime('%Y-%m-%dT%H:%M:%SZ')
             if processed_user.get('created_at'):
@@ -2600,6 +2745,7 @@ async def create_user(
 
         # Process datetime
         result = dict(created_user)
+        result['is_active'] = bool(result['is_active'])
         if result.get('created_at'):
             result['created_at'] = result['created_at'].strftime('%Y-%m-%dT%H:%M:%SZ')
 
@@ -2794,9 +2940,12 @@ async def update_user(
 
         connection.close()
 
+        updated_user_dict = dict(updated_user)
+        updated_user_dict['is_active'] = bool(updated_user_dict['is_active'])
+
         return JSONResponse(content={
             "message": "User updated successfully",
-            "user": dict(updated_user)
+            "user": updated_user_dict
         }, status_code=200)
 
     except HTTPException:
@@ -2863,6 +3012,7 @@ async def get_assessment_details(
                 ms.standard_code,
                 ms.standard_name,
                 ms.standard_description,
+                ms.standard_type,
                 ma.mat_aspect_id,
                 ma.aspect_code,
                 ma.aspect_name,
@@ -3020,6 +3170,7 @@ async def get_assessments_by_aspect(
                 "standard_code": row['standard_code'],
                 "standard_name": row['standard_name'],
                 "standard_description": row['standard_description'],
+                "standard_type": row['standard_type'],
                 "sort_order": row['sort_order'],
                 "rating": row['rating'],
                 "evidence_comments": row['evidence_comments'],
@@ -3058,195 +3209,6 @@ async def get_assessments_by_aspect(
             "standards": standards_list
         }, status_code=200)
 
-    except HTTPException:
-        raise
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-@app.get("/api/debug/assessment-parsing/{assessment_id}", tags=["Debug"])
-async def debug_assessment_parsing(assessment_id: str):
-    """
-    Debug endpoint to see how assessment_id is being parsed
-    """
-    try:
-        # Parse assessment_id to get components
-        parts = assessment_id.split('-')
-        
-        # Find the term pattern (T1, T2, T3, etc.)
-        term_index = None
-        for i, part in enumerate(parts):
-            if part.startswith('T') and part[1:].isdigit():
-                term_index = i
-                break
-        
-        if term_index is None:
-            return {"error": "No term found", "parts": parts}
-        
-        # Split the parts correctly
-        school_parts = parts[:term_index-1]
-        category = parts[term_index-1]
-        term_id = parts[term_index]
-        academic_year_parts = parts[term_index+1:]
-        
-        school_id = '-'.join(school_parts)
-        academic_year = '-'.join(academic_year_parts)
-        
-        connection = get_db_connection()
-        cursor = connection.cursor()
-        
-        # Check what actually exists in the database
-        check_query = """
-            SELECT school_id, standard_id, term_id, academic_year, s.aspect_id
-            FROM assessments a 
-            JOIN standards s ON a.standard_id = s.standard_id 
-            WHERE a.school_id = %s AND a.term_id = %s AND a.academic_year = %s
-            LIMIT 5
-        """
-        cursor.execute(check_query, (school_id, term_id, academic_year))
-        db_records = cursor.fetchall()
-        
-        connection.close()
-        
-        return {
-            "original_assessment_id": assessment_id,
-            "parsed_parts": parts,
-            "term_index": term_index,
-            "parsed_school_id": school_id,
-            "parsed_category": category,
-            "parsed_term_id": term_id, 
-            "parsed_academic_year": academic_year,
-            "database_records": db_records
-        }
-        
-    except Exception as e:
-        return {"error": str(e)}
-
-@app.post("/api/assessments/{assessment_id}/submit", tags=["Assessments"])
-async def submit_assessment_ratings(
-    assessment_id: str,
-    submission: AssessmentSubmission,
-    current_mat_id: str = Depends(get_current_mat),
-    current_user: UserResponse = Depends(get_current_user)
-):
-    """
-    Submit or update ratings for multiple standards within an assessment.
-    Enforces MAT isolation - can only submit for assessments in user's MAT.
-    Requires authentication.
-    """
-    try:
-        connection = get_db_connection()
-        cursor = connection.cursor()
-
-        # Parse assessment_id to get components
-        parts = assessment_id.split('-')
-        if len(parts) < 4:
-            raise HTTPException(status_code=400, detail="Invalid assessment_id format")
-
-        # For assessment_id like: cedar-park-primary-education-T1-2024-25
-        # We need to find where the school_id ends and category begins
-        # Look for the term pattern (T1, T2, T3, etc.)
-        term_index = None
-        for i, part in enumerate(parts):
-            if part.startswith('T') and part[1:].isdigit():
-                term_index = i
-                break
-
-        if term_index is None or term_index < 2:
-            raise HTTPException(status_code=400, detail="Invalid assessment_id format - no term found")
-
-        # Split the parts correctly
-        school_parts = parts[:term_index-1]  # Everything before category
-        category = parts[term_index-1]       # The category (education, governance, etc.)
-        term_id = parts[term_index]          # The term (T1, T2, T3)
-        academic_year_parts = parts[term_index+1:]  # Academic year parts (2024, 25)
-
-        school_id = '-'.join(school_parts)
-        academic_year = '-'.join(academic_year_parts)
-
-        # MAT isolation: Verify school belongs to user's MAT
-        mat_check_query = "SELECT school_id FROM schools WHERE school_id = %s AND mat_id = %s"
-        cursor.execute(mat_check_query, (school_id, current_mat_id))
-        if not cursor.fetchone():
-            connection.close()
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="Cannot submit assessment for school outside your MAT"
-            )
-
-        # Verify assessment exists by checking if any standards exist for this combination
-        verify_query = """
-            SELECT COUNT(*) as count FROM assessments
-            WHERE school_id = %s AND term_id = %s AND academic_year = %s
-        """
-        cursor.execute(verify_query, (school_id, term_id, academic_year))
-        result = cursor.fetchone()
-
-        if not result or result['count'] == 0:
-            raise HTTPException(status_code=404, detail="Assessment not found")
-        
-        # Update each standard rating with UPSERT logic
-        updated_standards = []
-        for standard in submission.standards:
-            # Check if record exists using standard_id (the lowest data level)
-            check_query = """
-                SELECT id FROM assessments 
-                WHERE school_id = %s AND standard_id = %s AND term_id = %s AND academic_year = %s
-            """
-            cursor.execute(check_query, (school_id, standard.standard_id, term_id, academic_year))
-            existing_record = cursor.fetchone()
-            
-            if existing_record:
-                # Update existing record
-                update_query = """
-                    UPDATE assessments 
-                    SET rating = %s, evidence_comments = %s, submitted_by = %s, 
-                        last_updated = CONVERT_TZ(NOW(), @@session.time_zone, '+01:00'), 
-                        updated_by = %s
-                    WHERE school_id = %s AND standard_id = %s AND term_id = %s AND academic_year = %s
-                """
-                cursor.execute(update_query, (
-                    standard.rating,
-                    standard.evidence_comments,
-                    standard.submitted_by,
-                    standard.submitted_by,
-                    school_id,
-                    standard.standard_id,
-                    term_id,
-                    academic_year
-                ))
-            else:
-                # Insert new record
-                insert_query = """
-                    INSERT INTO assessments 
-                    (id, school_id, standard_id, term_id, academic_year, rating, evidence_comments, 
-                     submitted_by, last_updated, updated_by)
-                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, 
-                            CONVERT_TZ(NOW(), @@session.time_zone, '+01:00'), %s)
-                """
-                new_uuid = str(uuid.uuid4())
-                cursor.execute(insert_query, (
-                    new_uuid,
-                    school_id,
-                    standard.standard_id,
-                    term_id,
-                    academic_year,
-                    standard.rating,
-                    standard.evidence_comments,
-                    standard.submitted_by,
-                    standard.submitted_by
-                ))
-            
-            updated_standards.append(standard.standard_id)
-        
-        connection.close()
-        
-        return JSONResponse(content={
-            "message": f"Successfully updated {len(updated_standards)} standards",
-            "assessment_id": assessment_id,
-            "updated_standards": updated_standards,
-            "status": "success"
-        }, status_code=200)
-        
     except HTTPException:
         raise
     except Exception as e:
@@ -3407,6 +3369,546 @@ async def bulk_update_assessments(
         raise HTTPException(status_code=500, detail=str(e))
 
 # ================================
+# ASSESSMENT ACTIONS (CHECKLIST) — REQ-002
+# ================================
+
+def _resolve_assessment_uuid(cursor, assessment_id: str, mat_id: str) -> Optional[str]:
+    """Resolve a composite assessment_id to its UUID PK, enforcing MAT isolation.
+
+    Returns the UUID (assessments.id) when the composite identifier belongs to
+    a school in the caller's MAT, or None when it does not. Callers should
+    treat None as 404 — do not differentiate "not yours" from "not found".
+    """
+    cursor.execute(
+        """
+        SELECT a.id
+        FROM assessments a
+        JOIN schools s ON s.school_id = a.school_id
+        WHERE a.assessment_id = %s
+          AND s.mat_id = %s
+        LIMIT 1
+        """,
+        (assessment_id, mat_id),
+    )
+    row = cursor.fetchone()
+    return row['id'] if row else None
+
+
+def _action_row_to_dict(row: dict) -> dict:
+    """Serialise an assessment_actions row for JSON responses."""
+    return {
+        'id': row['id'],
+        'text': row['text'],
+        'is_completed': bool(row['is_completed']),
+        'sort_order': int(row['sort_order']),
+        'created_at': row['created_at'].strftime('%Y-%m-%dT%H:%M:%SZ') if isinstance(row['created_at'], datetime) else row['created_at'],
+        'created_by': row['created_by'],
+        'completed_at': row['completed_at'].strftime('%Y-%m-%dT%H:%M:%SZ') if isinstance(row['completed_at'], datetime) else row['completed_at'],
+        'completed_by': row['completed_by'],
+    }
+
+
+@app.get("/api/assessments/{assessment_id}/actions", tags=["Assessments"])
+async def list_assessment_actions(
+    assessment_id: str,
+    current_mat_id: str = Depends(get_current_mat),
+    current_user: UserResponse = Depends(get_current_user)
+):
+    """
+    List checklist action items for an assessment.
+
+    Path Parameter:
+    - assessment_id: Composite, e.g. cedar-park-primary-ES1-T1-2024-25.
+
+    Returns the items ordered by sort_order then created_at.
+    Enforces MAT isolation - 404 if the assessment is not in the caller's MAT.
+    """
+    try:
+        connection = get_db_connection()
+        cursor = connection.cursor()
+
+        assessment_uuid = _resolve_assessment_uuid(cursor, assessment_id, current_mat_id)
+        if not assessment_uuid:
+            connection.close()
+            raise HTTPException(status_code=404, detail="Assessment not found")
+
+        cursor.execute(
+            """
+            SELECT id, assessment_id, text, is_completed, sort_order,
+                   created_at, created_by, completed_at, completed_by
+            FROM assessment_actions
+            WHERE assessment_id = %s
+            ORDER BY sort_order, created_at
+            """,
+            (assessment_uuid,),
+        )
+        rows = cursor.fetchall()
+        connection.close()
+
+        return JSONResponse(
+            content=[_action_row_to_dict(r) for r in rows],
+            status_code=200,
+        )
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/assessments/{assessment_id}/actions", tags=["Assessments"], status_code=status.HTTP_201_CREATED)
+async def create_assessment_action(
+    assessment_id: str,
+    body: ActionCreate,
+    current_mat_id: str = Depends(get_current_mat),
+    current_user: UserResponse = Depends(get_current_user)
+):
+    """
+    Create a new checklist action item on an assessment.
+
+    Path Parameter:
+    - assessment_id: Composite, e.g. cedar-park-primary-ES1-T1-2024-25.
+
+    Request body:
+    - text (required, non-empty)
+    - sort_order (optional; defaults to MAX(existing) + 1 for the assessment)
+
+    Enforces MAT isolation - 404 if the assessment is not in the caller's MAT.
+    """
+    try:
+        connection = get_db_connection()
+        cursor = connection.cursor()
+
+        assessment_uuid = _resolve_assessment_uuid(cursor, assessment_id, current_mat_id)
+        if not assessment_uuid:
+            connection.close()
+            raise HTTPException(status_code=404, detail="Assessment not found")
+
+        if body.sort_order is not None:
+            sort_order = body.sort_order
+        else:
+            cursor.execute(
+                "SELECT COALESCE(MAX(sort_order), -1) + 1 AS next_order FROM assessment_actions WHERE assessment_id = %s",
+                (assessment_uuid,),
+            )
+            sort_order = int(cursor.fetchone()['next_order'])
+
+        action_id = str(uuid.uuid4())
+        cursor.execute(
+            """
+            INSERT INTO assessment_actions
+                (id, assessment_id, text, is_completed, sort_order, created_by)
+            VALUES (%s, %s, %s, 0, %s, %s)
+            """,
+            (action_id, assessment_uuid, body.text, sort_order, current_user.user_id),
+        )
+        connection.commit()
+
+        cursor.execute(
+            """
+            SELECT id, assessment_id, text, is_completed, sort_order,
+                   created_at, created_by, completed_at, completed_by
+            FROM assessment_actions
+            WHERE id = %s
+            """,
+            (action_id,),
+        )
+        created = cursor.fetchone()
+        connection.close()
+
+        return JSONResponse(
+            content=_action_row_to_dict(created),
+            status_code=status.HTTP_201_CREATED,
+        )
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.put("/api/assessments/{assessment_id}/actions/{action_id}", tags=["Assessments"])
+async def update_assessment_action(
+    assessment_id: str,
+    action_id: str,
+    body: ActionUpdate,
+    current_mat_id: str = Depends(get_current_mat),
+    current_user: UserResponse = Depends(get_current_user)
+):
+    """
+    Update an action item. Partial updates accepted (any subset of fields).
+
+    On is_completed transitions: true -> set completed_at=NOW(), completed_by=user;
+                                  false -> null both.
+    """
+    try:
+        connection = get_db_connection()
+        cursor = connection.cursor()
+
+        assessment_uuid = _resolve_assessment_uuid(cursor, assessment_id, current_mat_id)
+        if not assessment_uuid:
+            connection.close()
+            raise HTTPException(status_code=404, detail="Assessment not found")
+
+        # NOTE: this read-then-write pattern is not transactional. Concurrent
+        # PUTs on the same action could race on the is_completed transition.
+        # Acceptable at early-adopter scale; revisit (single conditional UPDATE
+        # or wrap in a transaction) if concurrency grows.
+        cursor.execute(
+            "SELECT is_completed FROM assessment_actions WHERE id = %s AND assessment_id = %s",
+            (action_id, assessment_uuid),
+        )
+        existing = cursor.fetchone()
+        if not existing:
+            connection.close()
+            raise HTTPException(status_code=404, detail="Action not found")
+
+        set_clauses: List[str] = []
+        params: List = []
+
+        if body.text is not None:
+            set_clauses.append("text = %s")
+            params.append(body.text)
+
+        if body.sort_order is not None:
+            set_clauses.append("sort_order = %s")
+            params.append(body.sort_order)
+
+        if body.is_completed is not None:
+            set_clauses.append("is_completed = %s")
+            params.append(1 if body.is_completed else 0)
+            was_completed = bool(existing['is_completed'])
+            if body.is_completed and not was_completed:
+                set_clauses.append("completed_at = NOW()")
+                set_clauses.append("completed_by = %s")
+                params.append(current_user.user_id)
+            elif not body.is_completed and was_completed:
+                set_clauses.append("completed_at = NULL")
+                set_clauses.append("completed_by = NULL")
+
+        if set_clauses:
+            params.extend([action_id, assessment_uuid])
+            cursor.execute(
+                f"UPDATE assessment_actions SET {', '.join(set_clauses)} WHERE id = %s AND assessment_id = %s",
+                params,
+            )
+            connection.commit()
+
+        cursor.execute(
+            """
+            SELECT id, assessment_id, text, is_completed, sort_order,
+                   created_at, created_by, completed_at, completed_by
+            FROM assessment_actions
+            WHERE id = %s
+            """,
+            (action_id,),
+        )
+        updated = cursor.fetchone()
+        connection.close()
+
+        return JSONResponse(content=_action_row_to_dict(updated), status_code=200)
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.delete("/api/assessments/{assessment_id}/actions/{action_id}", tags=["Assessments"], status_code=status.HTTP_204_NO_CONTENT)
+async def delete_assessment_action(
+    assessment_id: str,
+    action_id: str,
+    current_mat_id: str = Depends(get_current_mat),
+    current_user: UserResponse = Depends(get_current_user)
+):
+    """
+    Hard-delete an action item. 204 on success, 404 if action or assessment is
+    not visible to the caller's MAT.
+    """
+    try:
+        connection = get_db_connection()
+        cursor = connection.cursor()
+
+        assessment_uuid = _resolve_assessment_uuid(cursor, assessment_id, current_mat_id)
+        if not assessment_uuid:
+            connection.close()
+            raise HTTPException(status_code=404, detail="Assessment not found")
+
+        cursor.execute(
+            "DELETE FROM assessment_actions WHERE id = %s AND assessment_id = %s",
+            (action_id, assessment_uuid),
+        )
+        if cursor.rowcount == 0:
+            connection.close()
+            raise HTTPException(status_code=404, detail="Action not found")
+
+        connection.commit()
+        connection.close()
+        return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ================================
+# ADMIN TOOLING — MOCK DATA (super-admin only)
+# ================================
+#
+# Internal tooling for populating / wiping assessment data so the dashboard
+# and analytics screens have something to render. Gated by SUPER_ADMIN_EMAILS
+# (see auth_config.py). Triggered via Swagger; not exposed in the frontend.
+
+
+@app.post("/api/admin/mock-data/generate", tags=["Admin"])
+async def generate_mock_data(
+    body: MockDataRequest,
+    current_user: UserResponse = Depends(verify_super_admin),
+):
+    """
+    UPSERT uniformly random ratings (1–4) for every active
+    (school × mat_standard × term) combination in the target MAT.
+
+    Overwrites `rating` and `evidence_comments` on existing rows; inserts
+    new rows where none exist (natural key: `uk_assessment` on
+    `school_id, mat_standard_id, unique_term_id`).
+
+    Rows are tagged in `evidence_comments` with a `[MOCK YYYY-MM-DD]` marker
+    so they are visually identifiable in the UI.
+    """
+    if body.confirm_mat_id != body.mat_id:
+        raise HTTPException(status_code=400, detail="confirm_mat_id must match mat_id")
+
+    try:
+        connection = get_db_connection()
+        cursor = connection.cursor()
+
+        cursor.execute("SELECT mat_id FROM mats WHERE mat_id = %s", (body.mat_id,))
+        if not cursor.fetchone():
+            connection.close()
+            raise HTTPException(status_code=404, detail=f"MAT not found: {body.mat_id}")
+
+        placeholders = ",".join(["%s"] * len(body.term_ids))
+        cursor.execute(
+            f"SELECT unique_term_id, academic_year FROM terms WHERE unique_term_id IN ({placeholders})",
+            body.term_ids,
+        )
+        term_to_year = {r["unique_term_id"]: r["academic_year"] for r in cursor.fetchall()}
+        missing_terms = [t for t in body.term_ids if t not in term_to_year]
+        if missing_terms:
+            connection.close()
+            raise HTTPException(status_code=400, detail=f"Invalid term_ids: {missing_terms}")
+
+        deleted_pattern = "%-deleted-%"
+        cursor.execute(
+            """
+            SELECT s.school_id, ms.mat_standard_id
+            FROM schools s
+            CROSS JOIN mat_standards ms
+            WHERE s.mat_id = %s
+              AND s.is_active = 1
+              AND ms.mat_id = %s
+              AND ms.is_active = 1
+              AND ms.mat_standard_id NOT LIKE %s
+            """,
+            (body.mat_id, body.mat_id, deleted_pattern),
+        )
+        grid = cursor.fetchall()
+        if not grid:
+            connection.close()
+            raise HTTPException(
+                status_code=400,
+                detail=f"No active schools × standards found for MAT {body.mat_id}",
+            )
+
+        marker = f"[MOCK {datetime.utcnow().strftime('%Y-%m-%d')}] Generated mock data"
+        upsert = """
+            INSERT INTO assessments
+              (id, school_id, mat_standard_id, unique_term_id, academic_year,
+               rating, evidence_comments, status,
+               submitted_by, submitted_at, last_updated, updated_by)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, 'completed',
+                    %s, NOW(), NOW(), %s)
+            ON DUPLICATE KEY UPDATE
+              rating = VALUES(rating),
+              evidence_comments = VALUES(evidence_comments),
+              status = VALUES(status),
+              submitted_by = VALUES(submitted_by),
+              submitted_at = NOW(),
+              last_updated = NOW(),
+              updated_by = VALUES(updated_by)
+        """
+
+        rows_per_term: dict = {}
+        total = 0
+        for term_id in body.term_ids:
+            academic_year = term_to_year[term_id]
+            values = [
+                (
+                    str(uuid.uuid4()),
+                    row["school_id"],
+                    row["mat_standard_id"],
+                    term_id,
+                    academic_year,
+                    random.randint(1, 4),
+                    marker,
+                    current_user.user_id,
+                    current_user.user_id,
+                )
+                for row in grid
+            ]
+            cursor.executemany(upsert, values)
+            rows_per_term[term_id] = len(values)
+            total += len(values)
+
+        connection.commit()
+        connection.close()
+
+        logger.info(
+            "Mock data generated",
+            extra={
+                "user_id": current_user.user_id,
+                "mat_id": body.mat_id,
+                "terms": body.term_ids,
+                "rows_upserted": total,
+            },
+        )
+
+        return JSONResponse(
+            content={
+                "mat_id": body.mat_id,
+                "terms_generated": body.term_ids,
+                "rows_upserted": total,
+                "rows_per_term": rows_per_term,
+            },
+            status_code=200,
+        )
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.delete("/api/admin/mock-data/wipe", tags=["Admin"])
+async def wipe_mock_data(
+    body: MockDataRequest,
+    current_user: UserResponse = Depends(verify_super_admin),
+):
+    """
+    Hard-delete every `assessments` row for the target MAT × terms.
+
+    Does NOT inspect the `[MOCK …]` marker — every row in scope is removed.
+    `assessment_actions` rows cascade via `fk_actions_assessment` ON DELETE
+    CASCADE. `standard_evidence` rows are keyed on `(mat_standard_id,
+    school_id, unique_term_id)` with no FK to `assessments.id`, so they
+    survive this wipe (evidence is treated as a separately tracked artefact).
+    """
+    if body.confirm_mat_id != body.mat_id:
+        raise HTTPException(status_code=400, detail="confirm_mat_id must match mat_id")
+
+    try:
+        connection = get_db_connection()
+        cursor = connection.cursor()
+
+        cursor.execute("SELECT mat_id FROM mats WHERE mat_id = %s", (body.mat_id,))
+        if not cursor.fetchone():
+            connection.close()
+            raise HTTPException(status_code=404, detail=f"MAT not found: {body.mat_id}")
+
+        placeholders = ",".join(["%s"] * len(body.term_ids))
+        cursor.execute(
+            f"SELECT unique_term_id FROM terms WHERE unique_term_id IN ({placeholders})",
+            body.term_ids,
+        )
+        found_terms = {r["unique_term_id"] for r in cursor.fetchall()}
+        missing_terms = [t for t in body.term_ids if t not in found_terms]
+        if missing_terms:
+            connection.close()
+            raise HTTPException(status_code=400, detail=f"Invalid term_ids: {missing_terms}")
+
+        rows_per_term: dict = {}
+        total_assessments = 0
+        total_actions_cascaded = 0
+
+        for term_id in body.term_ids:
+            # Count actions that will cascade-delete — cursor.rowcount on the
+            # DELETE only reports the direct (assessments) rowcount, not
+            # children pulled via the FK CASCADE.
+            cursor.execute(
+                """
+                SELECT COUNT(*) AS cnt
+                FROM assessment_actions aa
+                JOIN assessments a ON a.id = aa.assessment_id
+                JOIN schools s ON s.school_id = a.school_id
+                WHERE s.mat_id = %s
+                  AND a.unique_term_id = %s
+                """,
+                (body.mat_id, term_id),
+            )
+            actions_cnt = int(cursor.fetchone()["cnt"])
+
+            cursor.execute(
+                """
+                DELETE a FROM assessments a
+                JOIN schools s ON s.school_id = a.school_id
+                WHERE s.mat_id = %s
+                  AND a.unique_term_id = %s
+                """,
+                (body.mat_id, term_id),
+            )
+            deleted = cursor.rowcount
+
+            rows_per_term[term_id] = deleted
+            total_assessments += deleted
+            total_actions_cascaded += actions_cnt
+
+        cursor.execute(
+            f"""
+            SELECT COUNT(*) AS cnt
+            FROM standard_evidence
+            WHERE mat_id = %s
+              AND unique_term_id IN ({placeholders})
+            """,
+            (body.mat_id, *body.term_ids),
+        )
+        evidence_remaining = int(cursor.fetchone()["cnt"])
+
+        connection.commit()
+        connection.close()
+
+        logger.info(
+            "Mock data wiped",
+            extra={
+                "user_id": current_user.user_id,
+                "mat_id": body.mat_id,
+                "terms": body.term_ids,
+                "rows_deleted": total_assessments,
+                "cascaded_actions_deleted": total_actions_cascaded,
+                "evidence_rows_remaining": evidence_remaining,
+            },
+        )
+
+        return JSONResponse(
+            content={
+                "mat_id": body.mat_id,
+                "terms_wiped": body.term_ids,
+                "rows_deleted": total_assessments,
+                "rows_per_term": rows_per_term,
+                "cascaded_actions_deleted": total_actions_cascaded,
+                "evidence_rows_remaining": evidence_remaining,
+            },
+            status_code=200,
+        )
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ================================
 # ANALYTICS ENDPOINTS
 # ================================
 
@@ -3428,7 +3930,7 @@ async def get_trends(
     Query Parameters:
     - school_id (optional): Filter to single school
     - aspect_code (optional): Filter to single aspect
-    - aspect_category (optional): Filter by 'ofsted' or 'operational'
+    - aspect_category (optional): Filter by 'strategic' or 'operational'
     - standard_type (optional): Filter by 'assurance' or 'risk'
     - from_term (optional): Start term, e.g., T1-2023-24
     - to_term (optional): End term, e.g., T1-2025-26
@@ -3448,10 +3950,9 @@ async def get_trends(
                 MIN(a.rating) as min_rating,
                 MAX(a.rating) as max_rating,
                 COUNT(CASE WHEN a.rating = 1 THEN 1 END) as inadequate_count,
-                COUNT(CASE WHEN a.rating = 2 THEN 1 END) as requires_improvement_count,
+                COUNT(CASE WHEN a.rating = 2 THEN 1 END) as concerning_count,
                 COUNT(CASE WHEN a.rating = 3 THEN 1 END) as good_count,
-                COUNT(CASE WHEN a.rating = 4 THEN 1 END) as outstanding_count,
-                COUNT(CASE WHEN a.rating = 5 THEN 1 END) as exceptional_count
+                COUNT(CASE WHEN a.rating = 4 THEN 1 END) as strong_count
             FROM assessments a
             JOIN schools s ON a.school_id = s.school_id
             JOIN mat_standards ms ON a.mat_standard_id = ms.mat_standard_id
@@ -3507,10 +4008,9 @@ async def get_trends(
                 "max_rating": row['max_rating'],
                 "rating_distribution": {
                     "inadequate": row['inadequate_count'],
-                    "requires_improvement": row['requires_improvement_count'],
+                    "concerning": row['concerning_count'],
                     "good": row['good_count'],
-                    "outstanding": row['outstanding_count'],
-                    "exceptional": row['exceptional_count']
+                    "strong": row['strong_count']
                 }
             })
 

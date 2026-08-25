@@ -129,6 +129,8 @@ export function BrandingCustomizationModal({
   ];
 
   const getScoreColor = (score: number) => {
+    // Deliberately uses a simplified 3-tier palette for branding preview/demo mock
+    // scores — not the live 4-band performance system in performance-bands.ts.
     if (score >= 3.5) return "text-emerald-700";
     if (score >= 2.5) return "text-amber-700";
     return "text-rose-700";

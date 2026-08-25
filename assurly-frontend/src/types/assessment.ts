@@ -4,9 +4,9 @@
 
 // Core Types
 export type AssessmentStatus = 'not_started' | 'in_progress' | 'completed' | 'approved';
-export type Rating = 1 | 2 | 3 | 4 | 5 | null;
+export type Rating = 1 | 2 | 3 | 4 | null;
 export type StandardType = 'assurance' | 'risk';
-export type AspectCategory = 'ofsted' | 'operational';
+export type AspectCategory = 'strategic' | 'operational';
 export type SchoolType = 'primary' | 'secondary' | 'all_through' | 'special' | 'central';
 export type TrendDirection = 'improving' | 'declining' | 'stable' | 'no_data';
 
@@ -25,23 +25,7 @@ export type AssessmentCategory =
 export type AcademicTerm = "Autumn" | "Spring" | "Summer";
 export type AcademicYear = string; // Format: "2024-2025" (long format)
 
-// Rating labels for display
-export const RatingLabels: Record<NonNullable<Rating>, string> = {
-  1: "Inadequate",
-  2: "Requires Improvement",
-  3: "Good",
-  4: "Outstanding",
-  5: "Exceptional"
-};
-
-// Rating descriptions for each level
-export const RatingDescriptions: Record<NonNullable<Rating>, string> = {
-  1: "Significant concerns requiring immediate action",
-  2: "Areas identified for development",
-  3: "Solid performance meeting expected standards",
-  4: "Exemplary practice exceeding expectations",
-  5: "World-class performance setting the benchmark"
-};
+// Rating labels and descriptions: use getRatingLabel / getRatingDescription from @/utils/rating-labels
 
 // ============================================================================
 // User & Auth
@@ -252,7 +236,7 @@ export interface Aspect {
     aspect_code: string;            // EDU
     aspect_name: string;
     aspect_description: string;
-    aspect_category?: AspectCategory; // 'ofsted' or 'operational'
+    aspect_category?: AspectCategory; // 'strategic' or 'operational'
     sort_order: number;
     is_custom: boolean;
     standards_count: number;
@@ -327,10 +311,9 @@ export interface TermTrend {
 
 export interface RatingDistribution {
     inadequate: number;
-    requires_improvement: number;
+    concerning: number;
     good: number;
-    outstanding: number;
-    exceptional: number;
+    strong: number;
 }
 
 // ============================================================================

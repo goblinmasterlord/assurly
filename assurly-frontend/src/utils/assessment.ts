@@ -1,6 +1,12 @@
 // src/utils/assessment.ts
 
-import type { Assessment, AssessmentGroup, AssessmentStatus, AssessmentStandard, AssessmentByAspect, Rating } from '../types/assessment';
+import type { Assessment, AssessmentGroup, AssessmentStatus, AssessmentStandard, AssessmentByAspect } from '../types/assessment';
+import {
+  calculateAverageRating,
+  getRatingLabel as getPolarityRatingLabel,
+} from './rating-labels';
+
+export { calculateAverageRating } from './rating-labels';
 
 /**
  * Check if an assessment is overdue
@@ -66,30 +72,9 @@ export function calculateProgress(group: AssessmentGroup | AssessmentByAspect): 
     if (group.total_standards === 0) return 0;
     return Math.round((group.completed_standards / group.total_standards) * 100);
 }
-
-/**
- * Calculate average rating from assessment standards
- */
-export function calculateAverageRating(standards: AssessmentStandard[]): number | null {
-    const rated = standards.filter(s => s.rating !== null);
-    if (rated.length === 0) return null;
-    const sum = rated.reduce((acc, s) => acc + (s.rating || 0), 0);
-    return Math.round((sum / rated.length) * 10) / 10;
-}
-
-/**
- * Get rating label
- */
-export function getRatingLabel(rating: number | null): string {
-    if (rating === null) return 'Not Rated';
-    const labels: Record<number, string> = {
-        1: 'Inadequate',
-        2: 'Requires Improvement',
-        3: 'Good',
-        4: 'Outstanding',
-        5: 'Exceptional'
-    };
-    return labels[rating] || 'Unknown';
+/** @deprecated Prefer getRatingLabel from @/utils/rating-labels with standardType */
+export function getRatingLabel(rating: number | null, standardType?: AssessmentStandard['standard_type']): string {
+    return getPolarityRatingLabel(rating, standardType);
 }
 
 /**
@@ -102,7 +87,6 @@ export function getRatingColor(rating: number | null): string {
         2: 'orange',
         3: 'green',
         4: 'blue',
-        5: 'purple'
     };
     return colors[rating] || 'gray';
 }

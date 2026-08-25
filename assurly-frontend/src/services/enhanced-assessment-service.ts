@@ -24,7 +24,9 @@ import {
   updateAspect as apiUpdateAspect,
   deleteAspect as apiDeleteAspect,
   getTerms as apiGetTerms,
+  getAnalyticsTrends as apiGetAnalyticsTrends,
 } from '@/services/assessment-service';
+import { getSchoolsDashboard as apiGetSchoolsDashboard } from '@/services/dashboard-service';
 import type { 
   Assessment,
   AssessmentByAspect,
@@ -32,10 +34,12 @@ import type {
   Aspect,
   School,
   Term,
+  TrendData,
   Rating,
   DeleteStandardResponse,
   DeleteAspectResponse
 } from '@/types/assessment';
+import type { SchoolsDashboardResponse } from '@/types/dashboard';
 
 // Enhanced service with caching, optimistic updates, and intelligent data management
 export class EnhancedAssessmentService {
@@ -89,6 +93,20 @@ export class EnhancedAssessmentService {
   }
 
   /**
+   * Schools dashboard summary with per-term caching
+   */
+  async getSchoolsDashboard(
+    termId?: string,
+    view: 'school' | 'trust' = 'school'
+  ): Promise<SchoolsDashboardResponse> {
+    return requestCache.get(
+      'dashboard_schools',
+      () => apiGetSchoolsDashboard(termId, view),
+      { termId: termId ?? null, view }
+    );
+  }
+
+  /**
    * Update single assessment with optimistic updates
    */
   async updateAssessment(
@@ -135,13 +153,14 @@ export class EnhancedAssessmentService {
   }>): Promise<void> {
     try {
       await apiBulkUpdateAssessments(updates);
-      
-      // Invalidate all affected caches
-      updates.forEach(u => {
+
+      updates.forEach((u) => {
         requestCache.invalidate('assessment_detail', { id: u.assessment_id });
       });
       requestCache.invalidate('assessments');
-      
+      requestCache.invalidateByPrefix('aspect_');
+      requestCache.invalidateByPrefix('dashboard_schools');
+
       console.log(`✅ ${updates.length} assessments updated successfully`);
     } catch (error) {
       console.error('❌ Bulk update failed');
@@ -338,7 +357,7 @@ export class EnhancedAssessmentService {
     data: {
       aspect_name: string;
       aspect_description: string;
-      aspect_category?: 'ofsted' | 'operational';
+      aspect_category?: 'strategic' | 'operational';
       sort_order: number;
     }
   ): Promise<void> {
@@ -375,11 +394,11 @@ export class EnhancedAssessmentService {
   /**
    * Get schools with long-term caching
    */
-  async getSchools(includeCentral: boolean = false): Promise<School[]> {
-    const cacheKey = includeCentral ? 'schools_with_central' : 'schools';
+  async getSchools(): Promise<School[]> {
+    const cacheKey = 'schools';
     return requestCache.get(
       cacheKey as any,
-      () => apiGetSchools(includeCentral)
+      () => apiGetSchools()
     );
   }
 
@@ -388,6 +407,29 @@ export class EnhancedAssessmentService {
    */
   subscribeToSchools(callback: (schools: School[]) => void): () => void {
     return requestCache.subscribe('schools', callback);
+  }
+
+  // ===== ANALYTICS OPERATIONS =====
+
+  /**
+   * Get trust-wide rating trends over time
+   */
+  async getAnalyticsTrends(filters?: {
+    school_id?: string;
+    aspect_code?: string;
+    aspect_category?: 'strategic' | 'operational';
+    standard_type?: 'assurance' | 'risk';
+    from_term?: string;
+    to_term?: string;
+  }): Promise<TrendData> {
+    const cacheKey = filters
+      ? `analytics_trends_${JSON.stringify(filters)}`
+      : 'analytics_trends';
+
+    return requestCache.get(
+      cacheKey as any,
+      () => apiGetAnalyticsTrends(filters)
+    );
   }
 
   // ===== TERMS OPERATIONS =====
@@ -441,10 +483,13 @@ export class EnhancedAssessmentService {
     // Invalidate all caches
     requestCache.invalidate('assessments');
     requestCache.invalidate('assessment_detail');
+    requestCache.invalidateByPrefix('aspect_');
+    requestCache.invalidateByPrefix('dashboard_schools');
     requestCache.invalidate('schools');
     requestCache.invalidate('standards');
     requestCache.invalidate('aspects');
     requestCache.invalidate('terms');
+    requestCache.invalidateByPrefix('analytics_trends');
 
     // Preload fresh data
     await this.preloadCriticalData();

@@ -1,5 +1,12 @@
 # Assurly — Frontend Implementation Brief (April 2026)
 
+> **ARCHIVED — historical record.** This brief documented in-flight work for REQ-002/003/004/005 (April 2026) and the subsequent `assessment_actions` rework (May 2026). All work described here has shipped. The current state of the schema and API is documented in:
+>
+> - `docs/assurly-data-model.md` (schema)
+> - `docs/api/assurly-api-contract.md` (API)
+>
+> Do not use this brief as a reference for current behaviour. Some details here are now stale (e.g. the original REQ-002 `actions` text-field approach was superseded by the `assessment_actions` child table). Refer to the live docs above.
+
 > **Audience:** Cursor, implementing React (frontend) changes on the Assurly web app.
 >
 > **Stack:** React, Recharts for visualisations, React DnD where relevant. British English throughout user-facing strings.
@@ -244,12 +251,7 @@ The dashboard shows assessments per school by default. Users should be able to t
 ### 5.2 State management
 
 - Store the selected view in component state — session-only, no need to persist across page refreshes.
-- On toggle, re-fetch the dashboard data with the appropriate `?view=` query parameter.
-- If your current fetch pattern pulls all dashboard data in one request and filters client-side, you can either:
-  - Keep that pattern and filter on `schools.is_central_office` client-side, OR
-  - Switch to a per-view fetch.
-
-  Prefer client-side filtering if the dataset is small (which it is today — ~12 schools per MAT max). Drop to server-side only if performance degrades.
+- On toggle, **re-fetch** the dashboard data with the appropriate `?view=` query parameter. This is a server-side re-fetch, not a client-side filter — the backend filters by `view` server-side and a `view=school` response does **not** contain the central office row, so client-side filtering on `is_central_office` cannot recover it. Likewise a `view=trust` response contains only the central office. Do not attempt to fetch once and filter both views from a single payload.
 
 ### 5.3 Rendering differences
 

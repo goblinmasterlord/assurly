@@ -45,6 +45,14 @@ BCRYPT_ROUNDS = int(os.getenv('BCRYPT_ROUNDS', '12'))
 MAGIC_LINK_RATE_LIMIT_PER_EMAIL = int(os.getenv('MAGIC_LINK_RATE_LIMIT_PER_EMAIL', '3'))  # 3 requests per hour
 MAGIC_LINK_RATE_LIMIT_WINDOW_HOURS = int(os.getenv('MAGIC_LINK_RATE_LIMIT_WINDOW_HOURS', '1'))
 
+# Super-admin allow-list — comma-separated emails authorised for /api/admin/* tooling
+# (mock-data generate/wipe). Not a DB role; lives in env so promotion is a deploy.
+SUPER_ADMIN_EMAILS = frozenset(
+    email.strip().lower()
+    for email in os.getenv('SUPER_ADMIN_EMAILS', '').split(',')
+    if email.strip()
+)
+
 def validate_config() -> bool:
     """
     Validate that all required configuration is present.

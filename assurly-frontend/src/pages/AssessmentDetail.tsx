@@ -28,7 +28,6 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { useUser } from "@/contexts/UserContext";
-import { submitAssessment } from "@/services/assessment-service"; // Keep submit function
 import { useAssessment } from "@/hooks/use-assessments"; // Optimized assessment fetching
 import { getStatusLabel, isOverdue } from "@/utils/assessment";
 import {
@@ -51,7 +50,9 @@ import {
   User,
   XCircle,
 } from "lucide-react";
-import { RatingLabels, RatingDescriptions, type Rating, type Standard, type Assessment, type FileAttachment } from "@/types/assessment";
+import { type Rating, type Standard, type Assessment, type FileAttachment, type StandardType, type Aspect, type AspectCategory } from "@/types/assessment";
+import { getAspects } from "@/services/assessment-service";
+import { AspectCategoryBadge } from "@/components/AspectCategoryBadge";
 import {
   Tooltip,
   TooltipContent,
@@ -75,7 +76,85 @@ import {
 } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
 import { FileUpload } from "@/components/ui/file-upload";
-import { assessmentService } from "@/services/enhanced-assessment-service";
+import {
+  getActions,
+  createAction,
+  updateAction,
+  deleteAction,
+  type UiAction,
+} from "@/services/actions-service";
+import { getRagBadgeClasses } from "@/utils/rag";
+import {
+  RATING_OPTIONS,
+  getRatingLabel,
+  getRatingDescription,
+  calculateAverageRating,
+} from "@/utils/rating-labels";
+import { StandardTypeBadge } from "@/components/StandardTypeBadge";
+
+type StandardWithAssessmentId = Standard & { assessment_id?: string };
+
+function resolveStandardAssessmentId(
+  standard: StandardWithAssessmentId | undefined,
+  assessment: Assessment,
+  urlId?: string
+): string | undefined {
+  if (!standard) return undefined;
+
+  if (standard.assessment_id) {
+    return standard.assessment_id;
+  }
+
+  if (assessment.school_id && standard.standard_code) {
+    const termId =
+      assessment.unique_term_id ||
+      (urlId ? urlId.split("-").slice(-2).join("-") : undefined);
+    if (termId) {
+      return `${assessment.school_id}-${standard.standard_code}-${termId}`;
+    }
+  }
+
+  return standard.id || standard.mat_standard_id;
+}
+
+function getSortedStandards(standards: Standard[]) {
+  return standards.slice().sort((a, b) => {
+    const aCode = a.code || "";
+    const bCode = b.code || "";
+    const aMatch = aCode.match(/([A-Z]+)(\d+)/);
+    const bMatch = bCode.match(/([A-Z]+)(\d+)/);
+
+    if (aMatch && bMatch) {
+      const aPrefix = aMatch[1];
+      const bPrefix = bMatch[1];
+      const aNum = parseInt(aMatch[2], 10);
+      const bNum = parseInt(bMatch[2], 10);
+
+      if (aPrefix !== bPrefix) {
+        return aPrefix.localeCompare(bPrefix);
+      }
+
+      return aNum - bNum;
+    }
+
+    return aCode.localeCompare(bCode);
+  });
+}
+
+function getGroupedStandards(standards: Standard[]) {
+  const sorted = getSortedStandards(standards);
+  return {
+    assurance: sorted.filter(
+      (s) => (s.standard_type || "assurance") === "assurance"
+    ),
+    risk: sorted.filter((s) => s.standard_type === "risk"),
+  };
+}
+
+function getNavigationStandards(standards: Standard[]) {
+  const { assurance, risk } = getGroupedStandards(standards);
+  return [...assurance, ...risk];
+}
 
 // Evidence Cell Component with smart text handling
 const EvidenceCell = ({ evidence }: { evidence: string }) => {
@@ -105,6 +184,40 @@ const EvidenceCell = ({ evidence }: { evidence: string }) => {
   );
 };
 
+const ADMIN_STANDARD_DESC_MAX = 50;
+
+function AdminStandardDescription({ description }: { description?: string | null }) {
+  const full = (description ?? "").trim();
+  if (!full) return null;
+
+  const isTruncated = full.length > ADMIN_STANDARD_DESC_MAX;
+  const display = isTruncated
+    ? `${full.slice(0, ADMIN_STANDARD_DESC_MAX)}...`
+    : full;
+
+  return (
+    <p className="text-sm text-slate-500 leading-snug flex items-center gap-1">
+      <span className="truncate">{display}</span>
+      {isTruncated && (
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <button
+              type="button"
+              className="inline-flex shrink-0 text-slate-400 hover:text-slate-600 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary rounded-sm"
+              aria-label="View full standard description"
+            >
+              <Info className="h-3.5 w-3.5" />
+            </button>
+          </TooltipTrigger>
+          <TooltipContent className="max-w-sm whitespace-pre-wrap">
+            {full}
+          </TooltipContent>
+        </Tooltip>
+      )}
+    </p>
+  );
+}
+
 export function AssessmentDetailPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
@@ -125,11 +238,12 @@ export function AssessmentDetailPage() {
   const isAdminView = searchParams.get('view') === 'admin' && role === 'mat-admin';
   
   // 🚀 OPTIMIZED: Using enhanced assessment hook with caching and automatic refresh
-      const { 
-      assessment, 
-      isLoading, 
-      error, 
-      refreshAssessment
+      const {
+      assessment,
+      isLoading,
+      error,
+      refreshAssessment,
+      submitAssessment,
     } = useAssessment(id || '');
   
   // Legacy fetchAssessment function for compatibility (just calls refreshAssessment)
@@ -145,37 +259,27 @@ export function AssessmentDetailPage() {
   const relatedAssessments: Assessment[] = [];
   
   const [activeStandard, setActiveStandard] = useState<Standard | null>(null);
-  
-  // Helper function to get sorted standards
-  const getSortedStandards = (standards: Standard[]) => {
-    return standards.slice().sort((a, b) => {
-      const aCode = a.code || '';
-      const bCode = b.code || '';
-      const aMatch = aCode.match(/([A-Z]+)(\d+)/);
-      const bMatch = bCode.match(/([A-Z]+)(\d+)/);
-      
-      if (aMatch && bMatch) {
-        const aPrefix = aMatch[1];
-        const bPrefix = bMatch[1];
-        const aNum = parseInt(aMatch[2], 10);
-        const bNum = parseInt(bMatch[2], 10);
-        
-        if (aPrefix !== bPrefix) {
-          return aPrefix.localeCompare(bPrefix);
-        }
-        
-        return aNum - bNum;
-      }
-      
-      return aCode.localeCompare(bCode);
-    });
-  };
-  
+  const [aspects, setAspects] = useState<Aspect[]>([]);
+
+  useEffect(() => {
+    getAspects()
+      .then(setAspects)
+      .catch((err) => console.error("Failed to load aspects:", err));
+  }, []);
+
+  const aspectCategory = useMemo((): AspectCategory | undefined => {
+    if (!assessment) return undefined;
+    const code = (assessment.aspect_code || assessment.category || "").toUpperCase();
+    const meta = aspects.find(
+      (a) => a.aspect_code.toUpperCase() === code
+    );
+    return meta?.aspect_category;
+  }, [assessment, aspects]);
+
   // Update activeStandard when assessment loads
   useEffect(() => {
     if (assessment?.standards && assessment.standards.length > 0) {
-      const sortedStandards = getSortedStandards(assessment.standards);
-      setActiveStandard(sortedStandards[0]);
+      setActiveStandard(getNavigationStandards(assessment.standards)[0]);
     }
   }, [assessment]);
   
@@ -184,9 +288,11 @@ export function AssessmentDetailPage() {
   const [attachments, setAttachments] = useState<Record<string, FileAttachment[]>>({});
   
   // Actions state - per standard
-  type Action = { id: string; text: string; completed: boolean };
-  const [actions, setActions] = useState<Record<string, Action[]>>({});
+  const [actions, setActions] = useState<Record<string, UiAction[]>>({});
   const [newActionText, setNewActionText] = useState<Record<string, string>>({});
+  const [actionsLoadError, setActionsLoadError] = useState<string | null>(null);
+  const [actionsError, setActionsError] = useState<string | null>(null);
+  const [actionsMutating, setActionsMutating] = useState<Record<string, boolean>>({});
 
   // Initialize form state when assessment loads
   useEffect(() => {
@@ -205,17 +311,103 @@ export function AssessmentDetailPage() {
         if (standard.id) acc[standard.id] = [];
         return acc;
       }, {} as Record<string, FileAttachment[]>));
-      
-      setActions(assessment.standards.reduce((acc, standard) => {
-        if (standard.id) acc[standard.id] = []; // Initialize with empty actions
-        return acc;
-      }, {} as Record<string, Action[]>));
     }
   }, [assessment]);
+
+  useEffect(() => {
+    if (!assessment?.standards) return;
+
+    let cancelled = false;
+
+    const loadActions = async () => {
+      setActionsLoadError(null);
+      const emptyActions = assessment.standards!.reduce((acc, standard) => {
+        if (standard.id) acc[standard.id] = [];
+        return acc;
+      }, {} as Record<string, UiAction[]>);
+
+      try {
+        const entries = await Promise.all(
+          assessment.standards!.map(async (standard) => {
+            if (!standard.id) return null;
+            const assessmentId = resolveStandardAssessmentId(
+              standard as StandardWithAssessmentId,
+              assessment,
+              id
+            );
+            if (!assessmentId) return [standard.id, [] as UiAction[]] as const;
+            const items = await getActions(assessmentId);
+            return [standard.id, items] as const;
+          })
+        );
+
+        if (cancelled) return;
+
+        const loaded = { ...emptyActions };
+        for (const entry of entries) {
+          if (entry) {
+            loaded[entry[0]] = entry[1];
+          }
+        }
+        setActions(loaded);
+      } catch (error) {
+        console.error("Failed to load actions:", error);
+        if (!cancelled) {
+          setActionsLoadError("Failed to load action items. Please refresh the page.");
+          setActions(emptyActions);
+        }
+      }
+    };
+
+    loadActions();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [assessment, id]);
 
   const [saving, setSaving] = useState(false);
   const [showSuccessDialog, setShowSuccessDialog] = useState(false);
   const [activeStandardIndex, setActiveStandardIndex] = useState(0);
+
+  const standardsRatingInputs = useMemo(() => {
+    if (!assessment?.standards) return [];
+    return getSortedStandards(assessment.standards).map((s) => ({
+      rating: s.id ? ratings[s.id] ?? s.rating : s.rating,
+      standard_type: s.standard_type,
+    }));
+  }, [assessment?.standards, ratings]);
+
+  const overallAvg = useMemo(
+    () => calculateAverageRating(standardsRatingInputs),
+    [standardsRatingInputs]
+  );
+  const assuranceAvg = useMemo(
+    () =>
+      calculateAverageRating(
+        standardsRatingInputs.filter(
+          (s) => (s.standard_type || "assurance") === "assurance"
+        )
+      ),
+    [standardsRatingInputs]
+  );
+  const riskAvg = useMemo(
+    () =>
+      calculateAverageRating(
+        standardsRatingInputs.filter((s) => s.standard_type === "risk")
+      ),
+    [standardsRatingInputs]
+  );
+
+  const groupedStandards = useMemo(() => {
+    if (!assessment?.standards) return { assurance: [] as Standard[], risk: [] as Standard[] };
+    return getGroupedStandards(assessment.standards);
+  }, [assessment?.standards]);
+
+  const navigationStandards = useMemo(() => {
+    if (!assessment?.standards) return [] as Standard[];
+    return getNavigationStandards(assessment.standards);
+  }, [assessment?.standards]);
   
   // Edit mode state for completed assessments
   const [isEditMode, setIsEditMode] = useState(false);
@@ -225,25 +417,22 @@ export function AssessmentDetailPage() {
   
   useEffect(() => {
     if (assessment?.standards && activeStandard) {
-      const sortedStandards = getSortedStandards(assessment.standards);
-      const index = sortedStandards.findIndex(s => s.id === activeStandard.id);
+      const index = navigationStandards.findIndex((s) => s.id === activeStandard.id);
       if (index !== -1) {
         setActiveStandardIndex(index);
       }
     }
-  }, [activeStandard, assessment]);
+  }, [activeStandard, assessment, navigationStandards]);
 
   const goToNextStandard = () => {
-    if (assessment?.standards && activeStandardIndex < assessment.standards.length - 1) {
-      const sortedStandards = getSortedStandards(assessment.standards);
-      setActiveStandard(sortedStandards[activeStandardIndex + 1]);
+    if (navigationStandards.length > 0 && activeStandardIndex < navigationStandards.length - 1) {
+      setActiveStandard(navigationStandards[activeStandardIndex + 1]);
     }
   };
 
   const goToPreviousStandard = () => {
-    if (assessment?.standards && activeStandardIndex > 0) {
-      const sortedStandards = getSortedStandards(assessment.standards);
-      setActiveStandard(sortedStandards[activeStandardIndex - 1]);
+    if (navigationStandards.length > 0 && activeStandardIndex > 0) {
+      setActiveStandard(navigationStandards[activeStandardIndex - 1]);
     }
   };
 
@@ -274,47 +463,110 @@ export function AssessmentDetailPage() {
     });
   };
 
+  const handleRatingChange = useCallback((standardId: string, value: Rating) => {
+    setRatings((prev) => ({
+      ...prev,
+      [standardId]: value,
+    }));
+  }, []);
+
+  const handleSave = useCallback(async () => {
+    if (!assessment || !id) return;
+
+    setSaving(true);
+    try {
+      const standardsWithData = new Set<string>();
+
+      Object.entries(ratings).forEach(([standardId, rating]) => {
+        if (rating !== null) {
+          standardsWithData.add(standardId);
+        }
+      });
+
+      Object.entries(evidence).forEach(([standardId, evidenceText]) => {
+        if (evidenceText && evidenceText.trim().length > 0) {
+          standardsWithData.add(standardId);
+        }
+      });
+
+      const standards = Array.from(standardsWithData).map((standardId) => ({
+        standardId,
+        rating: ratings[standardId] || null,
+        evidence: evidence[standardId] || "",
+      }));
+
+      if (standards.length === 0) {
+        toast({
+          title: "Nothing to save",
+          description:
+            "Please add a rating or evidence to at least one standard before saving.",
+          variant: "destructive",
+        });
+        return;
+      }
+
+      await submitAssessment(standards);
+      await refreshAssessment();
+
+      toast({
+        title: "Progress saved",
+        description: `Successfully saved progress for ${standards.length} standard${standards.length > 1 ? "s" : ""}`,
+        variant: "default",
+      });
+    } catch (error) {
+      console.error("Save error:", error);
+      toast({
+        title: "Save failed",
+        description: "There was an error saving your progress. Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setSaving(false);
+    }
+  }, [assessment, id, ratings, evidence, submitAssessment, refreshAssessment, toast]);
+
   const handleSaveEdit = async () => {
     await handleSave();
     setIsEditMode(false);
-    
-    // Refresh assessment data
-    await fetchAssessment(false);
-    
+
     toast({
       title: "Assessment updated",
       description: "Your changes have been saved successfully.",
     });
   };
-  
-  // Add keyboard navigation
+
+  const canEditForShortcuts =
+    !!assessment &&
+    (role === "department-head" || role === "mat-admin") &&
+    (assessment.status !== "completed" || isEditMode);
+
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      // Only activate keyboard shortcuts when we're in the assessment detail view
-      if (!activeStandard || !canEdit) return;
-      
-      // Don't trigger shortcuts when typing in input fields
-      const target = e.target as HTMLElement;
-      const isTyping = target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable;
+      if (!activeStandard || !canEditForShortcuts) return;
 
-      // Arrow right or Cmd/Ctrl+J: Next standard
+      const target = e.target as HTMLElement;
+      const isTyping =
+        target.tagName === "INPUT" ||
+        target.tagName === "TEXTAREA" ||
+        target.isContentEditable;
+
       if (e.key === "ArrowRight" || (e.key.toLowerCase() === "j" && (e.ctrlKey || e.metaKey))) {
         e.preventDefault();
         goToNextStandard();
-      }
-      // Arrow left or Cmd/Ctrl+K: Previous standard
-      else if (e.key === "ArrowLeft" || (e.key.toLowerCase() === "k" && (e.ctrlKey || e.metaKey))) {
+      } else if (e.key === "ArrowLeft" || (e.key.toLowerCase() === "k" && (e.ctrlKey || e.metaKey))) {
         e.preventDefault();
         goToPreviousStandard();
-      }
-      // Numbers 1-4: Set rating for current standard (only when not typing)
-      else if (!isTyping && ["1", "2", "3", "4"].includes(e.key) && !e.ctrlKey && !e.metaKey && activeStandard?.id) {
-        handleRatingChange(activeStandard.id, parseInt(e.key) as Rating);
-      }
-      // Cmd/Ctrl+S: Save progress
-      else if (e.key.toLowerCase() === "s" && (e.ctrlKey || e.metaKey)) {
-        e.preventDefault(); // Prevent browser save dialog
-        handleSave();
+      } else if (
+        !isTyping &&
+        ["1", "2", "3", "4"].includes(e.key) &&
+        !e.ctrlKey &&
+        !e.metaKey &&
+        activeStandard?.id
+      ) {
+        handleRatingChange(activeStandard.id, parseInt(e.key, 10) as Rating);
+      } else if (e.key.toLowerCase() === "s" && (e.ctrlKey || e.metaKey)) {
+        e.preventDefault();
+        void handleSave();
       }
     };
 
@@ -322,7 +574,14 @@ export function AssessmentDetailPage() {
     return () => {
       window.removeEventListener("keydown", handleKeyDown);
     };
-  }, [activeStandard, activeStandardIndex, assessment, role]);
+  }, [
+    activeStandard,
+    canEditForShortcuts,
+    goToNextStandard,
+    goToPreviousStandard,
+    handleRatingChange,
+    handleSave,
+  ]);
 
   // Update the UI for keyboard shortcuts help
   const keyboardShortcuts = [
@@ -379,13 +638,6 @@ export function AssessmentDetailPage() {
   const totalCount = assessment.standards?.length || 0;
   const progressPercentage = totalCount > 0 ? (completedCount / totalCount) * 100 : 0;
   
-  const handleRatingChange = (standardId: string, value: Rating) => {
-    setRatings(prev => ({
-      ...prev,
-      [standardId]: value,
-    }));
-  };
-  
   const handleEvidenceChange = (standardId: string, value: string) => {
     setEvidence(prev => ({
       ...prev,
@@ -400,122 +652,113 @@ export function AssessmentDetailPage() {
     }));
   };
   
-  // Action handlers
-  const handleAddAction = (standardId: string) => {
+  const findStandardById = (standardId: string) =>
+    assessment?.standards?.find(
+      (std) => std.mat_standard_id === standardId || std.id === standardId
+    );
+
+  const getAssessmentIdForStandard = (standardId: string) => {
+    const standard = findStandardById(standardId);
+    return resolveStandardAssessmentId(
+      standard as StandardWithAssessmentId | undefined,
+      assessment!,
+      id
+    );
+  };
+
+  const setStandardMutating = (standardId: string, mutating: boolean) => {
+    setActionsMutating((prev) => ({ ...prev, [standardId]: mutating }));
+  };
+
+  const handleAddAction = async (standardId: string) => {
     const text = newActionText[standardId]?.trim();
-    if (!text) return;
-    
-    const newAction: Action = {
-      id: `action-${Date.now()}`,
-      text,
-      completed: false
-    };
-    
-    setActions((prev) => ({
-      ...prev,
-      [standardId]: [...(prev[standardId] || []), newAction],
-    }));
-    
-    setNewActionText((prev) => ({
-      ...prev,
-      [standardId]: "",
-    }));
-  };
-  
-  const handleToggleAction = (standardId: string, actionId: string) => {
-    setActions((prev) => ({
-      ...prev,
-      [standardId]: (prev[standardId] || []).map(action =>
-        action.id === actionId ? { ...action, completed: !action.completed } : action
-      ),
-    }));
-  };
-  
-  const handleDeleteAction = (standardId: string, actionId: string) => {
-    setActions((prev) => ({
-      ...prev,
-      [standardId]: (prev[standardId] || []).filter(action => action.id !== actionId),
-    }));
-  };
-  
-  const handleSave = async () => {
-    if (!assessment || !id) return;
-    
-    setSaving(true);
+    if (!text || !assessment) return;
+
+    const assessmentId = getAssessmentIdForStandard(standardId);
+    if (!assessmentId) {
+      setActionsError("Could not resolve assessment for this standard.");
+      return;
+    }
+
+    setActionsError(null);
+    setStandardMutating(standardId, true);
     try {
-      // Get all standard IDs that have either a rating or evidence
-      const standardsWithData = new Set<string>();
-      
-      // Add standards with ratings
-      Object.entries(ratings).forEach(([standardId, rating]) => {
-        if (rating !== null) {
-          standardsWithData.add(standardId);
-        }
-      });
-      
-      // Add standards with evidence
-      Object.entries(evidence).forEach(([standardId, evidenceText]) => {
-        if (evidenceText && evidenceText.trim().length > 0) {
-          standardsWithData.add(standardId);
-        }
-      });
-
-      // Convert to the format expected by the API
-      const standards = Array.from(standardsWithData).map(standardId => ({
-        standardId,
-        rating: ratings[standardId] || null, // null is allowed by the API
-        evidence: evidence[standardId] || '',
+      const newAction = await createAction(assessmentId, text);
+      setActions((prev) => ({
+        ...prev,
+        [standardId]: [...(prev[standardId] || []), newAction],
       }));
-
-      if (standards.length === 0) {
-        toast({
-          title: "Nothing to save",
-          description: "Please add a rating or evidence to at least one standard before saving.",
-          variant: "destructive",
-        });
-        return;
-      }
-
-      // Use the assessment_id from each standard, not the group_id from URL
-      // The assessment.standards array contains the correct assessment_id for each standard
-      await submitAssessment(standards.map(s => {
-        const standard = assessment.standards?.find(std => 
-          std.mat_standard_id === s.standardId || std.id === s.standardId
-        );
-        // Get assessment_id from the standard (from API response) or construct it
-        const standardWithId = standard as (Standard & { assessment_id?: string }) | undefined;
-        let assessmentId = standardWithId?.assessment_id;
-        
-        // If assessment_id not available, construct it: school-standard-term-year
-        if (!assessmentId && standard && assessment) {
-          const termId = assessment.unique_term_id || id!.split('-').slice(-2).join('-');
-          assessmentId = `${assessment.school_id}-${standard.standard_code}-${termId}`;
-        }
-        
-        return {
-          assessment_id: assessmentId || s.standardId,
-          rating: s.rating,
-          evidence_comments: s.evidence
-        };
+      setNewActionText((prev) => ({
+        ...prev,
+        [standardId]: "",
       }));
-      
-      // Force refresh of assessments cache to ensure immediate updates
-      await assessmentService.refreshAllData();
-      
-      toast({
-        title: "Progress saved",
-        description: `Successfully saved progress for ${standards.length} standard${standards.length > 1 ? 's' : ''}`,
-        variant: "default",
-      });
     } catch (error) {
-      console.error('Save error:', error);
-      toast({
-        title: "Save failed",
-        description: "There was an error saving your progress. Please try again.",
-        variant: "destructive",
-      });
+      setActionsError(
+        error instanceof Error ? error.message : "Failed to add action item."
+      );
     } finally {
-      setSaving(false);
+      setStandardMutating(standardId, false);
+    }
+  };
+
+  const handleToggleAction = async (standardId: string, actionId: string) => {
+    if (!assessment) return;
+
+    const current = actions[standardId]?.find((a) => a.id === actionId);
+    if (!current) return;
+
+    const assessmentId = getAssessmentIdForStandard(standardId);
+    if (!assessmentId) {
+      setActionsError("Could not resolve assessment for this standard.");
+      return;
+    }
+
+    setActionsError(null);
+    setStandardMutating(standardId, true);
+    try {
+      const updated = await updateAction(assessmentId, actionId, {
+        is_completed: !current.completed,
+      });
+      setActions((prev) => ({
+        ...prev,
+        [standardId]: (prev[standardId] || []).map((action) =>
+          action.id === actionId ? updated : action
+        ),
+      }));
+    } catch (error) {
+      setActionsError(
+        error instanceof Error ? error.message : "Failed to update action item."
+      );
+    } finally {
+      setStandardMutating(standardId, false);
+    }
+  };
+
+  const handleDeleteAction = async (standardId: string, actionId: string) => {
+    if (!assessment) return;
+
+    const assessmentId = getAssessmentIdForStandard(standardId);
+    if (!assessmentId) {
+      setActionsError("Could not resolve assessment for this standard.");
+      return;
+    }
+
+    setActionsError(null);
+    setStandardMutating(standardId, true);
+    try {
+      await deleteAction(assessmentId, actionId);
+      setActions((prev) => ({
+        ...prev,
+        [standardId]: (prev[standardId] || []).filter(
+          (action) => action.id !== actionId
+        ),
+      }));
+    } catch (error) {
+      setActionsError(
+        error instanceof Error ? error.message : "Failed to delete action item."
+      );
+    } finally {
+      setStandardMutating(standardId, false);
     }
   };
   
@@ -542,32 +785,9 @@ export function AssessmentDetailPage() {
         evidence: evidence[standardId] || '',
       }));
 
-      // Use the assessment_id from each standard, not the group_id from URL
-      // The assessment.standards array contains the correct assessment_id for each standard
-      await submitAssessment(standards.map(s => {
-        const standard = assessment.standards?.find(std => 
-          std.mat_standard_id === s.standardId || std.id === s.standardId
-        );
-        // Get assessment_id from the standard (from API response) or construct it
-        const standardWithId = standard as (Standard & { assessment_id?: string }) | undefined;
-        let assessmentId = standardWithId?.assessment_id;
-        
-        // If assessment_id not available, construct it: school-standard-term-year
-        if (!assessmentId && standard && assessment) {
-          const termId = assessment.unique_term_id || id!.split('-').slice(-2).join('-');
-          assessmentId = `${assessment.school_id}-${standard.standard_code}-${termId}`;
-        }
-        
-        return {
-          assessment_id: assessmentId || s.standardId,
-          rating: s.rating,
-          evidence_comments: s.evidence
-        };
-      }));
-      
-      // Force refresh of assessments cache to ensure immediate updates
-      await assessmentService.refreshAllData();
-      
+      await submitAssessment(standards);
+      await refreshAssessment();
+
       setShowSuccessDialog(true);
     } catch (error) {
       console.error('Submit error:', error);
@@ -624,8 +844,8 @@ export function AssessmentDetailPage() {
 
   const isCompleted = progressPercentage === 100;
   const canSubmit = isCompleted && (role === "department-head" || role === "mat-admin") && (assessment.status !== "completed" || isEditMode);
-  const canEdit = (role === "department-head" || role === "mat-admin") && (assessment.status !== "completed" || isEditMode);
-  
+  const canEdit = canEditForShortcuts;
+
   return (
     <div className="container max-w-7xl py-6 md:py-10">
       <div className="flex flex-wrap items-center justify-between gap-4 mb-6">
@@ -712,39 +932,15 @@ export function AssessmentDetailPage() {
               </div>
             </div>
             
-            {/* Status and Progress */}
-            <div className="flex items-center gap-4 mt-4">
-              <Badge 
-                className={cn(
-                  "px-3 py-1 text-sm font-medium border",
-                  assessment.status === "completed" && "bg-emerald-100 text-emerald-700 border-emerald-200",
-                  assessment.status === "in_progress" && "bg-blue-100 text-blue-700 border-blue-200",
-                  assessment.status === "not_started" && "bg-slate-100 text-slate-700 border-slate-200",
-                  isOverdue(assessment) && "bg-red-100 text-red-700 border-red-200"
-                )}
-              >
-                {formatStatus(assessment.status)}
-              </Badge>
-              
-              <div className="flex items-center gap-2">
-                <div className="w-16 h-2 bg-slate-100 rounded-full overflow-hidden">
-                  <div
-                    className={cn(
-                      "h-full transition-all duration-300",
-                      progressPercentage === 100 ? "bg-emerald-500" : "bg-slate-400"
-                    )}
-                    style={{ width: `${progressPercentage}%` }}
-                  />
-                </div>
-                <span className="text-sm font-medium text-slate-700">
-                  {completedCount}/{totalCount}
-                </span>
+            {aspectCategory && (
+              <div className="mt-4">
+                <AspectCategoryBadge category={aspectCategory} />
               </div>
-            </div>
+            )}
           </div>
           
           {/* Metadata Grid */}
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 lg:gap-6 min-w-0 lg:min-w-[400px]">
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4 lg:gap-6 min-w-0 lg:min-w-[480px]">
             {assessment.assignedTo && assessment.assignedTo.length > 0 && (
               <div className="flex items-center gap-2">
                 <div className="h-8 w-8 rounded-lg bg-slate-100 flex items-center justify-center flex-shrink-0">
@@ -801,6 +997,53 @@ export function AssessmentDetailPage() {
                 </p>
               </div>
             </div>
+
+            <div className="flex items-center gap-2">
+              <div className="h-8 w-8 rounded-lg bg-slate-100 flex items-center justify-center flex-shrink-0">
+                <CheckCircle className="h-4 w-4 text-slate-600" />
+              </div>
+              <div className="min-w-0">
+                <p className="text-xs font-medium text-slate-500 uppercase tracking-wide">
+                  Status
+                </p>
+                <Badge
+                  className={cn(
+                    "mt-0.5 px-2 py-0.5 text-xs font-medium border",
+                    assessment.status === "completed" && "bg-emerald-100 text-emerald-700 border-emerald-200",
+                    assessment.status === "in_progress" && "bg-blue-100 text-blue-700 border-blue-200",
+                    assessment.status === "not_started" && "bg-slate-100 text-slate-700 border-slate-200",
+                    isOverdue(assessment) && "bg-red-100 text-red-700 border-red-200"
+                  )}
+                >
+                  {formatStatus(assessment.status)}
+                </Badge>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <div className="h-8 w-8 rounded-lg bg-slate-100 flex items-center justify-center flex-shrink-0">
+                <ClipboardCheck className="h-4 w-4 text-slate-600" />
+              </div>
+              <div className="min-w-0">
+                <p className="text-xs font-medium text-slate-500 uppercase tracking-wide">
+                  Completion
+                </p>
+                <div className="flex items-center gap-2 mt-0.5">
+                  <div className="w-14 h-2 bg-slate-100 rounded-full overflow-hidden">
+                    <div
+                      className={cn(
+                        "h-full transition-all duration-300",
+                        progressPercentage === 100 ? "bg-emerald-500" : "bg-slate-400"
+                      )}
+                      style={{ width: `${progressPercentage}%` }}
+                    />
+                  </div>
+                  <span className="text-sm font-medium text-slate-900">
+                    {completedCount}/{totalCount}
+                  </span>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
       </div>
@@ -825,65 +1068,88 @@ export function AssessmentDetailPage() {
             </CardHeader>
             <CardContent className="px-2 py-2 max-h-[60vh] overflow-y-auto">
               <div className="space-y-1">
-                {assessment.standards
-                  .slice()
-                  .sort((a, b) => {
-                    // Extract the numeric part from the standard code (e.g., ED1 -> 1, ED10 -> 10)
-                    const aCode = a.code || '';
-                    const bCode = b.code || '';
-                    const aMatch = aCode.match(/([A-Z]+)(\d+)/);
-                    const bMatch = bCode.match(/([A-Z]+)(\d+)/);
-                    
-                    if (aMatch && bMatch) {
-                      const aPrefix = aMatch[1];
-                      const bPrefix = bMatch[1];
-                      const aNum = parseInt(aMatch[2], 10);
-                      const bNum = parseInt(bMatch[2], 10);
-                      
-                      // First sort by prefix (ED, ES, FN, etc.)
-                      if (aPrefix !== bPrefix) {
-                        return aPrefix.localeCompare(bPrefix);
-                      }
-                      
-                      // Then sort numerically
-                      return aNum - bNum;
-                    }
-                    
-                    // Fallback to string comparison if pattern doesn't match
-                    return aCode.localeCompare(bCode);
-                  })
-                  .map((standard, index) => {
-                  const status = getStatusStatus(standard);
-                  return (
-                    <Button
-                      key={standard.id}
-                      variant="ghost"
-                      className={cn(
-                        "w-full justify-between rounded-lg px-4 py-3 h-auto border transition-colors",
-                        activeStandard?.id === standard.id 
-                          ? "border-primary/70 bg-primary/5" 
-                          : "border-transparent hover:bg-slate-50",
-                      )}
-                      onClick={() => setActiveStandard(standard)}
-                    >
-                      <div className="flex items-center gap-3">
-                        <div className={cn(
-                          "text-slate-700 rounded-full w-6 h-6 flex items-center justify-center text-xs font-medium",
-                          activeStandard?.id === standard.id ? "bg-primary/10 text-primary" : "bg-slate-200"
-                        )}>
-                          {index + 1}
-                        </div>
-                        <div className="text-left">
-                          <span className={cn("font-medium block text-sm", activeStandard?.id === standard.id ? "text-primary" : "")}>{standard.code}</span>
-                          <span className={cn("text-xs truncate max-w-[150px] block", activeStandard?.id === standard.id ? "text-foreground" : "text-muted-foreground")}>{standard.title}</span>
-                        </div>
-                      </div>
-                      <div className="flex items-center">
-                        {getStatusIcon(getStandardStatus(standard))}
-                      </div>
-                    </Button>
-                  );
-                })}
+                {([
+                  {
+                    key: "assurance" as const,
+                    title: "Assurance",
+                    standards: groupedStandards.assurance,
+                    headerClass: "text-green-800",
+                  },
+                  {
+                    key: "risk" as const,
+                    title: "Risk",
+                    standards: groupedStandards.risk,
+                    headerClass: "text-red-800",
+                  },
+                ] as const)
+                  .filter((section) => section.standards.length > 0)
+                  .map((section) => (
+                    <div key={section.key} className="space-y-1">
+                      <p
+                        className={cn(
+                          "text-xs font-medium px-3 pt-2 pb-1",
+                          section.headerClass
+                        )}
+                      >
+                        {section.title}
+                      </p>
+                      {section.standards.map((standard, index) => (
+                        <Button
+                          key={standard.id}
+                          variant="ghost"
+                          className={cn(
+                            "w-full justify-between rounded-lg px-4 py-3 h-auto border transition-colors",
+                            activeStandard?.id === standard.id
+                              ? "border-primary/70 bg-primary/5"
+                              : "border-transparent hover:bg-slate-50"
+                          )}
+                          onClick={() => setActiveStandard(standard)}
+                        >
+                          <div className="flex items-center gap-3 min-w-0">
+                            <div
+                              className={cn(
+                                "text-slate-700 rounded-full w-6 h-6 flex-shrink-0 flex items-center justify-center text-xs font-medium",
+                                activeStandard?.id === standard.id
+                                  ? "bg-primary/10 text-primary"
+                                  : "bg-slate-200"
+                              )}
+                            >
+                              {index + 1}
+                            </div>
+                            <div className="text-left min-w-0">
+                              <div className="flex items-center gap-1.5 flex-wrap">
+                                <span
+                                  className={cn(
+                                    "font-medium text-sm",
+                                    activeStandard?.id === standard.id ? "text-primary" : ""
+                                  )}
+                                >
+                                  {standard.code}
+                                </span>
+                                <StandardTypeBadge
+                                  type={standard.standard_type || "assurance"}
+                                  className="text-[9px] px-1 py-0 h-4 leading-4"
+                                />
+                              </div>
+                              <span
+                                className={cn(
+                                  "text-xs truncate max-w-[150px] block",
+                                  activeStandard?.id === standard.id
+                                    ? "text-foreground"
+                                    : "text-muted-foreground"
+                                )}
+                              >
+                                {standard.title}
+                              </span>
+                            </div>
+                          </div>
+                          <div className="flex items-center flex-shrink-0">
+                            {getStatusIcon(getStandardStatus(standard))}
+                          </div>
+                        </Button>
+                      ))}
+                    </div>
+                  ))}
               </div>
             </CardContent>
           </Card>
@@ -894,9 +1160,15 @@ export function AssessmentDetailPage() {
               <Card className="h-full">
                 <CardHeader className="pb-2">
                   <div className="flex items-center justify-between mb-2">
-                    <Badge variant="outline" className="text-primary border-primary">
-                      Standard {activeStandardIndex + 1} of {totalCount}
-                    </Badge>
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <Badge variant="outline" className="text-primary border-primary">
+                        Standard {activeStandardIndex + 1} of {totalCount}
+                      </Badge>
+                      <StandardTypeBadge
+                        type={activeStandard.standard_type || "assurance"}
+                        className="text-[10px] h-5 px-1.5 py-0.5"
+                      />
+                    </div>
                     <div className="flex items-center text-sm text-muted-foreground">
                       <Button 
                         variant="ghost" 
@@ -945,19 +1217,21 @@ export function AssessmentDetailPage() {
                               </Button>
                             </TooltipTrigger>
                             <TooltipContent className="max-w-sm">
-                              <p>1: Inadequate - {RatingDescriptions[1]}</p>
-                              <p>2: Requires Improvement - {RatingDescriptions[2]}</p>
-                              <p>3: Good - {RatingDescriptions[3]}</p>
-                              <p>4: Outstanding - {RatingDescriptions[4]}</p>
-                              <p>5: Exceptional - {RatingDescriptions[5]}</p>
+                              {RATING_OPTIONS.map((rating) => (
+                                <p key={rating}>
+                                  {rating}: {getRatingLabel(rating, activeStandard.standard_type)} —{' '}
+                                  {getRatingDescription(rating, activeStandard.standard_type)}
+                                </p>
+                              ))}
                             </TooltipContent>
                           </Tooltip>
                         </TooltipProvider>
                       </div>
                       
-                      <div className="grid grid-cols-1 lg:grid-cols-5 gap-3">
-                        {[1, 2, 3, 4, 5].map((rating) => {
+                      <div className="grid grid-cols-1 lg:grid-cols-4 gap-3">
+                        {RATING_OPTIONS.map((rating) => {
                           const isSelected = ratings[activeStandard.id!] === rating;
+                          const standardType = activeStandard.standard_type;
                           return (
                             <div 
                               key={rating}
@@ -976,13 +1250,12 @@ export function AssessmentDetailPage() {
                               <div className="flex items-center justify-between">
                                 <div className="flex items-center gap-1.5">
                                   <span className="font-medium">{rating}:</span>
-                                  <span className="font-medium">{RatingLabels[rating as 1 | 2 | 3 | 4 | 5]}</span>
+                                  <span className="font-medium">{getRatingLabel(rating, standardType)}</span>
                                 </div>
-                                {/* Fixed checkmark position */}
                                 {isSelected && <Check className="h-4 w-4 text-primary shrink-0" />}
                               </div>
                               <p className="text-xs text-muted-foreground mt-1.5">
-                                {RatingDescriptions[rating as 1 | 2 | 3 | 4 | 5]}
+                                {getRatingDescription(rating, standardType)}
                               </p>
                               {role === "department-head" && assessment.status !== "completed" && (
                                 <span className="absolute top-2 right-2 text-xs font-mono text-muted-foreground bg-gray-50 px-1.5 py-0.5 rounded">
@@ -1026,9 +1299,15 @@ export function AssessmentDetailPage() {
                         <div className="flex items-center justify-between mb-3">
                           <h3 className="text-base font-medium">Actions <span className="text-xs text-muted-foreground">(Optional)</span></h3>
                           <span className="text-xs text-muted-foreground">
-                            {actions[activeStandard.id!]?.filter((a: any) => a.completed).length || 0} / {actions[activeStandard.id!]?.length || 0} completed
+                            {actions[activeStandard.id!]?.filter((a) => a.completed).length || 0} / {actions[activeStandard.id!]?.length || 0} completed
                           </span>
                         </div>
+
+                        {(actionsLoadError || actionsError) && (
+                          <div className="mb-3 rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">
+                            {actionsError || actionsLoadError}
+                          </div>
+                        )}
                         
                         {/* Add Action Input */}
                         {canEdit && (
@@ -1046,13 +1325,18 @@ export function AssessmentDetailPage() {
                                   handleAddAction(activeStandard.id!);
                                 }
                               }}
+                              disabled={!!actionsMutating[activeStandard.id!]}
                               className="flex-1"
                             />
                             <Button
                               type="button"
                               size="sm"
                               onClick={() => activeStandard?.id && handleAddAction(activeStandard.id)}
-                              disabled={!activeStandard?.id || !newActionText[activeStandard.id]?.trim()}
+                              disabled={
+                                !activeStandard?.id ||
+                                !newActionText[activeStandard.id]?.trim() ||
+                                !!actionsMutating[activeStandard.id!]
+                              }
                             >
                               Add
                             </Button>
@@ -1066,12 +1350,12 @@ export function AssessmentDetailPage() {
                               No actions added yet
                             </p>
                           ) : (
-                            actions[activeStandard.id].map((action: any) => (
+                            actions[activeStandard.id].map((action) => (
                               <div key={action.id} className="flex items-start gap-2 group">
                                 <Checkbox
                                   checked={action.completed}
                                   onCheckedChange={() => activeStandard?.id && handleToggleAction(activeStandard.id, action.id)}
-                                  disabled={!canEdit}
+                                  disabled={!canEdit || !!actionsMutating[activeStandard.id!]}
                                   className="mt-1"
                                 />
                                 <span className={`flex-1 text-sm ${action.completed ? 'line-through text-muted-foreground' : ''}`}>
@@ -1083,6 +1367,7 @@ export function AssessmentDetailPage() {
                                     size="sm"
                                     className="h-6 px-2 opacity-0 group-hover:opacity-100 transition-opacity"
                                     onClick={() => activeStandard?.id && handleDeleteAction(activeStandard.id, action.id)}
+                                    disabled={!!actionsMutating[activeStandard.id!]}
                                   >
                                     <XCircle className="h-3 w-3" />
                                   </Button>
@@ -1336,21 +1621,16 @@ export function AssessmentDetailPage() {
       
       {/* Admin View - Completed Assessment Overview */}
       {isAdminView && assessment.standards && (
+        <TooltipProvider delayDuration={200}>
         <div className="space-y-6">
           {/* Compact Metrics Bar */}
           <Card className="border-slate-200/60">
-            <CardContent className="px-6 py-4">
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
+            <CardContent className="px-6 py-4 space-y-6">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                 <div className="flex items-center space-x-3">
                   <div className="h-10 w-10 rounded-lg bg-slate-100 flex items-center justify-center">
                     <span className="text-slate-700 font-semibold text-sm">
-                      {(() => {
-                        const averageRating = assessment.standards
-                          .filter(s => s.rating !== null)
-                          .reduce((sum, s) => sum + (s.rating || 0), 0) / 
-                          assessment.standards.filter(s => s.rating !== null).length;
-                        return averageRating ? averageRating.toFixed(1) : '—';
-                      })()}
+                      {overallAvg != null ? overallAvg.toFixed(1) : "—"}
                     </span>
                   </div>
                   <div>
@@ -1359,6 +1639,32 @@ export function AssessmentDetailPage() {
                   </div>
                 </div>
 
+                <div className="flex items-center space-x-3">
+                  <div className="h-10 w-10 rounded-lg bg-green-50 border border-green-100 flex items-center justify-center">
+                    <span className="text-green-800 font-semibold text-sm">
+                      {assuranceAvg != null ? assuranceAvg.toFixed(1) : "—"}
+                    </span>
+                  </div>
+                  <div>
+                    <p className="text-xs text-green-700/70 font-medium">Average Score</p>
+                    <p className="text-sm font-semibold text-slate-900">Assurance Avg</p>
+                  </div>
+                </div>
+
+                <div className="flex items-center space-x-3">
+                  <div className="h-10 w-10 rounded-lg bg-red-50 border border-red-100 flex items-center justify-center">
+                    <span className="text-red-800 font-semibold text-sm">
+                      {riskAvg != null ? riskAvg.toFixed(1) : "—"}
+                    </span>
+                  </div>
+                  <div>
+                    <p className="text-xs text-red-700/70 font-medium">Average Score</p>
+                    <p className="text-sm font-semibold text-slate-900">Risk Avg</p>
+                  </div>
+                </div>
+              </div>
+
+              <div className="border-t border-slate-200/60 pt-4 grid grid-cols-2 md:grid-cols-4 gap-6">
                 <div className="flex items-center space-x-3">
                   <div className="h-10 w-10 rounded-lg bg-slate-100 flex items-center justify-center">
                     <span className="text-slate-700 font-semibold text-sm">
@@ -1427,117 +1733,181 @@ export function AssessmentDetailPage() {
             </CardContent>
           </Card>
 
-          {/* Enhanced Standards Table */}
+          {/* Enhanced Standards Table — grouped by standard type */}
           <Card className="border-slate-200/60">
-            <Table>
-              <TableHeader>
-                <TableRow className="border-slate-200/60">
-                  <TableHead className="w-12 text-center font-semibold text-slate-600">#</TableHead>
-                  <TableHead className="font-semibold text-slate-600">Standard</TableHead>
-                  <TableHead className="w-24 text-center font-semibold text-slate-600">Rating</TableHead>
-                  <TableHead className="w-20 text-center font-semibold text-slate-600">Status</TableHead>
-                  <TableHead className="w-80 font-semibold text-slate-600">Comments</TableHead>
-                  <TableHead className="w-20 font-semibold text-slate-600">Files</TableHead>
-                  <TableHead className="w-36 font-semibold text-slate-600">Updated by</TableHead>
-                  <TableHead className="w-24 text-right font-semibold text-slate-600">Updated</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {getSortedStandards(assessment.standards).map((standard, index) => (
-                  // Standard objects may carry extra API fields in aspect view
-                  <TableRow 
-                    key={standard.id} 
-                    className="border-slate-200/60 hover:bg-slate-50/50 transition-colors"
-                  >
-                    <TableCell className="text-center">
-                      <span className="text-sm font-medium text-slate-500">
-                        {index + 1}
-                      </span>
-                    </TableCell>
-                    
-                    <TableCell className="py-4">
-                      <div className="space-y-1">
-                        <h4 className="font-medium text-slate-900 leading-tight">
-                          {standard.title}
-                        </h4>
-                        <p className="text-sm text-slate-500 leading-relaxed">
-                          {standard.description}
-                        </p>
-                      </div>
-                    </TableCell>
-                    
-                    <TableCell className="text-center">
-                      {standard.rating && (
-                        <div className="flex justify-center">
-                          <div className={`
-                            inline-flex items-center justify-center h-8 w-8 rounded-full text-sm font-semibold
-                            ${standard.rating === 5 ? 'bg-purple-100 text-purple-700 border border-purple-200' : ''}
-                            ${standard.rating === 4 ? 'bg-emerald-100 text-emerald-700 border border-emerald-200' : ''}
-                            ${standard.rating === 3 ? 'bg-blue-100 text-blue-700 border border-blue-200' : ''}
-                            ${standard.rating === 2 ? 'bg-amber-100 text-amber-700 border border-amber-200' : ''}
-                            ${standard.rating === 1 ? 'bg-red-100 text-red-700 border border-red-200' : ''}
-                          `}>
-                            {standard.rating}
-                          </div>
-                        </div>
+            {([
+              {
+                key: "assurance" as const,
+                title: "Assurance Standards",
+                standards: groupedStandards.assurance,
+                headerClass: "text-green-800",
+              },
+              {
+                key: "risk" as const,
+                title: "Risk Standards",
+                standards: groupedStandards.risk,
+                headerClass: "text-red-800",
+              },
+            ] as const)
+              .filter((section) => section.standards.length > 0)
+              .map((section, sectionIndex) => (
+                <div
+                  key={section.key}
+                  className={cn(sectionIndex > 0 && "border-t border-slate-200/60")}
+                >
+                  <div className="px-6 pt-4 pb-2">
+                    <h3
+                      className={cn(
+                        "text-sm font-medium text-slate-600",
+                        section.headerClass
                       )}
-                    </TableCell>
-                    
-                    <TableCell className="text-center">
-                      <div className="flex justify-center">
-                        {standard.rating ? (
-                          <div className="h-6 w-6 rounded-full bg-emerald-100 flex items-center justify-center">
-                            <CheckCircle className="h-4 w-4 text-emerald-600" />
-                          </div>
-                        ) : (
-                          <div className="h-6 w-6 rounded-full bg-slate-100 flex items-center justify-center">
-                            <Clock className="h-3 w-3 text-slate-400" />
-                          </div>
-                        )}
-                      </div>
-                    </TableCell>
-                    
-                    <TableCell>
-                      {standard.evidence ? (
-                        <EvidenceCell evidence={standard.evidence} />
-                      ) : (
-                        <span className="text-sm text-slate-400 italic">No comments provided</span>
-                      )}
-                    </TableCell>
-                    
-                    <TableCell className="text-center">
-                      <span className="text-sm text-slate-500">
-                        {standard.id ? (attachments[standard.id]?.length || 0) : 0}
-                      </span>
-                    </TableCell>
+                    >
+                      {section.title}
+                    </h3>
+                  </div>
+                  <Table>
+                    <TableHeader>
+                      <TableRow className="border-slate-200/60">
+                        <TableHead className="w-12 text-center font-semibold text-slate-600">#</TableHead>
+                        <TableHead className="w-24 text-center font-semibold text-slate-600">Type</TableHead>
+                        <TableHead className="font-semibold text-slate-600">Standard</TableHead>
+                        <TableHead className="w-24 text-center font-semibold text-slate-600">Rating</TableHead>
+                        <TableHead className="w-20 text-center font-semibold text-slate-600">Status</TableHead>
+                        <TableHead className="w-80 font-semibold text-slate-600">Comments</TableHead>
+                        <TableHead className="w-20 font-semibold text-slate-600">Files</TableHead>
+                        <TableHead className="w-20 text-center font-semibold text-slate-600">Actions</TableHead>
+                        <TableHead className="w-36 font-semibold text-slate-600">Updated by</TableHead>
+                        <TableHead className="w-24 text-right font-semibold text-slate-600">Updated</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {section.standards.map((standard, index) => (
+                        <TableRow
+                          key={standard.id}
+                          className="border-slate-200/60 hover:bg-slate-50/50 transition-colors"
+                        >
+                          <TableCell className="text-center">
+                            <span className="text-sm font-medium text-slate-500">
+                              {index + 1}
+                            </span>
+                          </TableCell>
 
-                    <TableCell>
-                      <span className="text-sm text-slate-600">
-                        {(() => {
-                          const s: any = standard as any;
-                          return s.updated_by_name || s.assigned_to_name || "—";
-                        })()}
-                      </span>
-                    </TableCell>
-                    
-                    <TableCell className="text-right">
-                      <span className="text-sm text-slate-500">
-                        {(() => {
-                          const s: any = standard as any;
-                          const ts = s.last_updated || s.updated_at || s.updatedAt;
-                          if (!ts) return '—';
-                          const date = new Date(ts);
-                          if (Number.isNaN(date.getTime())) return '—';
-                          return date.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
-                        })()}
-                      </span>
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
+                          <TableCell className="text-center">
+                            <StandardTypeBadge
+                              type={standard.standard_type || "assurance"}
+                              className="text-[10px] px-1.5 py-0.5"
+                            />
+                          </TableCell>
+
+                          <TableCell className="py-4">
+                            <div className="space-y-1">
+                              <h4 className="font-medium text-slate-900 leading-tight">
+                                {standard.title}
+                              </h4>
+                              <AdminStandardDescription
+                                description={
+                                  standard.description ?? standard.standard_description
+                                }
+                              />
+                            </div>
+                          </TableCell>
+
+                          <TableCell className="text-center">
+                            {standard.rating && (
+                              <div className="flex justify-center">
+                                <div
+                                  className={cn(
+                                    "inline-flex items-center justify-center h-8 w-8 rounded-full text-sm font-semibold",
+                                    getRagBadgeClasses(standard.rating, standard.standard_type)
+                                  )}
+                                >
+                                  {standard.rating}
+                                </div>
+                              </div>
+                            )}
+                          </TableCell>
+
+                          <TableCell className="text-center">
+                            <div className="flex justify-center">
+                              {standard.rating ? (
+                                <div className="h-6 w-6 rounded-full bg-emerald-100 flex items-center justify-center">
+                                  <CheckCircle className="h-4 w-4 text-emerald-600" />
+                                </div>
+                              ) : (
+                                <div className="h-6 w-6 rounded-full bg-slate-100 flex items-center justify-center">
+                                  <Clock className="h-3 w-3 text-slate-400" />
+                                </div>
+                              )}
+                            </div>
+                          </TableCell>
+
+                          <TableCell>
+                            {standard.evidence ? (
+                              <EvidenceCell evidence={standard.evidence} />
+                            ) : (
+                              <span className="text-sm text-slate-400 italic">No comments provided</span>
+                            )}
+                          </TableCell>
+
+                          <TableCell className="text-center">
+                            <span className="text-sm text-slate-500">
+                              {standard.id ? (attachments[standard.id]?.length || 0) : 0}
+                            </span>
+                          </TableCell>
+
+                          <TableCell className="text-center">
+                            {(() => {
+                              const actionCount = standard.id
+                                ? (actions[standard.id]?.length ?? 0)
+                                : 0;
+                              return (
+                                <span
+                                  className={cn(
+                                    "inline-flex min-w-[1.5rem] justify-center rounded-full px-2 py-0.5 text-sm font-semibold tabular-nums",
+                                    actionCount > 0
+                                      ? "bg-amber-100 text-amber-800 border border-amber-200"
+                                      : "text-slate-400"
+                                  )}
+                                >
+                                  {actionCount}
+                                </span>
+                              );
+                            })()}
+                          </TableCell>
+
+                          <TableCell>
+                            <span className="text-sm text-slate-600">
+                              {(() => {
+                                const s: any = standard as any;
+                                return s.updated_by_name || s.assigned_to_name || "—";
+                              })()}
+                            </span>
+                          </TableCell>
+
+                          <TableCell className="text-right">
+                            <span className="text-sm text-slate-500">
+                              {(() => {
+                                const s: any = standard as any;
+                                const ts = s.last_updated || s.updated_at || s.updatedAt;
+                                if (!ts) return "—";
+                                const date = new Date(ts);
+                                if (Number.isNaN(date.getTime())) return "—";
+                                return date.toLocaleDateString("en-GB", {
+                                  day: "numeric",
+                                  month: "short",
+                                });
+                              })()}
+                            </span>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
+              ))}
           </Card>
         </div>
+        </TooltipProvider>
       )}
       
       {/* Submission Success Dialog */}
@@ -1557,24 +1927,27 @@ export function AssessmentDetailPage() {
             <div className="space-y-2 my-2">
               <h4 className="text-sm font-medium">Assessment Summary:</h4>
               <div className="grid grid-cols-2 gap-2 text-sm">
-                {[1, 2, 3, 4, 5].map(rating => {
-                  const count = assessment.standards!.filter(s => s.id && ratings[s.id] === rating).length;
-                  if (count === 0) return null;
-                  
-                  const color = rating === 1 ? "text-red-600" :
-                              rating === 2 ? "text-amber-600" :
-                              rating === 3 ? "text-blue-600" :
-                              rating === 4 ? "text-emerald-600" :
-                              rating === 5 ? "text-purple-600" :
-                              "text-green-600";
-                  
-                  return (
-                    <div key={rating} className="flex items-center gap-1.5">
-                      <span className={cn("font-medium", color)}>
-                        {count}× {RatingLabels[rating as 1|2|3|4|5]}
+                {RATING_OPTIONS.flatMap((rating) => {
+                  const standardsAtRating = assessment.standards!.filter(
+                    (s) => s.id && ratings[s.id] === rating
+                  );
+                  if (standardsAtRating.length === 0) return [];
+
+                  const byType = new Map<StandardType | 'assurance', typeof standardsAtRating>();
+                  for (const s of standardsAtRating) {
+                    const type = s.standard_type || 'assurance';
+                    const group = byType.get(type) || [];
+                    group.push(s);
+                    byType.set(type, group);
+                  }
+
+                  return Array.from(byType.entries()).map(([type, stds]) => (
+                    <div key={`${rating}-${type}`} className="flex items-center gap-1.5">
+                      <span className="font-medium text-slate-700">
+                        {stds.length}× {getRatingLabel(rating, type)}
                       </span>
                     </div>
-                  );
+                  ));
                 })}
               </div>
             </div>

@@ -15,6 +15,7 @@ import { DPAPage } from "@/pages/DPA";
 import { ExportPage } from "@/pages/Export";
 import StandardsManagement from "@/pages/admin/StandardsManagement";
 import UsersManagement from "@/pages/admin/UsersManagement";
+import { VersionHistoryPage } from "@/pages/VersionHistory";
 import LoginPage from "@/pages/auth/Login";
 import VerifyPage from "@/pages/auth/Verify";
 import { Toaster } from "@/components/ui/toaster";
@@ -57,6 +58,7 @@ function AppContent() {
           <Route path="export" element={<ExportPage />} />
           <Route path="admin/standards" element={<StandardsManagement />} />
           <Route path="admin/users" element={<UsersManagement />} />
+          <Route path="version-history" element={<VersionHistoryPage />} />
         </Route>
         
         {/* Redirect any unknown routes to landing */}
