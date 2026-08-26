@@ -1,8 +1,8 @@
 # Assurly — Milestone Plan
 
 **Suggested path:** `docs/milestones/assurly-milestone-plan.md`
-**Version:** 2.5
-**Date:** 25 August 2026
+**Version:** 2.6
+**Date:** 26 August 2026
 **Status:** Approved. M1 open.
 **Owner:** Product Owner
 
@@ -110,10 +110,10 @@ Internal is not further subdivided at this stage. Requirements below refer to th
 
 | ID | Milestone | Requirements | Gate |
 |---|---|---|---|
-| **M1** | Stabilise — live defects | AUD-001, DOC-001, DOC-002, REQ-006 → REQ-012 | None. Starts immediately. |
+| **M1** | Stabilise — live defects | AUD-001, DOC-001, DOC-002, DOC-003, SEC-001, REQ-007 → REQ-012 | None. Starts immediately. |
 | **M2** | Role model | REQ-013 | None |
 | **M3** | Assessment lifecycle | REQ-014 → REQ-016 | M2 complete |
-| **M4** | Evidence model | REQ-017 | REQ-006 closed |
+| **M4** | Evidence model | REQ-017 | None. REQ-006 was retired into REQ-017; the old gate no longer exists. |
 | **M5** | Applicability | REQ-018 | None |
 | **M6** | Navigation shell | REQ-024 | M2 complete |
 | **M7** | Analytics and trends | REQ-019 → REQ-023 | **M3, M5 and M6 complete** |
@@ -121,7 +121,7 @@ Internal is not further subdivided at this stage. Requirements below refer to th
 
 ### 4.1 Sequencing rationale
 
-- **M1 first.** Seven live defects, most of them cheap, all of them visible to the early adopter during the exact period they are being asked to trust the platform.
+- **M1 first.** Six live defects, most of them cheap, all of them visible to the early adopter during the exact period they are being asked to trust the platform. (Seven until REQ-006 was retired into REQ-017 — see the retirement note in §6.)
 - **M2 second.** The role model is now load-bearing: the lifecycle rules in M3, the actions permissions in M7 and the read-only requirement all reference the three tiers. Building any of them before the tiers exist means encoding permissions twice.
 - **M5 before M7.** Aggregate scores are currently distorted by standards that do not apply to a given school. Comparative analytics built on that denominator will need rebuilding. Fix the denominator first.
 - **M3 before M7.** A historical series that cannot be corrected is not worth visualising.
@@ -159,7 +159,9 @@ Settled. Applicability is **per school, per term, carried forward**:
 
 ### M1 — Stabilise
 
-**Definition of done:** All seven requirements verified in production; AUD-001 reported; DOC-001 and DOC-002 complete; regression notes in the changelog; API contract updated wherever a response shape changed.
+**Definition of done:** REQ-007 → REQ-012 verified in production; AUD-001 reported; SEC-001 reported and its contract documentation landed; DOC-001, DOC-002 and DOC-003 complete; regression notes in the changelog; API contract updated wherever a response shape changed.
+
+**M1 closes without a working evidence feature.** REQ-006 has been retired into REQ-017 (M4) — see the retirement note below. This is accepted, not an oversight.
 
 ---
 
@@ -207,22 +209,42 @@ Until it lands, the repository itself is the reference for file layout.
 
 ---
 
-#### REQ-006 — Evidence upload not firing
-**Type:** Defect
+#### SEC-001 — Make the super-admin guard visible
+**Type:** Security documentation and verification. Backend, small.
 
-**Problem:** Files attached as evidence do not appear after navigating away and back; the interface continues to report no files attached. **There is no log of a failed POST — the request does not appear to be reaching the backend at all**, which points at the frontend rather than the API or GCS.
+**Why:** `DELETE /api/admin/mock-data/wipe` hard-deletes every `assessments` row for a MAT. **It is protected** — `verify_super_admin` (`main.py:556`) checks the caller's email against the `SUPER_ADMIN_EMAILS` environment allow-list, and both admin endpoints depend on it (`main.py:3667`, `main.py:3797`). But the live OpenAPI spec advertises only `HTTPBearer`, so the protection is invisible to the spec, to the API contract, and to anyone auditing from either. An earlier audit pass raised this endpoint as unguarded on exactly that basis. **The defect is the invisibility, not the guard.**
 
-**Cause — established, not hypothesised:** the upload client was never merged to `main`. A working implementation exists on branch `claude/review-backend-brief-mjtms`. **The fix is a port, not a rebuild.**
+**Scope:**
+- Confirm the check is present and correct on **every** destructive endpoint, not only the two known ones.
+- Document the `SUPER_ADMIN_EMAILS` mechanism in the API contract so the security posture is legible without reading the source.
+- Report whether any test covers it.
+- Report but **do not fix** anything else found.
 
-**Do not delete `claude/review-backend-brief-mjtms` until REQ-006 ships.**
+**Also record for M2:** `SUPER_ADMIN_EMAILS` is the **existing** super-admin mechanism. REQ-013 should extend it rather than introduce a parallel one. Note `.env.example` states plainly that "no DB-level super-admin role exists" — the allow-list is currently the whole of it.
 
-> ⚠️ **Verification, 25 August 2026 (AUD-001 session).** `claude/review-backend-brief-mjtms` **does not exist on `origin`.** The remote holds only `main` and `sprint-2.0`, and no pull request has ever been opened from that branch, so there is no `refs/pull/*` ref to recover it from either. If the implementation exists it is local to a working copy or in an unpushed session. **Push it before REQ-006 opens** — otherwise "port, not rebuild" has no source and the requirement needs rescoping.
->
-> The M1 frontend audit (`docs/milestones/m1-audit-frontend.md`) names the commits: `8676c15` added `EvidenceModal.tsx`, `services/evidence-service.ts` and `types/evidence.ts`; `e268686`, `215e19a` and `e1f7d3a` wired counts and download into `AssessmentDetail`. **None of the four is reachable from this clone either** (`git cat-file -e` fails on all of them), so whoever holds them holds the only copy. Ask for those four SHAs by name.
-
-**Out of scope:** Any change to the evidence data model. That is M4. This requirement makes the existing model behave as documented.
+**Separately:** `POST /api/auth/cleanup-expired-tokens` (`main.py:777`) declares **no security requirement at all** — the handler takes no dependencies. Low harm. Report whether that is intentional. Already logged as Known Issue #8 in the API contract.
 
 ---
+
+#### DOC-003 — Reconcile the contract with what actually ships
+**Type:** Housekeeping. Documentation only, no application code.
+
+Three documents state that the evidence endpoints are live. The live OpenAPI spec confirms they are not.
+
+1. **Correct all three statements:** API contract line 1418 ("The four evidence endpoints are live"), API contract changelog v1.8 ("Promoted the Evidence section… REQ-003 shipped some time ago"), and data model §17 ("Shipped April 2026", "live in production", "Mutated only via the four `/evidence/...` endpoints").
+2. **Document the `standard_evidence` table in the data model bible** — key structure, and the `evidence_type` and `url` columns. It is currently undocumented as a live schema object, which is why its shape was unknown until it was queried directly.
+3. **Re-verify every `🚧 In-flight` tag removed during the v1.5 → v1.8 reconciliation passes.** At least one was removed on a false judgement that work had shipped. The rest are untrusted until checked. **Report what is found; correct nothing beyond the three statements in (1) without instruction.**
+
+---
+
+#### REQ-006 — Evidence upload not firing — **RETIRED**
+**Status:** Retired, not completed. Merged into **REQ-017** (M4).
+
+**Why retired.** REQ-006 was scoped as "make the existing evidence model behave as documented" — a frontend fix over a working backend. Both halves of that premise were false. The M1 backend audit established that **no evidence endpoints have ever existed** on `main`: none of `main.py`'s 42 routes is an evidence route, there is no GCS client, and no Google SDK appears in `requirements.txt`. The M1 frontend audit established that the client existed only on `claude/review-backend-brief-mjtms`, which is absent from `origin` with no pull-request ref to recover it from; the four commits it names (`8676c15`, `e268686`, `215e19a`, `e1f7d3a`) are unreachable. A Cloud Run revision from May 2026 did serve working upload, but the image could not be unpacked and **recovery is abandoned — do not spend further time on it.**
+
+What remained was not a defect fix but a ground-up build of both layers, which is REQ-017's shape and REQ-017's milestone. Keeping it in M1 as a defect would have misrepresented both the work and the milestone.
+
+**M1 therefore closes without a working evidence feature. This is accepted.**
 
 #### REQ-007 — Request a Rating: due date
 **Type:** Incomplete build, not a defect
@@ -231,14 +253,28 @@ Until it lands, the repository itself is the reference for file layout.
 
 > **Settled by the AUD-001 backend audit, 25 August 2026: it is the transform, not persistence.** The backend persists `due_date` on creation (`main.py:1009-1021`) and returns it per standard from the by-aspect endpoint (`main.py:3180`). `transformAssessmentByAspectToAssessment` (`assurly-frontend/src/hooks/use-assessments.ts:84`) then discards it, hardcoding `due_date: null` on the aggregate it builds — even though every standard in `data.standards[]` carries a real value. `isOverdue` returns `false` for a null due date, so this also suppresses overdue rendering on that surface. The list endpoint already derives a group-level due date as `MAX(a.due_date)`; deriving it the same way in the transform is the obvious shape of the fix. **No migration is required — the column exists** (`assessments.due_date`, `date NULL`).
 
+**Production state, measured:** `due_date` is **null on all 1,921 assessment rows**. The create path does send `due_date`, so the plan's original "the selector is a mock, nothing was ever wired up" description was wrong and has been struck.
+
+**Settled design — derive the effective due date on read:**
+
+```sql
+COALESCE(a.due_date, t.end_date)
+```
+
+An explicit per-assessment date overrides; historical rows behave sensibly with **no backfill**; and a corrected term end date propagates automatically to everything that inherited it. **No migration.**
+
 **Scope — backend:**
-- Confirm whether the schema can store a due date on the rating request at all. If the column does not exist, produce the migration.
-- Accept, validate and persist the due date; return it on read.
+- Apply the `COALESCE` derivation on every read path that exposes a due date, and document the derived semantics in the API contract — a derived field that looks like a stored one will mislead the next reader otherwise.
+- Accept, validate and persist an explicit due date; return it on read.
 - UK timezone handling is a known sensitivity in this codebase — confirm the stored value round-trips correctly.
 
 **Scope — frontend:**
-- Replace the mock modal with a working date selector bound to the real payload.
-- Surface the due date to the recipient of the request, not only to the sender.
+- Bind the date selector to the real payload and surface the due date to the **recipient** of the request, not only the sender.
+- Stop discarding it on read: `transformAssessmentByAspectToAssessment` (`use-assessments.ts:84`) hardcodes `due_date: null`.
+
+**Before implementation — one manual test settles an open question.** Create an assessment with a due date through the invitation sheet, then re-count nulls. That distinguishes "nobody has ever set one" from "create silently drops the value". Everything above assumes the former; if the latter, the create path is also defective and the scope grows.
+
+**M3 rule to record now:** **overdue must suppress once a term is closed.** A closed term cannot be actioned, so continuing to flag its assessments as overdue is noise about work nobody is permitted to do.
 
 ---
 
@@ -247,7 +283,9 @@ Until it lands, the repository itself is the reference for file layout.
 
 **Problem:** Filtering by aspect returns everything for every school. **All other filters work, individually and in conjunction — the aspect filter alone is broken.** The request does not appear in the network tab.
 
-**Audit note:** Establish first whether this filter is supposed to trigger a backend query or filter client-side. That determines whether the fix is a missing request or broken client-side predicate logic. The contract is the reference for which parameters the ratings endpoint accepts.
+**Audit note — settled.** The filter is **client-side**; the M1 frontend audit found the defect there, and the M1 backend audit confirmed the server-side option is sound if it is ever needed (`GET /api/assessments` filters on `UPPER(ma.aspect_code) = UPPER(%s)`). No backend change is required.
+
+**Also in scope — the same defect, second symptom.** Fold in finding 3 of the frontend audit: the **`localStorage` filter restore compares saved values against raw aspect codes while the options use legacy names**, so restored filters are silently stripped on reload. This is the **same root cause** as the main defect — `aspect_code` versus category misalignment — and the proposed fix already calls for aligning them in one place. **Fixing one without the other ships a filter that works until the user reloads the page**, which is arguably worse than one that visibly never works.
 
 **Out of scope:** New filter dimensions.
 
@@ -261,6 +299,12 @@ Until it lands, the repository itself is the reference for file layout.
 **Scope:** Status filtering must resolve per aspect within a school, and a school with a mixed set must appear correctly under each applicable status.
 
 **Related:** REQ-008. Both are filter defects on the same surface and may share an audit session, but they are separate fixes with separate causes.
+
+**Backend audit finding — `MAX(due_date)` is the wrong aggregate.** The group-level due date is `MAX(a.due_date)` (`main.py:838`), documented at API contract line 848 as "Latest due date across standards in the group". For the question actually being asked — *is anything in this group overdue?* — `MAX` is wrong: it flags the group only once the **last** standard is past due. An aspect holding one standard three months overdue and one due next month reads as not overdue. The correct aggregate is the earliest due date among standards **not yet complete**. **This misreports a documented contract field today, independent of anything REQ-009 changes.**
+
+Also confirmed: **`?status=overdue` can never return rows.** The grouped `CASE` (`main.py:840-844`) has three total branches — `not_started`, `completed`, `in_progress` — and the filter compares against that derived column, so the endpoint returns `200` with an empty array. A caller cannot distinguish "nothing is overdue" from "this filter does not work".
+
+> **Interaction with REQ-007.** If every standard inherits the same `t.end_date` via the REQ-007 `COALESCE`, then `MAX` and `MIN` agree across the group and **this defect goes quiet** — it does not get fixed, it stops being observable. It resurfaces the moment explicit per-standard due dates are set. Sequencing REQ-007 first therefore hides REQ-009's aggregate bug rather than resolving it; fix the aggregate on its own merits, not on whether the symptom is currently visible.
 
 ---
 
@@ -276,7 +320,15 @@ Until it lands, the repository itself is the reference for file layout.
 
 **Leading hypothesis, to be confirmed not assumed:** the rename route identifies the aspect by **name rather than by ID**, so a name containing `&`, `\` or `/` breaks path resolution or URL encoding. A 404 on an aspect that demonstrably exists is characteristic of a routing failure rather than a missing record.
 
+> **Backend audit, 26 August 2026 — hypothesis rejected, symptom confirmed.** The route keys on **ID**, not name, in both layers: `PUT /api/aspects/{mat_aspect_id}` looks up `WHERE mat_aspect_id = %s` (`main.py:2263-2266`) and the new name travels in the JSON body, where special characters are harmless. The frontend passes `aspect.mat_aspect_id` throughout.
+>
+> The real chain: `mat_aspect_id` is **minted from user text** — `f"{current_mat_id}-{aspect_code_upper}"` (`main.py:2177`) — from an `aspect_code` field validated only for **length** (`z.string().min(2).max(10)`, `CreateAspectModal.tsx:29`; a bare `str` with no validator on the Pydantic side). It is then interpolated into a URL path **without encoding** (`assessment-service.ts:377`), where `actions-service.ts` does encode. The browser's URL parser rewrites `\` to `/`, so `/api/aspects/HLT-IT\DATA` leaves as `/api/aspects/HLT-IT/DATA` — two path segments, no matching route, `404`.
+>
+> **This explains `IT\Data`. It does not explain `IT & Data`** — `&` is a legal path character and should reach the handler intact. That case **remains open**: either the stored code differs from the display name, or an intermediary is involved, or the two share a symptom and not a cause. `vercel.json` was checked and ruled out.
+
 **Scope:** If the hypothesis holds, the fix is to key the route on the aspect identifier. Escaping the name is a patch over the underlying design problem and should not be the chosen fix without discussion.
+
+**This requires a primary-key migration, not only a code fix.** Rows already minted with unescaped characters in `mat_aspects.mat_aspect_id` stay broken however the code changes — **and those rows are the reported symptom.** The migration rewrites primary keys with dependent foreign keys (`mat_standards.mat_aspect_id`, and transitively anything joining through it), so per §2.4 it needs SQL and a rollback note, written by an agent and applied manually. Treating REQ-010 as code-only will fix future aspects and leave every currently-broken one broken.
 
 **Downstream dependency:** The planned Education → Curriculum and Teaching rename is blocked behind this and is folded into this requirement. Once REQ-010 is fixed, perform that rename and confirm it propagates correctly.
 
@@ -294,6 +346,18 @@ Until it lands, the repository itself is the reference for file layout.
 
 **Why this matters more than it looks:** M6 depends on trustworthy timestamps. If update times are being fabricated at read time, that needs to be known before analytics work begins.
 
+**Audit answer, 26 August 2026 — all three questions settled.** The timestamp is genuine in the database, absent from the API, and fabricated by the frontend. `mat_standards.updated_at` holds real values; `GET /api/standards` neither selects it (`main.py:1115-1129`) nor declares it on `MatStandardResponse` (`main.py:326-334`), so the `response_model` would strip it even if the SELECT were fixed; and `SortableStandardCard.tsx:136` renders `standard.updated_at || new Date()`, so the fallback fires every time and prints today.
+
+**Settled definition: "Updated" means a *material* edit.** Renames and content changes count. **Reordering does not.**
+
+**Scope:**
+- **Stop bumping `updated_at` on `sort_order`-only writes.** This is the part that makes the field mean what the definition says.
+- **Expose it on `GET /api/standards`** — both the SELECT and `MatStandardResponse`, since either alone is insufficient.
+- **Update API contract §13.** Its current omission *accurately* documents a deficient endpoint, so this is a genuine backend gap and **both the contract and the implementation change** — this is not a documentation-only correction.
+- **Remove the frontend's `|| new Date()` fallback** so a missing value renders as "—" rather than a plausible lie. `VersionHistoryModal.tsx:77` carries the same pattern.
+
+**Confirm what currently writes `updated_at` before implementing.** The column carries `CURRENT_TIMESTAMP on update`, and at least one handler also sets it explicitly (`main.py:1718`). Both paths must be accounted for, or the sort-order exclusion will be silently defeated by the column default.
+
 ---
 
 #### REQ-012 — Inactive aspects view returns 404
@@ -302,6 +366,18 @@ Until it lands, the repository itself is the reference for file layout.
 **Problem:** The inactive aspects feature errors with a 404 despite previously deleted aspects existing in the tenant.
 
 **Audit note:** Determine whether deletion is soft or hard. If aspects are hard-deleted, the inactive view has nothing to return and the defect is conceptual rather than a routing bug — report that finding rather than fabricating a fix. This interacts with REQ-016, which introduces deletion of assessments; the two should share a consistent deletion model.
+
+> **Audit answer, 26 August 2026 — deletion is soft, and this is a routing bug.** Neither branch of `delete_aspect` (`main.py:2342-2438`) issues a `DELETE`: defaults get `is_active = 0` with IDs intact and are reinstatable; customs get archive-renamed to `{id}-deleted-{ts}` plus `is_active = 0`. Data model §11 records 14 inactive rows in production, so the view has real data to return. The conceptual explanation is **rejected on evidence**.
+>
+> The cause is **route shadowing**. Starlette matches in registration order, and `@app.get("/api/aspects/{mat_aspect_id}")` is registered at `main.py:2105` while `@app.get("/api/aspects/inactive")` is at `main.py:2502`. The literal route is unreachable; the request lands on the detail handler with `mat_aspect_id="inactive"`, which finds no such aspect and raises `404`. **Confirmed against the live OpenAPI spec.**
+
+**Also in scope: `GET /api/standards/inactive`, which has the identical bug.** `@app.get("/api/standards/{mat_standard_id}")` is registered at `main.py:1181` and `@app.get("/api/standards/inactive")` at `main.py:1926`. Both confirmed against the live OpenAPI spec: the inactive routes are registered after their parameterised siblings. **Same two-decorator fix, same session** — otherwise it resurfaces as a separate bug report the week after REQ-012 ships.
+
+**Fix:** move each literal route above its parameterised sibling. No logic change, no data change, no migration. The other parameterised routes were checked — `/api/users/me`, `bulk-update` and `by-aspect` are safe; these two are the only literal-after-parameter collisions in the file.
+
+**Blast radius note:** a feature that has never worked starts working, surfacing inactive rows nobody has seen. `get_inactive_aspects` deliberately excludes archived customs, so the count shown will be deactivated defaults only, not all 14. Confirm the view renders sensibly with real data before calling it done.
+
+**Frontend:** none. `getInactiveAspects` already calls the correct path (`assessment-service.ts:418`) and has been receiving a 404 from a correctly-formed request.
 
 ---
 
@@ -315,7 +391,7 @@ Until it lands, the repository itself is the reference for file layout.
 **Scope — backend:**
 - Implement the superadmin / internal / external tiers described in Section 3.
 - External tier: read access to everything within the MAT, including commentary and evidence; **write blocked at endpoint level**. Hiding controls in the UI is not sufficient and will not be accepted as the implementation.
-- Superadmin tier scoped across tenants for the platform team.
+- Superadmin tier scoped across tenants for the platform team. **`SUPER_ADMIN_EMAILS` is the existing super-admin mechanism** — an environment allow-list checked by `verify_super_admin` (`main.py:556`). **Extend it; do not introduce a parallel one.** Note `.env.example` states plainly that no DB-level super-admin role exists, so this allow-list is currently the whole of it, and REQ-013 is where that either becomes a real role or is deliberately kept as configuration. See SEC-001.
 - Audit the three user-CRUD endpoints currently missing `verify_mat_admin` as part of this work — the role model is the right moment to close that gap.
 
 **Scope — frontend:**
@@ -373,6 +449,17 @@ Until it lands, the repository itself is the reference for file layout.
 
 **Design input — "current term" collapses into term state (AUD-001).** The platform currently derives "current term" two mutually inconsistent ways under the same name: `GET /api/terms` sets `is_current` from the calendar (`CURDATE() BETWEEN start_date AND end_date`), while `GET /api/dashboard/schools` sets `current_term` to whichever term has assessment rows. This is a real defect and is **deliberately not being fixed in M1** — it resolves here. Once term state exists, current term becomes **the most recent open term, derived from state**, and **both existing derivations are deleted**. Note that `current_term` is a contract-visible response field, so this is a contract change as well as a code change.
 
+> **Correction to the AUD-001 finding — there is no vacation gap.** AUD-001 reported that `is_current` would be false for every row during vacations. **That was wrong.** It rested on an assumption about the table's contents, and the production data disproves it: T1 runs 1 Sep – 31 Dec, T2 1 Jan – 1 Apr, T3 2 Apr – 31 Aug, **each abutting the next with no gap**. `is_current` is true for **exactly one row at any time**. Any AUD-001 conclusion that depended on the gap is void.
+
+**Settled rules for the term model:**
+
+- Terms sort **newest to oldest**.
+- **The reporting term is the current calendar term**, regardless of open or closed state. Open/closed governs *writability*, not *which term is reported*. These are separate axes and must not be conflated.
+
+> ⚠️ **Dated risk — 1 September 2026.** On that date `is_current` flips to `T1-2026-27`, which **has no assessment rows**. `GET /api/dashboard/schools` derives its term from whichever term has rows, so it will keep reporting `T3-2025-26`. The two derivations, which agree today, visibly diverge on that date and the dashboard silently reports a term that is no longer current.
+>
+> **The resolution is an empty state plus a term switcher — not a fallback to the last term with data.** A fallback reintroduces exactly the "term with rows" derivation this requirement exists to delete, and it does so invisibly. An empty state is honest about there being no data yet; a fallback is not.
+
 **Known gap:** the platform may have no mechanism for scheduling term dates and may not validate against them anywhere. **AUD-001 in M1 establishes this before M3 opens.** If terms carry no state today, REQ-015 is not adding a close action to an existing model — it is introducing term state for the first time, and should be scoped accordingly. Automatic date-driven transitions remain out of scope either way; close is a manual superadmin action.
 
 ---
@@ -398,29 +485,40 @@ Until it lands, the repository itself is the reference for file layout.
 
 ### M4 — Evidence model
 
-**Gate:** REQ-006 closed; Q1 answered.
+**Gate:** None. REQ-006 has been retired into REQ-017, so the gate it provided no longer exists. **M4 keeps its position in the sequence.**
 
 ---
 
-#### REQ-017 — Evidence at standard level
-**Type:** Feature (data model change)
+#### REQ-017 — Evidence: build the feature
+**Type:** Feature. **Full rebuild of both layers.** No longer a data-model change.
 
-**Problem:** Evidence attaches at aspect level with a ceiling of three files for the entire aspect. Users gather evidence per standard and have several pieces for each.
+**Absorbs REQ-006**, retired from M1. See the retirement note under M1 for why.
 
-**On the cap:** the three-file limit is real and is what users named, but it is the symptom rather than the constraint — the binding problem is the attachment level. Both are being addressed: evidence moves to standard level **and the count limit is removed entirely** for the early adopter phase. See Section 5.
+**Problem:** There is no working evidence feature. Users cannot attach evidence to a standard because they cannot attach evidence at all.
+
+**What already exists — the schema, and it is already correct.** `standard_evidence` is keyed on `mat_standard_id` + `school_id` + `unique_term_id` — **per standard, per school, per term**, the same grain as `assessments`. That is exactly the grain this requirement was originally written to introduce. **No migration is required, and the "move evidence from aspect level to standard level" framing is void** — it was never stored at aspect level. The aspect-level ceiling users experienced was a property of the (now absent) frontend client, not of the data.
+
+The mock-data wipe docstring in `main.py` documents this key structure, so the table was integrated at some point even though no evidence routes now exist.
+
+**What does not exist:** the endpoints and the client. Neither is on `main`, and **neither is recoverable.** A Cloud Run revision from May 2026 did serve working upload, but the image could not be unpacked. **Recovery is abandoned — do not spend time on it.**
+
+**The GCS bucket is known, not an open question.** `GCS_EVIDENCE_BUCKET` is still set in the deployed image, so the bucket exists and the upload target is settled. **Verify writability during implementation**, not before.
 
 **Scope — backend:**
-- Move the evidence association from aspect level to standard level.
-- Migration for existing evidence records, with rollback note. **Note:** if REQ-006 shows uploads have been failing silently for some time, the corpus to migrate may be small or empty, which makes this straightforward. Establish the actual record count before designing the migration.
-- Contract update: evidence counts and collections return per standard, with aspect-level counts derived.
+- Build the four evidence endpoints. API contract §28–31 already specifies them completely — form fields, accepted types, the 25 MB cap, the 400/403/413/415 matrix, MAT isolation, and 404-not-403 on cross-MAT reads to avoid leaking existence. **Build to the contract.** If the contract turns out to be wrong, raise it; do not diverge silently.
+- Aspect-level evidence counts are **derived** from the per-standard rows, never stored.
 
 **Scope — frontend:**
-- Upload control and file list against each standard.
+- Build the upload control and file list against each standard.
 - Evidence indicators at both standard and aspect level.
+
+**File count limits are waived** for the early adopter phase — see §5. Do not reintroduce a cap.
+
+**Link evidence is anticipated by the schema but out of scope.** The table carries `evidence_type` (`'file'` | `'url'`) and a `url` column, with a CHECK constraint enforcing mutual exclusion, and contract §29 specifies `POST /evidence/link`. **Do not design it out** — building only the file path in a way that makes links awkward to add later would waste the schema work already done.
 
 **Out of scope:** Evidence versioning, approval, tagging, content extraction.
 
----
+> **Note for whoever picks this up.** `.env.example` carries a dated caveat (2026-06-04) that `GCS_EVIDENCE_BUCKET` "is referenced in deployment infra but the backend Python code does not currently read it directly — upload + signed-URL handling is external". If upload was genuinely served outside the FastAPI application, the working revision may not be a useful reference for a FastAPI-native implementation even had it been recoverable. Establish where the upload path is intended to live before writing code.
 
 ### M5 — Applicability
 
@@ -599,7 +697,9 @@ Not scheduled. Not to be picked up opportunistically.
 | AUD-001 | M1 | Complete — findings reported | ☑ | — | ☑ |
 | DOC-001 | M1 | Complete | ☑ | — | ☑ |
 | DOC-002 | M1 | Held to M1 close | ☐ | — | ☐ |
-| REQ-006 | M1 | Ready | ☐ | ☐ | ☐ |
+| DOC-003 | M1 | Ready — docs only | ☐ | — | ☐ |
+| SEC-001 | M1 | Ready | ☐ | — | ☐ |
+| REQ-006 | — | **Retired** — merged into REQ-017 | — | — | — |
 | REQ-007 | M1 | Ready | ☐ | ☐ | ☐ |
 | REQ-008 | M1 | Ready | ☐ | ☐ | ☐ |
 | REQ-009 | M1 | Ready | ☐ | ☐ | ☐ |
@@ -610,7 +710,7 @@ Not scheduled. Not to be picked up opportunistically.
 | REQ-014 | M3 | Gated on M2 | ☐ | ☐ | ☐ |
 | REQ-015 | M3 | Gated on M2 | ☐ | ☐ | ☐ |
 | REQ-016 | M3 | Gated on M2 | ☐ | ☐ | ☐ |
-| REQ-017 | M4 | Gated on REQ-006 | ☐ | ☐ | ☐ |
+| REQ-017 | M4 | Ready — absorbs REQ-006 | ☐ | ☐ | ☐ |
 | REQ-018 | M5 | Ready | ☐ | ☐ | ☐ |
 | REQ-024 | M6 | Gated on M2 | — | ☐ | ☐ |
 | REQ-019 | M7 | Gated on M3, M5, M6 | ☐ | ☐ | ☐ |
@@ -627,6 +727,7 @@ Not scheduled. Not to be picked up opportunistically.
 
 | Version | Date | Change |
 |---|---|---|
+| 2.6 | 26 August 2026 | Applied after four production SQL queries and the live OpenAPI spec were checked; several earlier audit conclusions are corrected as fact, not opinion. **Terms:** the AUD-001 "vacation gap" finding is **withdrawn** — terms abut (T1 1 Sep–31 Dec, T2 1 Jan–1 Apr, T3 2 Apr–31 Aug) and `is_current` is true for exactly one row at any time. Settled rules recorded on REQ-015: terms sort newest to oldest, and the reporting term is the current calendar term regardless of open/closed state. Dated risk recorded for **1 September 2026**, when `is_current` flips to a term with no rows while the dashboard keeps reporting the last term with rows — resolved by an empty state and a term switcher, never a fallback. **REQ-006 retired** into REQ-017 and removed from M1 in §4, §6 and §8; it was retired, not completed, and M1 now closes without a working evidence feature by acceptance. M4's gate and §4.1's defect count updated in consequence. **REQ-017 rewritten** as a full rebuild of both layers, no longer a data-model change: `standard_evidence` is already keyed per standard/school/term so no migration is needed, the GCS bucket is known via `GCS_EVIDENCE_BUCKET`, recovery of the lost implementation is abandoned, and link evidence stays anticipated-but-out-of-scope. **SEC-001 added** to M1 — the super-admin guard on the destructive admin endpoints is real but invisible to the OpenAPI spec and the contract; scope is to verify, document and report, and to record `SUPER_ADMIN_EMAILS` as the mechanism REQ-013 must extend. **DOC-003 added** to M1 — correct the three documents asserting the evidence endpoints are live, document `standard_evidence` in the data model, and re-verify the `🚧 In-flight` tags removed across v1.5–v1.8. **REQ-007**: the "unwired mock" description struck (`due_date` is null on all 1,921 rows but the create path does send it); effective due date settled as `COALESCE(a.due_date, t.end_date)` with no migration; overdue must suppress on closed terms (M3); one manual test recorded as a precondition. **REQ-008**: the `localStorage` filter-restore defect folded in as the same root cause. **REQ-009**: `MAX(due_date)` recorded as the wrong aggregate, with the note that REQ-007 will mask rather than fix it. **REQ-010**: primary-key migration recorded as required, and `IT & Data` recorded as still unexplained. **REQ-011**: "Updated" defined as a material edit, excluding reordering. **REQ-012**: `/api/standards/inactive` folded in as the identical route-shadowing bug. |
 | 2.5 | 25 August 2026 | Post-AUD-001 corrections. §4 M1 row now lists AUD-001, DOC-001 and DOC-002 alongside REQ-006 → REQ-012, resolving the disagreement with §6 and §8. DOC-002 scope extended to `README.md`, whose documentation tree is stale in the same way. REQ-015: closing a term now explicitly bars creation against that term as well as editing, and back-dated creation against a past *open* term is recorded as intended behaviour, not a defect. REQ-015 also carries a new design input — the two conflicting "current term" derivations collapse into "most recent open term" here, and both are deleted. REQ-006 problem statement corrected: the regression hypothesis is withdrawn, the cause is that the upload client was never merged, and the fix is a port from `claude/review-backend-brief-mjtms` — **which is not on `origin` and must be pushed before REQ-006 opens**. REQ-007 problem statement corrected: the mock-modal description is withdrawn; the create path sends `due_date`, the backend persists and returns it, and the by-aspect transform discards it on read. No version 2.4 exists in this repository — 2.3 goes straight to 2.5; see the DOC-001 and AUD-001 dev log entries. |
 | 2.3 | 25 August 2026 | Development log and versioning conventions added (§2.5, §2.6). DOC-001 and DOC-002 added to M1 following contract discrepancies found during onboarding. `PROJECT_STRUCTURE.md` demoted from authoritative to descriptive pending refresh, and documentation filenames standardised to lowercase hyphenated form. |
 | 2.2 | 25 August 2026 | Applicability model settled: per school, per term, carried forward, non-retrospective, frozen at term close. AUD-001 added to M1 to establish whether a term and date model exists before M3 and M5 are scoped. Denominator-change visibility written into REQ-018, REQ-019 and REQ-023. No open questions remain. |
