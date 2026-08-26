@@ -217,6 +217,8 @@ Until it lands, the repository itself is the reference for file layout.
 **Do not delete `claude/review-backend-brief-mjtms` until REQ-006 ships.**
 
 > ⚠️ **Verification, 25 August 2026 (AUD-001 session).** `claude/review-backend-brief-mjtms` **does not exist on `origin`.** The remote holds only `main` and `sprint-2.0`, and no pull request has ever been opened from that branch, so there is no `refs/pull/*` ref to recover it from either. If the implementation exists it is local to a working copy or in an unpushed session. **Push it before REQ-006 opens** — otherwise "port, not rebuild" has no source and the requirement needs rescoping.
+>
+> The M1 frontend audit (`docs/milestones/m1-audit-frontend.md`) names the commits: `8676c15` added `EvidenceModal.tsx`, `services/evidence-service.ts` and `types/evidence.ts`; `e268686`, `215e19a` and `e1f7d3a` wired counts and download into `AssessmentDetail`. **None of the four is reachable from this clone either** (`git cat-file -e` fails on all of them), so whoever holds them holds the only copy. Ask for those four SHAs by name.
 
 **Out of scope:** Any change to the evidence data model. That is M4. This requirement makes the existing model behave as documented.
 
