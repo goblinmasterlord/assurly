@@ -1,7 +1,7 @@
 # Assurly — Milestone Plan
 
 **Suggested path:** `docs/milestones/assurly-milestone-plan.md`
-**Version:** 2.3
+**Version:** 2.5
 **Date:** 25 August 2026
 **Status:** Approved. M1 open.
 **Owner:** Product Owner
@@ -110,7 +110,7 @@ Internal is not further subdivided at this stage. Requirements below refer to th
 
 | ID | Milestone | Requirements | Gate |
 |---|---|---|---|
-| **M1** | Stabilise — live defects | REQ-006 → REQ-012 | None. Starts immediately. |
+| **M1** | Stabilise — live defects | AUD-001, DOC-001, DOC-002, REQ-006 → REQ-012 | None. Starts immediately. |
 | **M2** | Role model | REQ-013 | None |
 | **M3** | Assessment lifecycle | REQ-014 → REQ-016 | M2 complete |
 | **M4** | Evidence model | REQ-017 | REQ-006 closed |
@@ -201,6 +201,8 @@ Regenerate `project-structure.md` against the repository as it stands once M1 ha
 
 Until it lands, the repository itself is the reference for file layout.
 
+**Also in scope: `README.md`.** Its documentation tree is stale in the same way — it lists `docs/api/` files that now live in `docs/archive/`, and a `docs/fixes/` directory that does not exist. Refresh it in the same pass.
+
 ---
 
 ---
@@ -208,14 +210,13 @@ Until it lands, the repository itself is the reference for file layout.
 #### REQ-006 — Evidence upload not firing
 **Type:** Defect
 
-**Problem:** Files attached as evidence do not appear after navigating away and back; the interface continues to report no files attached. This previously worked. **There is no log of a failed POST — the request does not appear to be reaching the backend at all**, which points at the frontend rather than the API or GCS.
+**Problem:** Files attached as evidence do not appear after navigating away and back; the interface continues to report no files attached. **There is no log of a failed POST — the request does not appear to be reaching the backend at all**, which points at the frontend rather than the API or GCS.
 
-**Audit sequence:**
-1. Frontend first. Is the upload request constructed and dispatched at all? Check the network layer, not the component state.
-2. If a request is dispatched, is it rejected before reaching application logging (CORS, payload size, auth)?
-3. Only if both are clean, look at the backend write path and GCS.
+**Cause — established, not hypothesised:** the upload client was never merged to `main`. A working implementation exists on branch `claude/review-backend-brief-mjtms`. **The fix is a port, not a rebuild.**
 
-**Regression question worth answering:** this worked previously, so identify what changed. A recent frontend refactor is the most likely candidate.
+**Do not delete `claude/review-backend-brief-mjtms` until REQ-006 ships.**
+
+> ⚠️ **Verification, 25 August 2026 (AUD-001 session).** `claude/review-backend-brief-mjtms` **does not exist on `origin`.** The remote holds only `main` and `sprint-2.0`, and no pull request has ever been opened from that branch, so there is no `refs/pull/*` ref to recover it from either. If the implementation exists it is local to a working copy or in an unpushed session. **Push it before REQ-006 opens** — otherwise "port, not rebuild" has no source and the requirement needs rescoping.
 
 **Out of scope:** Any change to the evidence data model. That is M4. This requirement makes the existing model behave as documented.
 
@@ -224,7 +225,9 @@ Until it lands, the repository itself is the reference for file layout.
 #### REQ-007 — Request a Rating: due date
 **Type:** Incomplete build, not a defect
 
-**Problem:** The due date selector is a mock modal. Nothing is persisted because nothing was ever wired up.
+**Problem:** Due dates set when requesting a rating do not survive to the screens that consume them. The create path already sends `due_date`. The defect is downstream — either backend persistence or the by-aspect transform nulling it on read.
+
+> **Settled by the AUD-001 backend audit, 25 August 2026: it is the transform, not persistence.** The backend persists `due_date` on creation (`main.py:1009-1021`) and returns it per standard from the by-aspect endpoint (`main.py:3180`). `transformAssessmentByAspectToAssessment` (`assurly-frontend/src/hooks/use-assessments.ts:84`) then discards it, hardcoding `due_date: null` on the aggregate it builds — even though every standard in `data.standards[]` carries a real value. `isOverdue` returns `false` for a null due date, so this also suppresses overdue rendering on that surface. The list endpoint already derives a group-level due date as `MAX(a.due_date)`; deriving it the same way in the transform is the obvious shape of the fix. **No migration is required — the column exists** (`assessments.due_date`, `date NULL`).
 
 **Scope — backend:**
 - Confirm whether the schema can store a due date on the rating request at all. If the column does not exist, produce the migration.
@@ -355,14 +358,18 @@ Until it lands, the repository itself is the reference for file layout.
 
 **Scope — backend:**
 - Term close and reopen actions, **restricted to superadmin**.
-- Closing a term freezes all assessments within it against internal-tier writes.
+- Closing a term freezes all assessments within it against internal-tier writes. **Closing also prevents creation of new assessments against that term**, not only editing of existing ones. Until a term is closed it remains open for both.
 - Both actions audited.
+
+**Creating an assessment against a past open term is intended behaviour.** Term close is the only gate. A term that has ended by the calendar but has not been closed by a superadmin stays fully open for creation and editing, and back-dated creation must remain available by default.
 
 **Scope — frontend:**
 - Superadmin control for closing and reopening a term, with a confirmation step naming the term and the number of assessments affected.
 - Clear indication to all users when a term is closed and why editing is unavailable.
 
 **After close:** edit, delete and clear are superadmin-only.
+
+**Design input — "current term" collapses into term state (AUD-001).** The platform currently derives "current term" two mutually inconsistent ways under the same name: `GET /api/terms` sets `is_current` from the calendar (`CURDATE() BETWEEN start_date AND end_date`), while `GET /api/dashboard/schools` sets `current_term` to whichever term has assessment rows. This is a real defect and is **deliberately not being fixed in M1** — it resolves here. Once term state exists, current term becomes **the most recent open term, derived from state**, and **both existing derivations are deleted**. Note that `current_term` is a contract-visible response field, so this is a contract change as well as a code change.
 
 **Known gap:** the platform may have no mechanism for scheduling term dates and may not validate against them anywhere. **AUD-001 in M1 establishes this before M3 opens.** If terms carry no state today, REQ-015 is not adding a close action to an existing model — it is introducing term state for the first time, and should be scoped accordingly. Automatic date-driven transitions remain out of scope either way; close is a manual superadmin action.
 
@@ -618,6 +625,7 @@ Not scheduled. Not to be picked up opportunistically.
 
 | Version | Date | Change |
 |---|---|---|
+| 2.5 | 25 August 2026 | Post-AUD-001 corrections. §4 M1 row now lists AUD-001, DOC-001 and DOC-002 alongside REQ-006 → REQ-012, resolving the disagreement with §6 and §8. DOC-002 scope extended to `README.md`, whose documentation tree is stale in the same way. REQ-015: closing a term now explicitly bars creation against that term as well as editing, and back-dated creation against a past *open* term is recorded as intended behaviour, not a defect. REQ-015 also carries a new design input — the two conflicting "current term" derivations collapse into "most recent open term" here, and both are deleted. REQ-006 problem statement corrected: the regression hypothesis is withdrawn, the cause is that the upload client was never merged, and the fix is a port from `claude/review-backend-brief-mjtms` — **which is not on `origin` and must be pushed before REQ-006 opens**. REQ-007 problem statement corrected: the mock-modal description is withdrawn; the create path sends `due_date`, the backend persists and returns it, and the by-aspect transform discards it on read. No version 2.4 exists in this repository — 2.3 goes straight to 2.5; see the DOC-001 and AUD-001 dev log entries. |
 | 2.3 | 25 August 2026 | Development log and versioning conventions added (§2.5, §2.6). DOC-001 and DOC-002 added to M1 following contract discrepancies found during onboarding. `PROJECT_STRUCTURE.md` demoted from authoritative to descriptive pending refresh, and documentation filenames standardised to lowercase hyphenated form. |
 | 2.2 | 25 August 2026 | Applicability model settled: per school, per term, carried forward, non-retrospective, frozen at term close. AUD-001 added to M1 to establish whether a term and date model exists before M3 and M5 are scoped. Denominator-change visibility written into REQ-018, REQ-019 and REQ-023. No open questions remain. |
 | 2.1 | 25 August 2026 | Remaining decisions closed: evidence limits waived for the early adopter phase; closed terms superadmin-only; navigation shell promoted ahead of analytics. Milestones renumbered — navigation shell is M6, analytics M7, Actions and Interventions M8. Term date scheduling gap recorded against REQ-015. One open assumption remains on applicability retrospection. |
