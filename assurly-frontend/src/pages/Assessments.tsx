@@ -58,6 +58,7 @@ import { SchoolPerformanceView } from "@/components/SchoolPerformanceView";
 import { DepartmentHeadTableSkeleton } from "@/components/ui/table-skeleton";
 import { Skeleton } from "@/components/ui/skeleton";
 import { getAspectDisplayName } from "@/lib/assessment-utils";
+import { aspectCodeToCategory } from "@/lib/data-transformers";
 import { Progress } from "@/components/ui/progress";
 import { SortableTableHead, type SortDirection } from "@/components/ui/sortable-table-head";
 import { usePreload } from "@/hooks/use-preload";
@@ -261,27 +262,11 @@ export function AssessmentsPage() {
       value: school.id!
     }));
   
-  // Create filter options for multi-select components - USE MAT-SPECIFIC ASPECTS
-  // Map aspect codes to category names for filtering compatibility with assessment.category
-  const categoryOptions: MultiSelectOption[] = aspects.map(aspect => {
-    // Map aspect_code to legacy category format (EDU -> education, HR -> hr, etc.)
-    const aspectCode = aspect.aspect_code.toUpperCase();
-    const categoryMap: Record<string, string> = {
-      'EDU': 'education',
-      'HR': 'hr',
-      'FIN': 'finance',
-      'EST': 'estates',
-      'GOV': 'governance',
-      'IT': 'it',
-      'IS': 'is',
-    };
-    const categoryValue = categoryMap[aspectCode] || aspectCode.toLowerCase();
-    
-    return {
-      label: aspect.aspect_name,
-      value: categoryValue
-    };
-  });
+  // Aspect filter values must match assessment.category (aspectCodeToCategory in transformers)
+  const categoryOptions: MultiSelectOption[] = aspects.map((aspect) => ({
+    label: aspect.aspect_name,
+    value: aspectCodeToCategory(aspect.aspect_code),
+  }));
   
   // Category options for multi-select
 
@@ -415,12 +400,13 @@ export function AssessmentsPage() {
         const saved = localStorage.getItem('assurly_assessment_filters');
         if (saved) {
           const savedFilters = JSON.parse(saved);
-          // Validate that saved filter values exist in current options
-          // Convert aspect codes to lowercase for comparison
-          const aspectCodesLower = aspects.map(a => a.aspect_code.toLowerCase());
+          // Validate against the same values used by categoryOptions / assessment.category
+          const validCategoryValues = new Set(
+            aspects.map((a) => aspectCodeToCategory(a.aspect_code))
+          );
           const validatedFilters = {
-            category: savedFilters.category?.filter((c: string) => 
-              aspectCodesLower.includes(c.toLowerCase())
+            category: (savedFilters.category as string[] | undefined)?.filter((c) =>
+              validCategoryValues.has(c as AssessmentCategory)
             ) || [],
             status: savedFilters.status || [],
             school: savedFilters.school?.filter((s: string) => 
