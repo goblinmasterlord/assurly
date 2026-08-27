@@ -2,8 +2,13 @@ fastapi==0.110.1
 uvicorn==0.29.0
 gunicorn==21.2.0
 pymysql==1.1.0
-python-dotenv
-pydantic
+python-dotenv==1.2.3
+# The pydantic MAJOR version is not a free choice. auth_models.py:104 calls
+# UserResponse.model_rebuild(), which exists only in pydantic v2 — under v1 the
+# application fails at import with AttributeError. fastapi==0.110.1 permits
+# >=1.7.4,<3.0.0, so a resolver will happily offer v1; the code will not run on
+# it. Read this before attempting a downgrade.
+pydantic==2.13.4
 python-jose[cryptography]==3.3.0
 passlib[bcrypt]==1.7.4
 aiosmtplib==3.0.1
