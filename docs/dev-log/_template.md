@@ -3,7 +3,8 @@
 **Date:** YYYY-MM-DD
 **Agent:** Claude Code | Cursor
 **Milestone:** M[n]
-**Version after this session:** e.g. 1.43.2 — or "no bump" for audit and discovery sessions
+**Version after this session:** e.g. 1.43.2 — or "no bump" for audit and discovery sessions. **Records a merge, not a deployment** — see §2.6.
+**Deployed:** no — or "yes, YYYY-MM-DD". Merged-with-an-unapplied-migration and running-in-production are different states; this field is what distinguishes them. Deployment happens at test gates (§2.7), so "no" is the normal answer at the moment an entry is written.
 **Contract version worked against:** e.g. assurly-api-contract.md v2.5
 
 ---
