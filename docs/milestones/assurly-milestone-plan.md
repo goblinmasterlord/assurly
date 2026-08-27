@@ -1,8 +1,8 @@
 # Assurly — Milestone Plan
 
 **Suggested path:** `docs/milestones/assurly-milestone-plan.md`
-**Version:** 2.8
-**Date:** 26 August 2026
+**Version:** 2.9
+**Date:** 27 August 2026
 **Status:** Approved. M1 open.
 **Owner:** Product Owner
 
@@ -66,6 +66,11 @@ Backend ships and is verified before the corresponding frontend work opens. Fron
 - "Requires Attention" flags **rating 1 only**.
 - Fixed terminology: "Risk Profile" (never "Risk Register"); performance bands are Strong / Healthy / Needs Improvement / Critical; aspect categories are `operational` and `strategic`.
 - No terminology, threshold or polarity change without explicit sign-off from the Product Owner.
+- **Identifier fields are constrained; display fields are not.** Any user-supplied value that becomes part of an identifier, a primary key, or a URL path segment is constrained to a documented character set, **validated at the backend as the authoritative control** and mirrored at the frontend for the error message only. **Frontend validation is never the control:** the API is reachable directly, and the two layers drift.
+
+  This applies to the value that *becomes* the identifier, not to display fields. Names, descriptions and commentary carry no such restriction — they are displayed, never routed. Confusing the two produces both unreachable rows and needlessly restricted user input.
+
+  Where a value is already an identifier, **encode it at every interpolation site** rather than relying on it being safe. REQ-010 is the reference implementation for both halves.
 
 ### 2.5 Development log
 
@@ -81,6 +86,10 @@ Entries are compiled into `docs/development-log.md` at each milestone close. Age
 
 **Agents do not write release notes.** Version history copy is user-facing, read by school and trust staff, and is written by the product owner from the compiled log. Write the dev log entry for an engineer picking the work up cold, not for a customer.
 
+**Plan-edit sessions require an entry too.** A session that only changes this document still made decisions, and the reasoning behind a scope change is exactly what a later reader needs. Earlier plan-edit sessions (v2.6, v2.7, v2.8) have no entry; that is a gap, not a precedent.
+
+**The `Deployed:` field is populated from this session forward** (plan v2.9, 27 August 2026).
+
 ### 2.6 Versioning
 
 Current release 1.43. This programme is Sprint 2.0.
@@ -94,6 +103,8 @@ Record every bump in the dev log entry that caused it.
 **A version bump records a merge, not a deployment.** The two are separate events in this programme — work merges continuously to `sprint-2.0` and deploys at test gates (§2.7) — and a requirement can sit merged for some time before it runs anywhere. Merged-with-an-unapplied-migration and running-in-production are different states, and the log must be able to tell them apart, so the dev log template carries a **`Deployed:`** field: *yes* plus the date, or *no*.
 
 1.43.1 (REQ-012) and 1.43.2 (REQ-010) stand as recorded — both are merges, and neither claimed to be more.
+
+> ⚠️ **No artefact currently asserts a version.** Not the repository, not the application, not any config file — the version exists **only in dev log entries**, which is to say only in prose written after the fact. **A single source of truth is needed before 2.0**, because the in-app version history depends on it and cannot be generated from prose. Flagged, no action in M1.
 
 ### 2.7 Test gates
 
@@ -112,7 +123,7 @@ These do not join a bundle. The reasoning is that their failure modes are not ad
 
 **Each gate's checklist is derived from the requirements it contains** — the per-requirement verification notes are the raw material, not a separate document.
 
-A consequence worth stating: a requirement split across a deployable half and a schedulable half (see REQ-010) belongs to **two** gates, and its status in §8 is not "done" until both have passed.
+**A requirement split across gates is not complete in §8 until every gate containing it has passed.** This is explicit and not a matter of judgement: a requirement with a deployable half and a schedulable half (see REQ-010) belongs to **two** gates, and passing the first does not close it. Half-shipped is not shipped.
 
 ---
 
@@ -134,7 +145,7 @@ Internal is not further subdivided at this stage. Requirements below refer to th
 
 | ID | Milestone | Requirements | Gate |
 |---|---|---|---|
-| **M1** | Stabilise — live defects | AUD-001, DOC-001, DOC-002, DOC-003, SEC-001, REQ-007 → REQ-012, REQ-027, REQ-028 | None. Starts immediately. |
+| **M1** | Stabilise — live defects | AUD-001, DATA-001, DOC-001 → DOC-003, SEC-001, REQ-007 → REQ-012, REQ-027 → REQ-029 | None. Starts immediately. |
 | **M2** | Role model | REQ-013 | None |
 | **M3** | Assessment lifecycle | REQ-014 → REQ-016 | M2 complete |
 | **M4** | Evidence model | REQ-017 | **M2 and M3 complete** |
@@ -145,7 +156,7 @@ Internal is not further subdivided at this stage. Requirements below refer to th
 
 ### 4.1 Sequencing rationale
 
-- **M1 first.** Eight live defects, most of them cheap, all of them visible to the early adopter during the exact period they are being asked to trust the platform. (REQ-006 was retired into REQ-017; REQ-027 and REQ-028 added — see §6.)
+- **M1 first.** Nine live defects, most of them cheap, all of them visible to the early adopter during the exact period they are being asked to trust the platform. (REQ-006 was retired into REQ-017; REQ-027, REQ-028 and REQ-029 added, plus DATA-001 as a manual data task — see §6.)
 - **M2 second.** The role model is now load-bearing: the lifecycle rules in M3, the actions permissions in M7 and the read-only requirement all reference the three tiers. Building any of them before the tiers exist means encoding permissions twice.
 - **M5 before M7.** Aggregate scores are currently distorted by standards that do not apply to a given school. Comparative analytics built on that denominator will need rebuilding. Fix the denominator first.
 - **M3 before M7.** A historical series that cannot be corrected is not worth visualising.
@@ -352,26 +363,30 @@ Also confirmed: **`?status=overdue` can never return rows.** The grouped `CASE` 
 >
 > **This explains `IT\Data`. It does not explain `IT & Data`** — `&` is a legal path character and should reach the handler intact. `vercel.json` was checked and ruled out, as was client-side id reconstruction (`CreateAspectModal.onSubmit` passes `aspect?.mat_aspect_id` through verbatim).
 
-**`IT & Data` — two surviving hypotheses.** Tracing the request path, both characters survive an unencoded round trip: the space is percent-encoded to `%20` by the URL parser, `&` is a legal path sub-delimiter, uvicorn unquotes both, and `[^/]+` matches. So the character diagnosis cannot account for it, and has not been stretched to.
+**`IT & Data` — SETTLED. Both previously recorded hypotheses were wrong.**
 
-1. **The aspect is `is_active = 0`.** `update_aspect`'s existence check is `WHERE mat_aspect_id = %s AND mat_id = %s AND is_active = 1` — a deactivated aspect returns the same `404` for any name, entirely independently of characters. It is the handler's only other 404 branch.
-2. **It is a renamed *default* aspect whose `aspect_code` is still `IT`.** Its id would then be `HLT-IT` — clean, with no special character anywhere, making the character diagnosis inapplicable by construction.
+Production data shows `aspect_code = 'IT/DATA_OP'`, giving `mat_aspect_id = 'HLT-IT/DATA_OP'`. **The failing character is a forward slash in the identifier, not the ampersand in the display name.**
 
-**External confirmation indicates one of the IT aspects is a rename, which favours hypothesis 2.** A production query is **pending** and settles it:
+**This is why two sessions diagnosed the wrong character: users report by display name.** The name shown in the interface — "IT & Data" — contains an ampersand that is entirely harmless and is not part of the id. The id is derived from `aspect_code`, which nobody was looking at. Worth carrying forward as a habit: when a defect is reported against a user-visible label, establish what the *identifier* is before reasoning about characters.
 
-```sql
-SELECT mat_aspect_id, aspect_code, aspect_name, is_active, source_aspect_id
-FROM mat_aspects
-WHERE aspect_name LIKE '%IT%Data%';
-```
+**Consequence — the v2.8 split is reversed on this point. The migration is REQUIRED, not hygiene.** A forward slash is precisely the exception already identified: `encodeURIComponent` produces `%2F`, uvicorn decodes it back to `/` before Starlette routes, the path gains a segment, and no route matches. **Encoding does not repair this row.** The migration is the only fix for the reported symptom.
 
-A clean `mat_aspect_id` with `source_aspect_id` populated confirms hypothesis 2; a clean id with `is_active = 0` confirms hypothesis 1; a clean id that is active and default-derived means the `404` has a cause not yet identified and needs a fresh reproduction with the network tab open.
+**The two failing aspects fail for two different reasons**, which is why the diagnosis was so slippery:
+
+| Aspect | `aspect_code` | Failure | Repaired by |
+|---|---|---|---|
+| "IT & Data" | `IT/DATA_OP` | Forward slash adds a path segment; survives percent-encoding | **The migration only** |
+| "IT\Data" | `IT\DATA_ST` | Backslash rewritten to `/` by the browser's URL parser | **Encoding** |
+
+> **Provisional per §2.2.7.** The decode mechanism above — that uvicorn unquotes `%2F` to `/` before Starlette matches, so encoding cannot rescue this id — is **analysis, not observation**. It is confirmed by testing that specific row after **gate 2**. The remedy does not change if the mechanism is wrong (the row still needs renaming), but the explanation would.
 
 **Scope:** If the hypothesis holds, the fix is to key the route on the aspect identifier. Escaping the name is a patch over the underlying design problem and should not be the chosen fix without discussion.
 
-> **Corrected — the migration is hygiene, not the fix.** This previously read that rows already minted with unescaped characters "stay broken however the code changes — and those rows are the reported symptom". **That is wrong.** Percent-encoding transmits the character faithfully: `encodeURIComponent` produces `%5C`, uvicorn decodes it back to a literal backslash before Starlette routes, the route pattern `[^/]+` accepts it, and the parameterised lookup finds the row. **The encoding fix repairs the existing rows by itself.**
+> **Corrected twice — read the settled position below, not the history.**
 >
-> **The single exception is an id containing a literal forward slash.** `%2F` is decoded to `/` before routing, so it still adds a path segment and still misses the route. Discovery query 1b in the migration file establishes whether any such row exists.
+> **v2.8 said** the migration was hygiene, because percent-encoding transmits a backslash faithfully (`%5C` → uvicorn decodes → `[^/]+` matches → row found), so the encoding fix repairs those rows by itself. That reasoning is sound **and it does not apply to the row that was actually failing.**
+>
+> **v2.9 (settled):** the reported aspect's id contains a **forward slash** (`HLT-IT/DATA_OP`), the one case v2.8 named as beyond encoding — `%2F` is decoded to `/` before routing and still adds a path segment. **The migration is required. It is the only fix for the reported symptom.** Discovery query 1b in the migration file exists precisely to find rows of this kind, and it will find this one.
 
 **Settled — the permitted set is `^[A-Za-z0-9_]{2,10}$`:** ASCII letters, digits and underscore, 2–10 characters.
 
@@ -379,12 +394,20 @@ A clean `mat_aspect_id` with `source_aspect_id` populated confirms hypothesis 2;
 
 **REQ-010 splits into two halves, per §2.7:**
 
-| Half | Contents | Gate |
-|---|---|---|
-| **Deployable** | Call-site `encodeURIComponent`; `aspect_code` validation in Pydantic and Zod. | Bundled — low risk, no schema or permissions change. |
-| **Schedulable** | The primary-key migration (`docs/migrations/2026-08-26-REQ-010-aspect-code-sanitisation.sql`). | **Alone.** It is a data migration, so §2.7 bars it from a bundle. |
+| Half | Contents | Gate | Fixes |
+|---|---|---|---|
+| **Validation + encoding** | Call-site `encodeURIComponent`; `aspect_code` validation in Pydantic and Zod. | Bundled — low risk, no schema or permissions change. | `IT\DATA_ST`, and **prevents any further unreachable rows** |
+| **Migration** | `docs/migrations/2026-08-26-REQ-010-aspect-code-sanitisation.sql`. | **Alone** — a data migration, so §2.7 bars it from a bundle. | `IT/DATA_OP`, the reported symptom |
 
-The migration is worth applying — it aligns the data with the new rule and stops correctness depending on every future call site remembering to encode — but it is **schedulable, not blocking**, and REQ-010 is not "done" in §8 until both gates have passed. The migration rewrites primary keys under `fk_mat_standards_aspect` and `fk_assignments_aspect`, both `ON UPDATE NO ACTION`; per §2.4 the SQL and rollback note are written by an agent and applied manually.
+**Both halves are required and neither substitutes for the other.** REQ-010 is not "done" in §8 until both gates have passed (§2.7). The migration rewrites primary keys under `fk_mat_standards_aspect` and `fk_assignments_aspect`, both `ON UPDATE NO ACTION`; per §2.4 the SQL and rollback note are written by an agent and applied manually.
+
+**Settled — the minting convention, correcting an earlier assumption in this plan.** `{MAT}-{aspect_code}` is the **current** path, as the backend audit found in `main.py`. UUIDs are the **older** convention. Evidence: both broken rows are `is_custom = 1` in `{MAT}-{CODE}` format, so they were created through the UI on the live path.
+
+**Consequence — the character validation is not defence-in-depth. It is the only control preventing further unreachable rows.** Creating an aspect with a slash in its code today would produce another one. **Treat validation as the priority half of REQ-010, ahead of the migration** — the migration cleans up two rows; the validation stops the third.
+
+**HLT was seeded twice** (confirmed by the product owner). That explains the two id eras in `mat_aspects`, and — importantly — **the split does not track `is_custom`**: some defaults carry UUIDs and others carry `{MAT}-{CODE}`.
+
+> ⚠️ **No code may infer anything from the shape of an id.** Not whether a row is custom, not which era it came from, not whether it is safe to route. The shape is an accident of when the row was seeded. Read the column that actually answers the question — `is_custom`, `source_aspect_id` — and encode every id regardless of how safe it looks.
 
 **Downstream dependency:** The planned Education → Curriculum and Teaching rename is blocked behind this and is folded into this requirement. Once REQ-010 is fixed, perform that rename and confirm it propagates correctly.
 
@@ -468,6 +491,42 @@ The user sees an unexplained server error on an operation the interface offered 
 **Scope:** Make the operation behave predictably when inactive standards reference the aspect. Whether that means widening the guard to count inactive standards, repointing them, or making the FK cascade on update is a design decision for that session — the audit establishes the failure, not the remedy.
 
 **Out of scope:** The `409`-on-active-standards behaviour, which is correct.
+
+---
+
+#### REQ-029 — `aspect_code` is filtered case-sensitively against mixed-case data
+**Type:** Defect. **Backend.**
+
+**Problem:** `aspect_code` is stored in **mixed case** in production — lowercase `ab`, `ey`; uppercase `EDU`, `IT` — but two endpoints filter case-sensitively on that column, on the assumption that codes are uppercase:
+
+| Endpoint | Predicate | |
+|---|---|---|
+| `GET /api/standards` (`main.py:1170`) | `ma.aspect_code = %s` | **case-sensitive** |
+| `GET /api/assessments/by-aspect/{aspect_code}` (`main.py:3147`) | `ma.aspect_code = %s` | **case-sensitive** |
+| `GET /api/assessments` (`main.py:860`) | `UPPER(ma.aspect_code) = UPPER(%s)` | correct — the model to follow |
+
+**Those aspects return empty rather than erroring, so the failure is silent.** A caller cannot distinguish "this aspect has no standards" from "you sent the wrong case", and no error appears in any log.
+
+**Scope:** Make the comparison case-insensitive on both endpoints, matching `GET /api/assessments`. **Report whether anything else compares that column** — the audit found three call sites, but a fourth in a `JOIN` or a subquery would fail the same way.
+
+**Out of scope:** Normalising the stored data. That is a tenant-data question (see DATA-001), and the endpoints should be case-insensitive regardless of how tidy the column becomes.
+
+---
+
+#### DATA-001 — HLT tenant data cleanup
+**Type:** Data. **No code.** Run manually by the product owner.
+
+Three defects in HLT's aspect data, found while investigating REQ-010 and REQ-029. Recorded here so they are not rediscovered; **no SQL has been written or run for any of them.**
+
+| Row | Problem |
+|---|---|
+| `Mock aspect` | Marked `is_custom = 0`, as though it were a platform default. It is not. |
+| `Attendance & Behaviour` | **Exists twice**, under codes `ab` and `anb`. |
+| `Curriculum and Teaching` | **Trailing space** in `aspect_name`. |
+
+**Do not write or run SQL for this under any requirement.** It is tenant data, the correct resolution for the duplicate is a product decision (which row survives, and what happens to anything referencing the other), and none of it is urgent.
+
+**Interacts with REQ-029:** the lowercase `ab` code is one of the rows that filters silently to empty today.
 
 ---
 
@@ -811,11 +870,13 @@ Not scheduled. Not to be picked up opportunistically.
 | REQ-007 | M1 | Ready | ☐ | ☐ | ☐ |
 | REQ-008 | M1 | Frontend merged (`8390ecd`) — **pending gate 1**. No backend change required | — | ☑ | ☐ |
 | REQ-009 | M1 | Frontend merged (`9a6bda1`) — **pending gate 1**. Backend `MAX(due_date)` aggregate still outstanding | ☐ | ☑ | ☐ |
-| REQ-010 | M1 | Merged — deployable half **pending gate 1**; migration schedulable, unrun; `IT & Data` open | ☑ | ☑ | ☐ |
-| REQ-011 | M1 | Frontend merged (`b701b31`) — cards now render `—`. **Backend exposure outstanding and blocking** | ☐ | ☑ | ☐ |
+| REQ-010 | M1 | Validation+encoding merged, **pending gate 1**; migration **required and unrun**, pending gate 2. Not complete until both | ☑ | ☑ | ☐ |
+| REQ-011 | M1 | Merged both halves (`b701b31`, backend `updated_at`) — **pending gate 1**. Reorder-write scope item was vacuous; see dev log | ☑ | ☑ | ☑ |
 | REQ-012 | M1 | Merged — **pending gate 1** (OpenAPI-spec confirmation needs a deploy) | ☑ | — | ☑ |
 | REQ-027 | M1 | Frontend merged (`43a92f7`) — live UAT **pending gate 1** | — | ☑ | ☐ |
 | REQ-028 | M1 | Ready — schedule with the REQ-010 migration | ☐ | — | ☐ |
+| REQ-029 | M1 | Ready — backend only | ☐ | — | ☐ |
+| DATA-001 | M1 | Ready — **product owner runs manually**, no code | — | — | ☐ |
 | REQ-013 | M2 | Ready | ☐ | ☐ | ☐ |
 | REQ-014 | M3 | Gated on M2 | ☐ | ☐ | ☐ |
 | REQ-015 | M3 | Gated on M2 | ☐ | ☐ | ☐ |
@@ -837,6 +898,7 @@ Not scheduled. Not to be picked up opportunistically.
 
 | Version | Date | Change |
 |---|---|---|
+| 2.9 | 27 August 2026 | **REQ-010's `IT & Data` case is settled, and both hypotheses recorded in v2.8 were wrong.** Production shows `aspect_code = 'IT/DATA_OP'` — **the failing character is a forward slash in the identifier, not the ampersand in the display name**, which is why two sessions diagnosed the wrong character: users report by display name. This is the exception v2.8 itself identified, so **the v2.8 split is reversed on this point — the migration is REQUIRED, not hygiene, and is the only fix for the reported symptom.** `IT\DATA_ST` remains the encoding case, so the two failing aspects fail for two different reasons. The decode mechanism is marked provisional per §2.2.7, to be confirmed against that row after gate 2. **The minting convention is recorded as settled**, correcting an earlier assumption here: `{MAT}-{aspect_code}` is the current path and UUIDs are older, evidenced by both broken rows being `is_custom = 1` in `{MAT}-{CODE}` form. **Consequence: the character validation is not defence-in-depth but the only control preventing further unreachable rows, and is therefore the priority half of REQ-010, ahead of the migration.** HLT was seeded twice, which explains two id eras in `mat_aspects` where **the split does not track `is_custom`** — so **no code may infer anything from the shape of an id.** **§2.4** gains a standing constraint on identifier fields: constrained character set, backend-authoritative with the frontend mirroring only the message, display fields explicitly exempt, and encoding at every interpolation site. **REQ-029 added** to M1 (backend): `aspect_code` is stored mixed-case but `GET /api/standards` and `GET /api/assessments/by-aspect` filter case-sensitively, so those aspects return empty rather than erroring — a silent failure. **DATA-001 added** to M1 (no code, product owner runs it): HLT's `Mock aspect` is wrongly `is_custom = 0`, `Attendance & Behaviour` exists twice under `ab` and `anb`, and `Curriculum and Teaching` has a trailing space. **§2.7** makes explicit that a requirement split across gates is not complete in §8 until every gate containing it has passed. **§2.6** records that no artefact asserts a version — it exists only in dev log prose — and that a single source of truth is needed before 2.0. **§2.5** requires dev log entries for plan-edit sessions and starts the `Deployed:` field from this session. |
 | 2.8 | 26 August 2026 | Applied after the first implementation session; two of the corrections withdraw claims this plan itself made. **New §2.7 Test gates:** work merges continuously to `sprint-2.0` and deploys at gates, not per commit; a gate bundles low-risk changes into one test pass, but anything touching schema, a data migration, or authentication or permissions deploys and is tested **alone**; the product owner runs the gate and declares the result, and **agents do not declare a gate passed**. **§2.6** clarified that a version bump records a **merge, not a deployment**, and the dev log template gains a **`Deployed:`** field so merged-with-an-unapplied-migration and running-in-production stop being indistinguishable; 1.43.1 and 1.43.2 stand. **REQ-027 harm corrected:** the duplicate-row risk was theoretical — `uk_assessment` holds and a production query returned no duplicates, so a second attempt is rejected by the constraint and the real harm is a confusing error after an apparent success. The priority was right; the reasoning was overstated. **REQ-010 migration premise corrected:** rows minted with unescaped characters do **not** stay broken without the migration — percent-encoding transmits the character faithfully and the encoding fix repairs them by itself, the sole exception being an id containing a literal `/`. REQ-010 is therefore **split** per §2.7 into a deployable half (encoding, validation) and a schedulable half (the migration), and is not done in §8 until both gates pass. The permitted set is recorded as settled at `^[A-Za-z0-9_]{2,10}$`, with the reason hyphen is excluded. The **`IT & Data`** case records its two surviving hypotheses — `is_active = 0`, or a renamed default aspect whose code is still `IT` — with external confirmation favouring the second and the settling query pending. **REQ-028 added** to M1 (backend, small): `delete_aspect` guards on active standards only but `fk_mat_standards_aspect` is `ON UPDATE NO ACTION`, so an aspect with only inactive standards fails the archive-rename and surfaces a generic 500; schedule with the REQ-010 migration as the same FK class. **Outstanding recorded in §8:** REQ-012's OpenAPI-spec confirmation and REQ-027's live UAT both need a deploy and are pending gate 1. **§7** records `users-service.ts:55` as the one remaining unencoded path interpolation, latent rather than broken. **§8 also reconciled against frontend work merged while these edits were being written** — REQ-008, REQ-009, REQ-011 and REQ-027 all have their frontend halves merged. Those rows reflect the frontend agent's own dev log entries, not a review of the code by the backend agent. **REQ-011's backend half is now blocking:** the card fallback has been removed, so every standard renders `Updated —` until `GET /api/standards` exposes `updated_at`. |
 | 2.7 | 26 August 2026 | **§2.2** gains point 7: provisional claims are labelled where the reader meets them, not only in an Assumptions section at the foot — added after an AUD-001 finding that flagged its own assumption in a footer and was then acted on as fact. **M4 gate set to "M2 and M3 complete"** in §4 and §6: M2 settles who may upload, M3 settles whether upload to a closed term is permitted, and the endpoints cannot enforce either before they exist. The removed "Q1 answered" clause is not restored. **REQ-017** records the settled limits (single file 25 MB, no count limit) and that **upload is built inside FastAPI** — the project runs exactly one Cloud Run service, which is the backend, with the frontend on Vercel; the previously open "where does upload live" question is closed, and the `.env.example` note calling upload handling "external" is flagged as stale (referring to code replaced 4 June 2026) for correction elsewhere. **REQ-007**: the manual test is complete — 180 of 180 assessments persisted their due date, so the 1,921 nulls are non-use and the create path is sound; the defect is confirmed as the by-aspect transform. Frontend scope gains the date selector modal being unclickable and keyboard-only. **REQ-027 added** to M1 (frontend): created assessments and their terms do not appear until a browser refresh despite a success toast, leading users to create duplicates; scope is cache invalidation on creation for the assessment and term lists, with the related deferred aspect-metrics invalidation edge case to be checked and reported but not fixed. **REQ-013** gains minimal `pytest` coverage in scope, limited to proving the external tier is blocked at endpoint level on every write route, with a note that no test infrastructure exists to extend, and records from SEC-001 that the standards, aspects and action-item DELETE routes are guarded by authentication alone. **M7** records that dashboard `evidence_count` has been structurally zero since it shipped and becomes meaningful only after REQ-017. **§7** records that API contract Known Issue #12 is understated — `standard_type` is missing from the versions array as well as the response dict — as a triage item; the contract was deliberately not amended. |
 | 2.6 | 26 August 2026 | Applied after four production SQL queries and the live OpenAPI spec were checked; several earlier audit conclusions are corrected as fact, not opinion. **Terms:** the AUD-001 "vacation gap" finding is **withdrawn** — terms abut (T1 1 Sep–31 Dec, T2 1 Jan–1 Apr, T3 2 Apr–31 Aug) and `is_current` is true for exactly one row at any time. Settled rules recorded on REQ-015: terms sort newest to oldest, and the reporting term is the current calendar term regardless of open/closed state. Dated risk recorded for **1 September 2026**, when `is_current` flips to a term with no rows while the dashboard keeps reporting the last term with rows — resolved by an empty state and a term switcher, never a fallback. **REQ-006 retired** into REQ-017 and removed from M1 in §4, §6 and §8; it was retired, not completed, and M1 now closes without a working evidence feature by acceptance. M4's gate and §4.1's defect count updated in consequence. **REQ-017 rewritten** as a full rebuild of both layers, no longer a data-model change: `standard_evidence` is already keyed per standard/school/term so no migration is needed, the GCS bucket is known via `GCS_EVIDENCE_BUCKET`, recovery of the lost implementation is abandoned, and link evidence stays anticipated-but-out-of-scope. **SEC-001 added** to M1 — the super-admin guard on the destructive admin endpoints is real but invisible to the OpenAPI spec and the contract; scope is to verify, document and report, and to record `SUPER_ADMIN_EMAILS` as the mechanism REQ-013 must extend. **DOC-003 added** to M1 — correct the three documents asserting the evidence endpoints are live, document `standard_evidence` in the data model, and re-verify the `🚧 In-flight` tags removed across v1.5–v1.8. **REQ-007**: the "unwired mock" description struck (`due_date` is null on all 1,921 rows but the create path does send it); effective due date settled as `COALESCE(a.due_date, t.end_date)` with no migration; overdue must suppress on closed terms (M3); one manual test recorded as a precondition. **REQ-008**: the `localStorage` filter-restore defect folded in as the same root cause. **REQ-009**: `MAX(due_date)` recorded as the wrong aggregate, with the note that REQ-007 will mask rather than fix it. **REQ-010**: primary-key migration recorded as required, and `IT & Data` recorded as still unexplained. **REQ-011**: "Updated" defined as a material edit, excluding reordering. **REQ-012**: `/api/standards/inactive` folded in as the identical route-shadowing bug. |
