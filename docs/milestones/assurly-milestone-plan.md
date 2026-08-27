@@ -1,7 +1,7 @@
 # Assurly — Milestone Plan
 
 **Suggested path:** `docs/milestones/assurly-milestone-plan.md`
-**Version:** 2.6
+**Version:** 2.7
 **Date:** 26 August 2026
 **Status:** Approved. M1 open.
 **Owner:** Product Owner
@@ -52,6 +52,7 @@ The agent confirms in its first response which documents it has read and which c
 4. **Flag, don't fix.** Adjacent issues found mid-task go into a `Findings` section at the end of the session. They are never acted on without instruction.
 5. **Document with code.** No change is complete until the API contract, data model bible and changelog reflect it. Docs ship in the same commit as the code.
 6. **Reflect.** Close each session with: what changed, what was deliberately not changed, what the next session needs to know, and any assumptions made.
+7. **Label provisional claims where the reader meets them.** A finding resting on an unverified assumption is marked provisional **at the point of the claim**, not only in the Assumptions section at the foot of the document. A reader who acts on the headline may never reach the footer.
 
 ### 2.3 Sequencing gate
 
@@ -110,10 +111,10 @@ Internal is not further subdivided at this stage. Requirements below refer to th
 
 | ID | Milestone | Requirements | Gate |
 |---|---|---|---|
-| **M1** | Stabilise — live defects | AUD-001, DOC-001, DOC-002, DOC-003, SEC-001, REQ-007 → REQ-012 | None. Starts immediately. |
+| **M1** | Stabilise — live defects | AUD-001, DOC-001, DOC-002, DOC-003, SEC-001, REQ-007 → REQ-012, REQ-027 | None. Starts immediately. |
 | **M2** | Role model | REQ-013 | None |
 | **M3** | Assessment lifecycle | REQ-014 → REQ-016 | M2 complete |
-| **M4** | Evidence model | REQ-017 | None. REQ-006 was retired into REQ-017; the old gate no longer exists. |
+| **M4** | Evidence model | REQ-017 | **M2 and M3 complete** |
 | **M5** | Applicability | REQ-018 | None |
 | **M6** | Navigation shell | REQ-024 | M2 complete |
 | **M7** | Analytics and trends | REQ-019 → REQ-023 | **M3, M5 and M6 complete** |
@@ -121,7 +122,7 @@ Internal is not further subdivided at this stage. Requirements below refer to th
 
 ### 4.1 Sequencing rationale
 
-- **M1 first.** Six live defects, most of them cheap, all of them visible to the early adopter during the exact period they are being asked to trust the platform. (Seven until REQ-006 was retired into REQ-017 — see the retirement note in §6.)
+- **M1 first.** Seven live defects, most of them cheap, all of them visible to the early adopter during the exact period they are being asked to trust the platform. (REQ-006 was retired into REQ-017 and REQ-027 added — see the retirement note in §6.)
 - **M2 second.** The role model is now load-bearing: the lifecycle rules in M3, the actions permissions in M7 and the read-only requirement all reference the three tiers. Building any of them before the tiers exist means encoding permissions twice.
 - **M5 before M7.** Aggregate scores are currently distorted by standards that do not apply to a given school. Comparative analytics built on that denominator will need rebuilding. Fix the denominator first.
 - **M3 before M7.** A historical series that cannot be corrected is not worth visualising.
@@ -272,7 +273,9 @@ An explicit per-assessment date overrides; historical rows behave sensibly with 
 - Bind the date selector to the real payload and surface the due date to the **recipient** of the request, not only the sender.
 - Stop discarding it on read: `transformAssessmentByAspectToAssessment` (`use-assessments.ts:84`) hardcodes `due_date: null`.
 
-**Before implementation — one manual test settles an open question.** Create an assessment with a due date through the invitation sheet, then re-count nulls. That distinguishes "nobody has ever set one" from "create silently drops the value". Everything above assumes the former; if the latter, the create path is also defective and the scope grows.
+> **Manual test complete — the question is settled, and the create path is sound.** 180 assessments were created with a due date and **all 180 persisted**. The 1,921 pre-existing nulls are **non-use, not a silent drop**. The scope does not grow: the defect is confirmed as `transformAssessmentByAspectToAssessment` nulling `due_date` on read.
+
+**Also in frontend scope — the date selector modal is not clickable.** It can currently be operated only by keyboard tabbing. Likely a `pointer-events` or overlay stacking defect. **Fix alongside the display work** — a due date the user cannot set with a mouse is not meaningfully different from one that is discarded on read, and shipping the read fix alone would leave the feature still unusable for most users.
 
 **M3 rule to record now:** **overdue must suppress once a term is closed.** A closed term cannot be actioned, so continuing to flag its assessments as overdue is noise about work nobody is permitted to do.
 
@@ -381,6 +384,21 @@ Also confirmed: **`?status=overdue` can never return rows.** The grouped `CASE` 
 
 ---
 
+#### REQ-027 — New assessments do not appear until a browser refresh
+**Type:** Defect. **Frontend.**
+
+**Problem:** After creating assessments, neither the new assessment nor its term appears in the interface until a full browser refresh — **despite a success toast**. The write succeeded; only the view is stale.
+
+**Why this is worse than a cosmetic staleness bug.** The user is told the operation worked and then shown no evidence of it. The reasonable conclusion is that it silently failed, so **they create the assessments again — producing duplicates.** The defect manufactures the data problem it looks like.
+
+**Scope:** Cache invalidation on creation, for **both** the assessment list and the term list. The term list matters because a newly created assessment may be the first in its term, so the term itself is new to the view.
+
+**Related:** the deferred "expanded-school invalidation edge case for aspect metrics" in §7. **Check whether they share a cause and report.** **Fix only the creation path** — if they turn out to be the same defect, that is a finding for the product owner, not licence to widen this requirement.
+
+**Out of scope:** Any change to the creation endpoint. The backend write is confirmed sound.
+
+---
+
 ### M2 — Role model
 
 #### REQ-013 — Three-tier role model
@@ -398,7 +416,13 @@ Also confirmed: **`?status=overdue` can never return rows.** The grouped `CASE` 
 - Write affordances suppressed throughout for the external tier.
 - User management flow for inviting and assigning the external role.
 
-**Out of scope:** Subdividing the internal tier. Per-school scoping of external users — they see the whole MAT.
+**Scope — tests. Minimal `pytest` coverage is in scope for this requirement, limited to permission enforcement:** that the external tier is **blocked at endpoint level on every write route**. This is not a general test suite and must not grow into one — the claim being tested is the one the requirement stands or falls on, and it is the claim a UI demo cannot prove.
+
+Note the starting position: **`assurly-backend/test_phase2_auth.py` is the only test file in the repository** (four tests, all auth primitives — JWT creation, MAT-wide access, response formatting, magic-link generation). Nothing covers authorisation. **There is no infrastructure to extend**, so REQ-013 carries the cost of establishing it as well as the cost of the tests themselves. Budget accordingly.
+
+**Where enforcement will be proved or disproved (from SEC-001):** `DELETE /api/standards/{mat_standard_id}`, `DELETE /api/aspects/{mat_aspect_id}` and `DELETE /api/assessments/{assessment_id}/actions/{action_id}` are currently guarded by **authentication alone, with no role check** — any authenticated user in the MAT may call them. Those are precisely the routes the external tier must not reach. Note the corollary: until this requirement lands, **read-only access cannot be granted to anyone**, because there is no tier that has it.
+
+**Out of scope:** Subdividing the internal tier. Per-school scoping of external users — they see the whole MAT. A general-purpose test suite.
 
 ---
 
@@ -485,7 +509,9 @@ Also confirmed: **`?status=overdue` can never return rows.** The grouped `CASE` 
 
 ### M4 — Evidence model
 
-**Gate:** None. REQ-006 has been retired into REQ-017, so the gate it provided no longer exists. **M4 keeps its position in the sequence.**
+**Gate:** **M2 and M3 complete.** M2 settles **who** may upload; M3 settles **whether upload to a closed term is permitted**. Both must exist before the evidence endpoints can enforce them — building the endpoints first would mean writing the permission and lifecycle checks twice, or shipping them unenforced.
+
+(REQ-006's retirement removed the previous gate. This replaces it; the earlier "Q1 answered" clause is not restored.)
 
 ---
 
@@ -512,13 +538,17 @@ The mock-data wipe docstring in `main.py` documents this key structure, so the t
 - Build the upload control and file list against each standard.
 - Evidence indicators at both standard and aspect level.
 
-**File count limits are waived** for the early adopter phase — see §5. Do not reintroduce a cap.
+**Settled limits:** **single-file upload limit 25 MB. No count limit.** The per-file ceiling matches contract §28 and is a technical constraint on the upload path, not a product cap; the absence of a count limit is the deliberate §5 position for the early adopter phase. **Do not reintroduce a count cap.**
+
+**Upload is built inside FastAPI.** The project runs **exactly one Cloud Run service, and it is the backend**; the frontend is on Vercel. There is no Cloud Function and no second service. The upload endpoint therefore lives in `main.py` alongside every other route — this is settled, not an open architectural question.
+
+> ⚠️ **Stale note to correct, not in this session.** `assurly-backend/.env.example` carries a note against `GCS_EVIDENCE_BUCKET` claiming the variable "is referenced in deployment infra but the backend Python code does not currently read it directly — upload + signed-URL handling is external". **That refers to code replaced on 4 June 2026 and is stale.** It should be corrected, but doing so is out of scope here. Flagged so nobody reads it as an argument for building upload outside the service.
 
 **Link evidence is anticipated by the schema but out of scope.** The table carries `evidence_type` (`'file'` | `'url'`) and a `url` column, with a CHECK constraint enforcing mutual exclusion, and contract §29 specifies `POST /evidence/link`. **Do not design it out** — building only the file path in a way that makes links awkward to add later would waste the schema work already done.
 
 **Out of scope:** Evidence versioning, approval, tagging, content extraction.
 
-> **Note for whoever picks this up.** `.env.example` carries a dated caveat (2026-06-04) that `GCS_EVIDENCE_BUCKET` "is referenced in deployment infra but the backend Python code does not currently read it directly — upload + signed-URL handling is external". If upload was genuinely served outside the FastAPI application, the working revision may not be a useful reference for a FastAPI-native implementation even had it been recoverable. Establish where the upload path is intended to live before writing code.
+> **Previously open, now closed.** An earlier draft of this requirement asked where the upload path was intended to live, on the strength of the `.env.example` note quoted above. **That question is settled: inside FastAPI.** The note is stale, not evidence.
 
 ### M5 — Applicability
 
@@ -571,6 +601,10 @@ The mock-data wipe docstring in `main.py` documents this key structure, so the t
 **Gate:** M3, M5 and M6 complete. Split into M7a (backend) and M7b (frontend).
 
 **Goal:** Answer, without leaving the platform: what changed since last term, where, and is it one school or the whole trust?
+
+> ⚠️ **`evidence_count` is not a signal — it is a constant.** `GET /api/dashboard/schools` returns `evidence_count` for every school, and it has been **structurally zero since it shipped**, because it counts rows in `standard_evidence` — a table **no deployed code can write to** (the evidence API has never existed; see REQ-017 and DOC-003). Any analytics treating it as a measure of evidence-gathering behaviour is reading a constant and will produce a chart of zeroes or a correlation with nothing.
+>
+> **It becomes meaningful only after REQ-017 ships**, and only for data created from that point on — there is no historical evidence corpus to backfill from. Any M7 work that wants evidence as a dimension must either gate on REQ-017 or exclude it.
 
 ---
 
@@ -683,6 +717,7 @@ Not scheduled. Not to be picked up opportunistically.
 
 **Absorbed into scheduled work:**
 
+- **API contract Known Issue #12 is understated** → triage. It records that `GET /api/standards/{mat_standard_id}` omits `standard_type` from the response dict; it **also omits it from the versions array**, despite the versions query selecting it (`main.py:1235`). Found during DOC-003. **The contract was deliberately not amended** — recorded here for the product owner to schedule, most naturally alongside REQ-011, which is already in the same endpoint family.
 - `is_custom` / `is_modified` boolean coercion → investigate under REQ-010; promote into M1 if it proves to be the cause.
 - `verify_mat_admin` gaps on three user-CRUD endpoints → REQ-013.
 - Trends endpoint view param backend work → M7.
@@ -706,6 +741,7 @@ Not scheduled. Not to be picked up opportunistically.
 | REQ-010 | M1 | Ready | ☐ | ☐ | ☐ |
 | REQ-011 | M1 | Ready | ☐ | ☐ | ☐ |
 | REQ-012 | M1 | Ready | ☐ | ☐ | ☐ |
+| REQ-027 | M1 | Ready — frontend only | — | ☐ | ☐ |
 | REQ-013 | M2 | Ready | ☐ | ☐ | ☐ |
 | REQ-014 | M3 | Gated on M2 | ☐ | ☐ | ☐ |
 | REQ-015 | M3 | Gated on M2 | ☐ | ☐ | ☐ |
@@ -727,6 +763,7 @@ Not scheduled. Not to be picked up opportunistically.
 
 | Version | Date | Change |
 |---|---|---|
+| 2.7 | 26 August 2026 | **§2.2** gains point 7: provisional claims are labelled where the reader meets them, not only in an Assumptions section at the foot — added after an AUD-001 finding that flagged its own assumption in a footer and was then acted on as fact. **M4 gate set to "M2 and M3 complete"** in §4 and §6: M2 settles who may upload, M3 settles whether upload to a closed term is permitted, and the endpoints cannot enforce either before they exist. The removed "Q1 answered" clause is not restored. **REQ-017** records the settled limits (single file 25 MB, no count limit) and that **upload is built inside FastAPI** — the project runs exactly one Cloud Run service, which is the backend, with the frontend on Vercel; the previously open "where does upload live" question is closed, and the `.env.example` note calling upload handling "external" is flagged as stale (referring to code replaced 4 June 2026) for correction elsewhere. **REQ-007**: the manual test is complete — 180 of 180 assessments persisted their due date, so the 1,921 nulls are non-use and the create path is sound; the defect is confirmed as the by-aspect transform. Frontend scope gains the date selector modal being unclickable and keyboard-only. **REQ-027 added** to M1 (frontend): created assessments and their terms do not appear until a browser refresh despite a success toast, leading users to create duplicates; scope is cache invalidation on creation for the assessment and term lists, with the related deferred aspect-metrics invalidation edge case to be checked and reported but not fixed. **REQ-013** gains minimal `pytest` coverage in scope, limited to proving the external tier is blocked at endpoint level on every write route, with a note that no test infrastructure exists to extend, and records from SEC-001 that the standards, aspects and action-item DELETE routes are guarded by authentication alone. **M7** records that dashboard `evidence_count` has been structurally zero since it shipped and becomes meaningful only after REQ-017. **§7** records that API contract Known Issue #12 is understated — `standard_type` is missing from the versions array as well as the response dict — as a triage item; the contract was deliberately not amended. |
 | 2.6 | 26 August 2026 | Applied after four production SQL queries and the live OpenAPI spec were checked; several earlier audit conclusions are corrected as fact, not opinion. **Terms:** the AUD-001 "vacation gap" finding is **withdrawn** — terms abut (T1 1 Sep–31 Dec, T2 1 Jan–1 Apr, T3 2 Apr–31 Aug) and `is_current` is true for exactly one row at any time. Settled rules recorded on REQ-015: terms sort newest to oldest, and the reporting term is the current calendar term regardless of open/closed state. Dated risk recorded for **1 September 2026**, when `is_current` flips to a term with no rows while the dashboard keeps reporting the last term with rows — resolved by an empty state and a term switcher, never a fallback. **REQ-006 retired** into REQ-017 and removed from M1 in §4, §6 and §8; it was retired, not completed, and M1 now closes without a working evidence feature by acceptance. M4's gate and §4.1's defect count updated in consequence. **REQ-017 rewritten** as a full rebuild of both layers, no longer a data-model change: `standard_evidence` is already keyed per standard/school/term so no migration is needed, the GCS bucket is known via `GCS_EVIDENCE_BUCKET`, recovery of the lost implementation is abandoned, and link evidence stays anticipated-but-out-of-scope. **SEC-001 added** to M1 — the super-admin guard on the destructive admin endpoints is real but invisible to the OpenAPI spec and the contract; scope is to verify, document and report, and to record `SUPER_ADMIN_EMAILS` as the mechanism REQ-013 must extend. **DOC-003 added** to M1 — correct the three documents asserting the evidence endpoints are live, document `standard_evidence` in the data model, and re-verify the `🚧 In-flight` tags removed across v1.5–v1.8. **REQ-007**: the "unwired mock" description struck (`due_date` is null on all 1,921 rows but the create path does send it); effective due date settled as `COALESCE(a.due_date, t.end_date)` with no migration; overdue must suppress on closed terms (M3); one manual test recorded as a precondition. **REQ-008**: the `localStorage` filter-restore defect folded in as the same root cause. **REQ-009**: `MAX(due_date)` recorded as the wrong aggregate, with the note that REQ-007 will mask rather than fix it. **REQ-010**: primary-key migration recorded as required, and `IT & Data` recorded as still unexplained. **REQ-011**: "Updated" defined as a material edit, excluding reordering. **REQ-012**: `/api/standards/inactive` folded in as the identical route-shadowing bug. |
 | 2.5 | 25 August 2026 | Post-AUD-001 corrections. §4 M1 row now lists AUD-001, DOC-001 and DOC-002 alongside REQ-006 → REQ-012, resolving the disagreement with §6 and §8. DOC-002 scope extended to `README.md`, whose documentation tree is stale in the same way. REQ-015: closing a term now explicitly bars creation against that term as well as editing, and back-dated creation against a past *open* term is recorded as intended behaviour, not a defect. REQ-015 also carries a new design input — the two conflicting "current term" derivations collapse into "most recent open term" here, and both are deleted. REQ-006 problem statement corrected: the regression hypothesis is withdrawn, the cause is that the upload client was never merged, and the fix is a port from `claude/review-backend-brief-mjtms` — **which is not on `origin` and must be pushed before REQ-006 opens**. REQ-007 problem statement corrected: the mock-modal description is withdrawn; the create path sends `due_date`, the backend persists and returns it, and the by-aspect transform discards it on read. No version 2.4 exists in this repository — 2.3 goes straight to 2.5; see the DOC-001 and AUD-001 dev log entries. |
 | 2.3 | 25 August 2026 | Development log and versioning conventions added (§2.5, §2.6). DOC-001 and DOC-002 added to M1 following contract discrepancies found during onboarding. `PROJECT_STRUCTURE.md` demoted from authoritative to descriptive pending refresh, and documentation filenames standardised to lowercase hyphenated form. |
