@@ -180,10 +180,13 @@ export class EnhancedAssessmentService {
   }): Promise<void> {
     try {
       await apiCreateAssessments(request);
-      
-      // Invalidate assessments cache to refresh the list
+
+      // Creation must drop both list caches: the Ratings page derives its term
+      // selector from assessments, and anything using the terms cache (preload /
+      // invitation sheet via the enhanced path) must not keep a pre-create snapshot.
       requestCache.invalidate('assessments');
-      
+      requestCache.invalidate('terms');
+
       console.log('✅ Assessments created successfully');
     } catch (error) {
       console.error('❌ Failed to create assessments');

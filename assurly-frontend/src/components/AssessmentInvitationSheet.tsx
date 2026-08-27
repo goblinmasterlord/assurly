@@ -28,7 +28,8 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
 import { cn } from "@/lib/utils";
-import { getSchools, createAssessments, getAspects, getTerms } from "@/services/assessment-service";
+import { getSchools, getAspects, getTerms } from "@/services/assessment-service";
+import { assessmentService } from "@/services/enhanced-assessment-service";
 import { useToast } from "@/hooks/use-toast";
 import { getAspectDisplayName } from "@/lib/assessment-utils";
 import { useAuth } from "@/contexts/AuthContext";
@@ -322,9 +323,10 @@ export function AssessmentInvitationSheet({ open, onOpenChange, onSuccess }: Ass
     try {
       let totalAssessments = 0;
       
-      // Create assessments for each selected category
+      // Create assessments for each selected category (enhanced path invalidates
+      // assessments + terms caches so onSuccess refresh sees fresh data)
       for (const category of selectedCategories) {
-        await createAssessments({
+        await assessmentService.createAssessments({
           school_ids: selectedSchools,
           aspect_code: category,
           term_id: selectedTermId,
