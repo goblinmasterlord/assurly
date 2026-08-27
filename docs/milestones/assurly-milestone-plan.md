@@ -740,7 +740,7 @@ Not scheduled. Not to be picked up opportunistically.
 | REQ-009 | M1 | Ready | ☐ | ☐ | ☐ |
 | REQ-010 | M1 | Ready | ☐ | ☐ | ☐ |
 | REQ-011 | M1 | Ready | ☐ | ☐ | ☐ |
-| REQ-012 | M1 | Ready | ☐ | ☐ | ☐ |
+| REQ-012 | M1 | Backend fixed — **awaiting deploy verification** | ☑ | — | ☑ |
 | REQ-027 | M1 | Ready — frontend only | — | ☐ | ☐ |
 | REQ-013 | M2 | Ready | ☐ | ☐ | ☐ |
 | REQ-014 | M3 | Gated on M2 | ☐ | ☐ | ☐ |

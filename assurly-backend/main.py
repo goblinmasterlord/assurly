@@ -1178,6 +1178,74 @@ async def get_standards(
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to fetch standards: {str(e)}")
 
+# NOTE: literal paths must be registered BEFORE the parameterised
+# sibling below. Starlette matches in registration order, so
+# /api/.../inactive would otherwise be captured by the {id} route
+# and 404 as a missing record (REQ-012).
+@app.get("/api/standards/inactive", response_model=List[MatStandardResponse], tags=["Standards"])
+async def get_inactive_standards(
+    current_mat_id: str = Depends(get_current_mat),
+    current_user: UserResponse = Depends(get_current_user)
+):
+    """
+    Get list of deactivated default standards that can be reinstated.
+    Does not include archived custom standards.
+    """
+    try:
+        connection = get_db_connection()
+        cursor = connection.cursor()
+
+        query = """
+            SELECT ms.mat_standard_id,
+                   ms.mat_id,
+                   ms.standard_code,
+                   ms.standard_name,
+                   ms.standard_description,
+                   ms.standard_type,
+                   ms.sort_order,
+                   ms.is_custom,
+                   ms.is_modified,
+                   ma.mat_aspect_id,
+                   ma.aspect_code,
+                   ma.aspect_name,
+                   sv.version_id as current_version_id,
+                   sv.version_number as current_version
+            FROM mat_standards ms
+            JOIN mat_aspects ma ON ms.mat_aspect_id = ma.mat_aspect_id
+            LEFT JOIN standard_versions sv ON ms.current_version_id = sv.version_id
+            WHERE ms.mat_id = %s
+              AND ms.is_active = FALSE
+              AND ms.is_custom = FALSE
+            ORDER BY ma.sort_order, ms.sort_order
+        """
+        cursor.execute(query, (current_mat_id,))
+        standards = cursor.fetchall()
+
+        # Map response to ensure version_number is properly set
+        mapped_standards = []
+        for std in standards:
+            mapped_std = dict(std)
+            if 'current_version' in mapped_std and mapped_std['current_version'] is not None:
+                version_val = mapped_std['current_version']
+                if isinstance(version_val, str):
+                    try:
+                        version_val = int(version_val)
+                    except (ValueError, TypeError):
+                        version_val = None
+                elif hasattr(version_val, '__int__'):
+                    version_val = int(version_val)
+                mapped_std['version_number'] = version_val
+                mapped_std['current_version'] = version_val
+            if 'current_version_id' in mapped_std and mapped_std['current_version_id']:
+                mapped_std['version_id'] = mapped_std['current_version_id']
+            mapped_standards.append(mapped_std)
+
+        connection.close()
+        return mapped_standards
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to fetch inactive standards: {str(e)}")
+
 @app.get("/api/standards/{mat_standard_id}", tags=["Standards"])
 async def get_standard(
     mat_standard_id: str,
@@ -1923,70 +1991,6 @@ async def reinstate_standard(
             connection.close()
         raise HTTPException(status_code=500, detail=f"Failed to reinstate standard: {str(e)}")
 
-@app.get("/api/standards/inactive", response_model=List[MatStandardResponse], tags=["Standards"])
-async def get_inactive_standards(
-    current_mat_id: str = Depends(get_current_mat),
-    current_user: UserResponse = Depends(get_current_user)
-):
-    """
-    Get list of deactivated default standards that can be reinstated.
-    Does not include archived custom standards.
-    """
-    try:
-        connection = get_db_connection()
-        cursor = connection.cursor()
-
-        query = """
-            SELECT ms.mat_standard_id,
-                   ms.mat_id,
-                   ms.standard_code,
-                   ms.standard_name,
-                   ms.standard_description,
-                   ms.standard_type,
-                   ms.sort_order,
-                   ms.is_custom,
-                   ms.is_modified,
-                   ma.mat_aspect_id,
-                   ma.aspect_code,
-                   ma.aspect_name,
-                   sv.version_id as current_version_id,
-                   sv.version_number as current_version
-            FROM mat_standards ms
-            JOIN mat_aspects ma ON ms.mat_aspect_id = ma.mat_aspect_id
-            LEFT JOIN standard_versions sv ON ms.current_version_id = sv.version_id
-            WHERE ms.mat_id = %s
-              AND ms.is_active = FALSE
-              AND ms.is_custom = FALSE
-            ORDER BY ma.sort_order, ms.sort_order
-        """
-        cursor.execute(query, (current_mat_id,))
-        standards = cursor.fetchall()
-
-        # Map response to ensure version_number is properly set
-        mapped_standards = []
-        for std in standards:
-            mapped_std = dict(std)
-            if 'current_version' in mapped_std and mapped_std['current_version'] is not None:
-                version_val = mapped_std['current_version']
-                if isinstance(version_val, str):
-                    try:
-                        version_val = int(version_val)
-                    except (ValueError, TypeError):
-                        version_val = None
-                elif hasattr(version_val, '__int__'):
-                    version_val = int(version_val)
-                mapped_std['version_number'] = version_val
-                mapped_std['current_version'] = version_val
-            if 'current_version_id' in mapped_std and mapped_std['current_version_id']:
-                mapped_std['version_id'] = mapped_std['current_version_id']
-            mapped_standards.append(mapped_std)
-
-        connection.close()
-        return mapped_standards
-
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to fetch inactive standards: {str(e)}")
-
 # Version History Endpoint
 @app.get("/api/standards/{mat_standard_id}/versions", response_model=List[StandardVersionResponse], tags=["Standards"])
 async def get_standard_versions(
@@ -2101,6 +2105,54 @@ async def get_aspects(
 
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to fetch aspects: {str(e)}")
+
+# NOTE: literal paths must be registered BEFORE the parameterised
+# sibling below. Starlette matches in registration order, so
+# /api/.../inactive would otherwise be captured by the {id} route
+# and 404 as a missing record (REQ-012).
+@app.get("/api/aspects/inactive", response_model=List[MatAspectResponse], tags=["Aspects"])
+async def get_inactive_aspects(
+    current_mat_id: str = Depends(get_current_mat),
+    current_user: UserResponse = Depends(get_current_user)
+):
+    """
+    Get list of deactivated default aspects that can be reinstated.
+    Does not include archived custom aspects.
+    """
+    try:
+        connection = get_db_connection()
+        cursor = connection.cursor()
+
+        query = """
+            SELECT ma.mat_aspect_id,
+                   ma.mat_id,
+                   ma.aspect_code,
+                   ma.aspect_name,
+                   ma.aspect_description,
+                   ma.aspect_category,
+                   ma.sort_order,
+                   ma.is_custom,
+                   CASE WHEN ma.source_aspect_id IS NOT NULL AND
+                        (ma.aspect_name != COALESCE(da.aspect_name, '') OR
+                         ma.aspect_description != COALESCE(da.aspect_description, ''))
+                   THEN 1 ELSE 0 END as is_modified,
+                   (SELECT COUNT(*) FROM mat_standards ms
+                    WHERE ms.mat_aspect_id = ma.mat_aspect_id AND ms.is_active = TRUE) as standards_count
+            FROM mat_aspects ma
+            LEFT JOIN aspects da ON ma.source_aspect_id = da.aspect_id
+            WHERE ma.mat_id = %s
+              AND ma.is_active = FALSE
+              AND ma.is_custom = FALSE
+            ORDER BY ma.sort_order
+        """
+        cursor.execute(query, (current_mat_id,))
+        aspects = cursor.fetchall()
+
+        connection.close()
+        return aspects
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to fetch inactive aspects: {str(e)}")
 
 @app.get("/api/aspects/{mat_aspect_id}", response_model=MatAspectResponse, tags=["Aspects"])
 async def get_aspect(
@@ -2498,50 +2550,6 @@ async def reinstate_aspect(
             connection.rollback()
             connection.close()
         raise HTTPException(status_code=500, detail=f"Failed to reinstate aspect: {str(e)}")
-
-@app.get("/api/aspects/inactive", response_model=List[MatAspectResponse], tags=["Aspects"])
-async def get_inactive_aspects(
-    current_mat_id: str = Depends(get_current_mat),
-    current_user: UserResponse = Depends(get_current_user)
-):
-    """
-    Get list of deactivated default aspects that can be reinstated.
-    Does not include archived custom aspects.
-    """
-    try:
-        connection = get_db_connection()
-        cursor = connection.cursor()
-
-        query = """
-            SELECT ma.mat_aspect_id,
-                   ma.mat_id,
-                   ma.aspect_code,
-                   ma.aspect_name,
-                   ma.aspect_description,
-                   ma.aspect_category,
-                   ma.sort_order,
-                   ma.is_custom,
-                   CASE WHEN ma.source_aspect_id IS NOT NULL AND
-                        (ma.aspect_name != COALESCE(da.aspect_name, '') OR
-                         ma.aspect_description != COALESCE(da.aspect_description, ''))
-                   THEN 1 ELSE 0 END as is_modified,
-                   (SELECT COUNT(*) FROM mat_standards ms
-                    WHERE ms.mat_aspect_id = ma.mat_aspect_id AND ms.is_active = TRUE) as standards_count
-            FROM mat_aspects ma
-            LEFT JOIN aspects da ON ma.source_aspect_id = da.aspect_id
-            WHERE ma.mat_id = %s
-              AND ma.is_active = FALSE
-              AND ma.is_custom = FALSE
-            ORDER BY ma.sort_order
-        """
-        cursor.execute(query, (current_mat_id,))
-        aspects = cursor.fetchall()
-
-        connection.close()
-        return aspects
-
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to fetch inactive aspects: {str(e)}")
 
 @app.get("/api/terms", tags=["Terms"])
 async def get_terms(academic_year: Optional[str] = None):
