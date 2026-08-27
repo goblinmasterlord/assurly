@@ -1,8 +1,8 @@
 # Assurly API Contract
 
 **Status:** Authoritative. Both backend (Claude Code) and frontend (Cursor) reference this doc.
-**Version:** v2.7
-**Last updated:** 26 August 2026
+**Version:** v2.8
+**Last updated:** 27 August 2026
 **Backend base URL:** `http://localhost:8000` (local) / `https://assurly-frontend-400616570417.europe-west2.run.app` (Cloud Run production)
 
 This document defines every HTTP endpoint the frontend calls. If the frontend needs a shape that isn't here, the fix is to **update this doc first**, then code follows. If the backend diverges from what's here, it's a backend bug.
@@ -548,7 +548,8 @@ Authorization: Bearer <token>
     "aspect_code": "EDU",
     "aspect_name": "Education",
     "version_id": "HLT-AC1-v1",
-    "version_number": 1
+    "version_number": 1,
+    "updated_at": "2026-06-04T14:32:01Z"
   }
 ]
 ```
@@ -569,6 +570,7 @@ Authorization: Bearer <token>
 | `aspect_name` | string | no | |
 | `version_id` | string | yes | Current version ID. `null` if no version exists (shouldn't happen). |
 | `version_number` | integer | yes | Current version number. |
+| `updated_at` | string (date-time) | yes | ISO 8601 UTC, e.g. `2026-06-04T14:32:01Z`. **"Updated" means a material edit** — a rename or a content change. Reordering is not a material edit and does not move this value. `null` on rows that predate the column. Added v2.8 (REQ-011). |
 
 ---
 
@@ -2056,6 +2058,7 @@ Admin/cron utility. Not called by the frontend.
 
 | Version | Date | Change |
 |---|---|---|
+| v2.8 | 2026-08-27 | **REQ-011.** `GET /api/standards` (§13) now returns `updated_at` — ISO 8601 UTC with a trailing `Z`, `null` on rows predating the column. Additive; no existing field changed. The value means a **material edit** (rename or content change); reordering is not a material edit and does not move it. Previously the field was neither selected nor declared on `MatStandardResponse`, so it never reached the client and the standards-admin card fell back to rendering today's date for every standard. Serialised by the handler rather than coerced by Pydantic, because MySQL `TIMESTAMP` arrives naive and would render without the `Z` the rest of the API emits. **Note:** `GET /api/standards/inactive` shares `MatStandardResponse` and will therefore report `updated_at: null` until its own query selects the column — out of REQ-011's scope, recorded rather than silently fixed. |
 | v2.7 | 2026-08-26 | **DOC-003.** Documentation only. **Retracted the v1.8 entry and the "The four evidence endpoints are live" claim at the head of the Evidence section — both were false.** REQ-003 never shipped: `main.py` defines 42 routes and none is an evidence route, there is no GCS client and no Google SDK dependency, and the live OpenAPI spec does not list the endpoints. The §28–31 specification is **retained as the authoritative target** for REQ-017 (M4) rather than deleted, under a banner stating it is not implemented. The backing `standard_evidence` table does exist and is correctly shaped; what is missing is the API. Also re-verified every `🚧 In-flight` tag removed across the v1.5–v1.8 reconciliation passes — **v1.8 is the only false one**; v1.5's and v1.6's claims all hold against the code, with one caveat: `evidence_count` on `GET /api/dashboard/schools` does ship as a field but reads a table no code path can write to, so it is structurally always `0`. That is a consequence of the same v1.8 error, not a separate defect. |
 | v2.6 | 2026-08-26 | **SEC-001.** Documentation only — no endpoint, shape or behaviour changed. Added a **Authorisation tiers** section under Conventions, documenting the three dependency-enforced tiers (`get_current_user`, `verify_mat_admin`, `verify_super_admin`), the `SUPER_ADMIN_EMAILS` mechanism and its **deny-by-default** behaviour (unset ⇒ empty allow-list ⇒ everyone refused), and a table of which endpoints carry which tier. This exists because **the OpenAPI spec advertises only `HTTPBearer` and cannot express the upper two tiers**, so the spec understates the protection on the destructive admin endpoints — an earlier audit read the spec and concluded `DELETE /api/admin/mock-data/wipe` was unguarded. It is not; the guard was verified present on both admin endpoints. Corrected the Authentication section's list of endpoints not requiring a Bearer token, which omitted `POST /api/auth/cleanup-expired-tokens` — that endpoint declares no dependencies at all, which is now stated in its Deprecated-endpoints entry and in Known Issue #8, with the caveat that whether it is deliberate remains unconfirmed. |
 | v1 | 2026-04-27 | Initial contract. Documents all live endpoints from `main.py`, target state for REQ-002/003/004/005 with `🚧 In-flight` tags, deprecated endpoints, and known backend issues. |

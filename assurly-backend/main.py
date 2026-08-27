@@ -356,6 +356,10 @@ class MatStandardResponse(MatStandardBase):
     version_number: Optional[int] = None
     is_custom: bool
     is_modified: bool
+    # ISO 8601 UTC, or null on rows predating the column. "Updated" means a
+    # material edit — a rename or a content change (REQ-011). Serialised as a
+    # pre-formatted string by the handler, not coerced from datetime here.
+    updated_at: Optional[str] = None
 
 # Version History
 class StandardVersionResponse(BaseModel):
@@ -1150,7 +1154,8 @@ async def get_standards(
                    ma.aspect_code,
                    ma.aspect_name,
                    sv.version_id as current_version_id,
-                   sv.version_number as current_version
+                   sv.version_number as current_version,
+                   ms.updated_at
             FROM mat_standards ms
             JOIN mat_aspects ma ON ms.mat_aspect_id = ma.mat_aspect_id
             LEFT JOIN standard_versions sv ON ms.current_version_id = sv.version_id
@@ -1191,6 +1196,12 @@ async def get_standards(
                     version_val = int(version_val)
                 mapped_std['version_number'] = version_val
                 mapped_std['current_version'] = version_val  # Ensure it's an int
+            # Serialise updated_at to the contract's ISO 8601 UTC form with a
+            # trailing Z (REQ-011). Formatted here rather than left to Pydantic:
+            # MySQL TIMESTAMP arrives as a naive datetime, which Pydantic would
+            # render without the Z, and the rest of the API emits the Z form.
+            if mapped_std.get('updated_at') is not None:
+                mapped_std['updated_at'] = mapped_std['updated_at'].strftime('%Y-%m-%dT%H:%M:%SZ')
             # Also set version_id from current_version_id for Pydantic model
             if 'current_version_id' in mapped_std and mapped_std['current_version_id']:
                 mapped_std['version_id'] = mapped_std['current_version_id']
