@@ -1244,7 +1244,8 @@ async def get_inactive_standards(
                    ma.aspect_code,
                    ma.aspect_name,
                    sv.version_id as current_version_id,
-                   sv.version_number as current_version
+                   sv.version_number as current_version,
+                   ms.updated_at
             FROM mat_standards ms
             JOIN mat_aspects ma ON ms.mat_aspect_id = ma.mat_aspect_id
             LEFT JOIN standard_versions sv ON ms.current_version_id = sv.version_id
@@ -1271,6 +1272,11 @@ async def get_inactive_standards(
                     version_val = int(version_val)
                 mapped_std['version_number'] = version_val
                 mapped_std['current_version'] = version_val
+            # Same ISO 8601 UTC serialisation as the active list (REQ-011).
+            # MatStandardResponse types updated_at as a string, so the raw
+            # datetime has to be formatted here rather than handed to Pydantic.
+            if mapped_std.get('updated_at') is not None:
+                mapped_std['updated_at'] = mapped_std['updated_at'].strftime('%Y-%m-%dT%H:%M:%SZ')
             if 'current_version_id' in mapped_std and mapped_std['current_version_id']:
                 mapped_std['version_id'] = mapped_std['current_version_id']
             mapped_standards.append(mapped_std)
