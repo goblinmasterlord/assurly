@@ -4,7 +4,7 @@
 >
 > **How to read this.** Sections marked **`CURRENT`** describe what exists in production today. Sections marked **`PROPOSED`** describe corrections recommended after an April 2026 audit — they are NOT in production and must not be assumed when writing code. Sections marked **`INVARIANT`** are business rules enforced in the application layer, not the schema.
 >
-> **Last verified:** 20 April 2026, against production schema dump.
+> **Last verified:** 20 April 2026, against production schema dump. §17 `standard_evidence` corrected 26 August 2026 — see §21.
 > **Stack:** MySQL 8, FastAPI (Python), React, GCP Cloud Run (`europe-west2`), project `assurly-455412`.
 
 ---
@@ -512,11 +512,22 @@ All original issues now closed. Additional cleanup performed during the hardenin
 
 ## 17. Auxiliary tables — evidence and actions
 
-Two child tables hang off the assessment grain. Both shipped between April and May 2026 and are live in production.
+Two child tables hang off the assessment grain. **`assessment_actions` is live in production. `standard_evidence` exists and is correctly shaped, but has no API and therefore no write path** — see the status note below.
 
 ### `standard_evidence`
 
-Holds uploaded files and external URLs attached to assessment cells. File blobs live in GCS; this table holds metadata only. Shipped April 2026 (REQ-003).
+Holds uploaded files and external URLs attached to assessment cells. File blobs live in GCS; this table holds metadata only.
+
+> ### ⚠️ `EXISTS` — schema only, no write path
+>
+> **Corrected 26 August 2026 (DOC-003).** This section previously read "Shipped April 2026 (REQ-003)". **That was false.** The table exists and its shape below is accurate and verified, but **REQ-003 never shipped the API**: `assurly-backend/main.py` defines 42 routes and none is an evidence route, and the live OpenAPI spec confirms it.
+>
+> **Consequences, so nobody is surprised:**
+> - **Nothing can write to this table.** The only code that references it is a `COUNT(*)` subquery feeding `evidence_count` on `GET /api/dashboard/schools`, and a `COUNT(*)` in the mock-data wipe tool.
+> - **`evidence_count` on the dashboard is therefore structurally always `0`** for every school in every MAT, and has been since it shipped. It is not a bug in the dashboard — there is simply nothing to count.
+> - The column definitions, the CHECK constraint and the FK behaviour below **are** verified against the live schema and should be built against.
+>
+> **The API is REQ-017 (M4).** API contract §28–31 specifies it in full and remains the authoritative target. **No migration is required** — the grain below is already exactly what REQ-017 needs.
 
 **Grain:** one row per evidence item. Multiple items may attach to the same `(mat_standard_id, school_id, unique_term_id)` triple — same grain as `assessments`.
 
@@ -538,7 +549,7 @@ Holds uploaded files and external URLs attached to assessment cells. File blobs 
 
 **GCS bucket:** `europe-west2`, keys under `{mat_id}/{mat_standard_id}/{filename}`.
 
-**Mutated only via** the four `/evidence/...` endpoints in the API contract (upload, link, list, delete). All four enforce MAT isolation: writes verify the supplied `mat_standard_id` belongs to the caller's MAT; reads/deletes 404 (rather than 403) on cross-MAT access to avoid leaking existence.
+**Mutation — none today.** This previously read "Mutated only via the four `/evidence/...` endpoints"; those endpoints do not exist, so **nothing mutates this table at all**. When REQ-017 builds them, they are specified to enforce MAT isolation: writes verify the supplied `mat_standard_id` belongs to the caller's MAT; reads and deletes return `404` rather than `403` on cross-MAT access, to avoid leaking existence. Treat that as the requirement, not as current behaviour.
 
 **Archive-rename behaviour:** `fk_evidence_mat_standard` has `ON UPDATE CASCADE` — when a parent `mat_standard` is archive-renamed (the `-deleted-<unix_ts>` pattern, e.g. `HLT-AC5` → `HLT-AC5-deleted-1768213666`; see §11), the rename propagates to evidence rows automatically. Same convention used on `assessments` and `standard_versions`, so evidence stays linked to its parent's current identity. No orphans.
 
@@ -793,3 +804,4 @@ ORDER BY tc.TABLE_NAME, tc.CONSTRAINT_NAME;
 | 2026-05-30 | §2.5: Dashboard SQL caught up to the label convention. `current_score` is now a plain `AVG(rating)` (no `5 - rating` inversion) and `intervention_required` flags any standard with `rating <= 2` (no polarity branching). Bible §2.5 updated to drop the "predates the convention / review separately" caveat. No schema or constraint changes — see API contract §27 v2.1 changelog. |
 | 2026-06-04 | §2.5: `intervention_required` threshold tightened from `rating <= 2` to `rating = 1`. Product decision — flag only genuinely critical standards (Inadequate / Critical risk), not also Needs work / Major risk. Backend SQL and bible prose updated; see API contract §27 v2.4 changelog. |
 | 2026-06-04 | `GET /api/analytics/trends` `rating_distribution` realigned with the new `intervention_required` semantic. Dropped the dead `exceptional` bucket (impossible `rating = 5`); renamed `requires_improvement` → `concerning` (rating 2 — concerning but NOT headline-flagged) and `outstanding` → `strong` (matches `performance-bands.ts` vocabulary). Backend SQL aliases renamed in lockstep; frontend `RatingDistribution` type updated. No bible prose changes — trends bucket formulas weren't documented here. See API contract §X (trends) v2.5 changelog. |
+| 2026-08-26 | §17: **Correction (DOC-003).** `standard_evidence` was documented as "Shipped April 2026 (REQ-003)" and "Mutated only via the four `/evidence/...` endpoints". Both statements were false — the table exists and its documented shape is accurate, but the API was never built: `main.py` defines 42 routes and none is an evidence route, confirmed against the live OpenAPI spec. Nothing writes to this table, and `evidence_count` on `GET /api/dashboard/schools` is therefore structurally always `0`. Marked `EXISTS` — schema only, no write path. **No schema change, no migration** — the grain is already correct for REQ-017 (M4), which will build the API. |

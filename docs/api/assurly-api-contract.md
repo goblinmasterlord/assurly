@@ -1,7 +1,7 @@
 # Assurly API Contract
 
 **Status:** Authoritative. Both backend (Claude Code) and frontend (Cursor) reference this doc.
-**Version:** v2.6
+**Version:** v2.7
 **Last updated:** 26 August 2026
 **Backend base URL:** `http://localhost:8000` (local) / `https://assurly-frontend-400616570417.europe-west2.run.app` (Cloud Run production)
 
@@ -1446,7 +1446,17 @@ Hard-deletes the row (actions are ephemeral UI items, not historical records).
 
 ### Evidence
 
-The four evidence endpoints are live. The path prefix is `/evidence/...` (not `/api/evidence/...`).
+> ## ⚠️ NOT IMPLEMENTED — these four endpoints do not exist
+>
+> **Corrected 26 August 2026 (DOC-003).** This section previously read "The four evidence endpoints are live." **That was false.** None of the four is implemented in `assurly-backend/main.py`, which defines 42 routes and no evidence route. There is no GCS client in the backend and no Google SDK in `requirements.txt`. Confirmed against the live OpenAPI spec, which does not list them.
+>
+> **The specification below is retained deliberately, and remains authoritative as a target.** It is complete enough to build from, and **REQ-017** (M4) will build it. Treat everything here as the shape the implementation must take, not as a description of what ships today.
+>
+> **Do not call these endpoints.** Any client that does will receive `404`.
+>
+> The backing table `standard_evidence` **does** exist and is correctly shaped — see data model §17. What is missing is the API, not the schema.
+
+The path prefix is `/evidence/...` (not `/api/evidence/...`).
 
 #### 28. Upload file evidence
 
@@ -2046,6 +2056,7 @@ Admin/cron utility. Not called by the frontend.
 
 | Version | Date | Change |
 |---|---|---|
+| v2.7 | 2026-08-26 | **DOC-003.** Documentation only. **Retracted the v1.8 entry and the "The four evidence endpoints are live" claim at the head of the Evidence section — both were false.** REQ-003 never shipped: `main.py` defines 42 routes and none is an evidence route, there is no GCS client and no Google SDK dependency, and the live OpenAPI spec does not list the endpoints. The §28–31 specification is **retained as the authoritative target** for REQ-017 (M4) rather than deleted, under a banner stating it is not implemented. The backing `standard_evidence` table does exist and is correctly shaped; what is missing is the API. Also re-verified every `🚧 In-flight` tag removed across the v1.5–v1.8 reconciliation passes — **v1.8 is the only false one**; v1.5's and v1.6's claims all hold against the code, with one caveat: `evidence_count` on `GET /api/dashboard/schools` does ship as a field but reads a table no code path can write to, so it is structurally always `0`. That is a consequence of the same v1.8 error, not a separate defect. |
 | v2.6 | 2026-08-26 | **SEC-001.** Documentation only — no endpoint, shape or behaviour changed. Added a **Authorisation tiers** section under Conventions, documenting the three dependency-enforced tiers (`get_current_user`, `verify_mat_admin`, `verify_super_admin`), the `SUPER_ADMIN_EMAILS` mechanism and its **deny-by-default** behaviour (unset ⇒ empty allow-list ⇒ everyone refused), and a table of which endpoints carry which tier. This exists because **the OpenAPI spec advertises only `HTTPBearer` and cannot express the upper two tiers**, so the spec understates the protection on the destructive admin endpoints — an earlier audit read the spec and concluded `DELETE /api/admin/mock-data/wipe` was unguarded. It is not; the guard was verified present on both admin endpoints. Corrected the Authentication section's list of endpoints not requiring a Bearer token, which omitted `POST /api/auth/cleanup-expired-tokens` — that endpoint declares no dependencies at all, which is now stated in its Deprecated-endpoints entry and in Known Issue #8, with the caveat that whether it is deliberate remains unconfirmed. |
 | v1 | 2026-04-27 | Initial contract. Documents all live endpoints from `main.py`, target state for REQ-002/003/004/005 with `🚧 In-flight` tags, deprecated endpoints, and known backend issues. |
 | v1.1 | 2026-05-21 | Renamed `aspect_category` enum value `"ofsted"` → `"strategic"` wherever it appears as a request body field, response field, or query param (List Aspects, Create Aspect, Update Aspect, Analytics Trends) and in JSON examples. Allowed values are now `"operational"` / `"strategic"`. |
@@ -2055,7 +2066,7 @@ Admin/cron utility. Not called by the frontend.
 | v1.5 | 2026-05-28 | Doc reconciliation pass. Dropped `🚧 In-flight — REQ-002/003/005` tags from `GET /api/dashboard/schools` `view` param and `school_type` / `is_central_office` / `actions` / `evidence_count` fields — all now shipped. Marked Known Issue #1 (dashboard placeholder-comment defect) as **Resolved**. No new endpoints, no shape changes. |
 | v1.6 | 2026-05-28 | REQ-002 rework. `actions` is no longer a free-text field on `assessments` — it's now a checklist of items in a new `assessment_actions` child table, managed via four new endpoints (§32a-d: `GET`/`POST` list/create + `PUT`/`DELETE` per item). `GET /api/dashboard/schools` returns `outstanding_actions_count` (integer) in place of the old `actions` (string). `GET /api/assessments/{id}` and `GET /api/assessments/by-aspect/{aspect_code}` no longer document `actions`; both now return `standard_type` on the per-standard rows. Known Issues #10, #11, #13 resolved. |
 | v1.7 | 2026-05-30 | Removed stale `actions` field references from §25 and §26 (the actions work shipped as dedicated endpoints in §32a–d, not as a field on the assessment write endpoints). Doc-only cleanup; no shape change to deployed endpoints. |
-| v1.8 | 2026-05-30 | Promoted the Evidence section (endpoints §28–31) from `🚧 In-flight — REQ-003` to live. REQ-003 shipped some time ago; preamble and section header updated to present tense. No endpoint-shape changes. |
+| v1.8 | 2026-05-30 | ~~Promoted the Evidence section (endpoints §28–31) from `🚧 In-flight — REQ-003` to live. REQ-003 shipped some time ago; preamble and section header updated to present tense. No endpoint-shape changes.~~ **This entry was wrong and is retracted — see v2.7 (2026-08-26). REQ-003 never shipped; the four endpoints have never existed. The `🚧 In-flight` tag should not have been removed.** |
 | v1.9 | 2026-05-30 | Renumbered the four action-checklist endpoints from §31a–d to §32a–d to resolve a section-number collision with §31 (`DELETE /evidence/{evidence_id}`). Cross-references updated in §23, §24, §25, §26, Known Issues #10/#11/#13, and the v1.6/v1.7 changelog entries. Endpoint shapes and paths unchanged — only the doc section numbers. |
 | v2.0 | 2026-05-30 | `GET /api/dashboard/schools` (§27) now returns two new per-school fields alongside `current_score`: `assurance_score` (raw average of assurance-type ratings) and `risk_score` (raw average of risk-type ratings). Both are `number \| null` — null when no standards of that type exist for the school. All three scores read "higher is better" on a 1–4 scale; `current_score` remains the only polarity-corrected one. Additive change — no existing field shape modified. |
 | v2.1 | 2026-05-30 | `GET /api/dashboard/schools` (§27): simplified `current_score` and `intervention_required` to plain rating-based formulas. `current_score` is now `AVG(rating)` over all standards (was: risk ratings inverted via `5 - rating` before averaging). `intervention_required` now counts standards with `rating <= 2` (was: a polarity-branched check that flagged risk ratings >= 3). Both formulas were carrying obsolete polarity logic — under the current label convention (rating 4 = best for both `assurance` and `risk`, see `rating-labels.ts` and data-model bible §2.5), the inversion and branching produced wrong numbers. No shape changes; values shift toward the directionally correct semantics. |
