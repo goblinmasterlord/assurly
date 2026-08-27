@@ -69,7 +69,7 @@ import {
 } from "@/components/ui/skeleton-loaders";
 import { getAspectDisplayName, calculateSchoolStatus, getStatusColor, getStatusIcon } from "@/lib/assessment-utils";
 import { aspectCodeToCategory } from "@/lib/data-transformers";
-import { getStatusLabel } from "@/utils/assessment";
+import { getStatusLabel, isOverdue } from "@/utils/assessment";
 import {
   getPerformanceBandBadgeClasses,
   PERFORMANCE_BAND_LABELS,
@@ -840,14 +840,45 @@ export function SchoolPerformanceView({ assessments, refreshAssessments, isLoadi
     // Use optimistic filters when pending, otherwise use actual filters
     const activeFilters = isPending ? optimisticFilters : filters;
 
-    // Aspect filter: keep matching schools and narrow assessmentsByCategory so expanded
-    // rows only show selected aspects (REQ-008). Status still school-scoped until REQ-009.
+    const aspectMatchesStatus = (
+      cat: SchoolPerformance["assessmentsByCategory"][number],
+      status: string
+    ): boolean => {
+      switch (status) {
+        case "completed":
+          return cat.status === "completed";
+        case "in-progress":
+          return cat.status === "in_progress";
+        case "not-started":
+          return cat.status === "not_started";
+        case "overdue":
+          return isOverdue({
+            status: cat.status,
+            due_date: cat.dueDate ?? null,
+          });
+        default:
+          return false;
+      }
+    };
+
+    // Aspect/status filters narrow assessmentsByCategory so expanded rows show only
+    // matching aspects; schools with no remaining aspects are dropped (REQ-008/009).
     let filtered = schoolPerformanceData
       .map((school) => {
-        if (activeFilters.category.length === 0) return school;
-        const assessmentsByCategory = school.assessmentsByCategory.filter((cat) =>
-          activeFilters.category.includes(cat.category)
-        );
+        let assessmentsByCategory = school.assessmentsByCategory;
+
+        if (activeFilters.category.length > 0) {
+          assessmentsByCategory = assessmentsByCategory.filter((cat) =>
+            activeFilters.category.includes(cat.category)
+          );
+        }
+
+        if (activeFilters.status.length > 0) {
+          assessmentsByCategory = assessmentsByCategory.filter((cat) =>
+            activeFilters.status.some((status) => aspectMatchesStatus(cat, status))
+          );
+        }
+
         return { ...school, assessmentsByCategory };
       })
       .filter((school) => {
@@ -862,17 +893,8 @@ export function SchoolPerformanceView({ assessments, refreshAssessments, isLoadi
         )
       );
 
-      const matchesStatus = activeFilters.status.length === 0 || activeFilters.status.some(status => {
-        return school.assessmentsByCategory.some(cat => {
-          switch (status) {
-            case "completed": return cat.status === "completed";
-            case "in-progress": return cat.status === "in_progress";
-            case "not-started": return cat.status === "not_started";
-            case "overdue": return cat.status === "not_started"; // Overdue is derived, not stored
-            default: return false;
-          }
-        });
-      });
+      const matchesStatus =
+        activeFilters.status.length === 0 || school.assessmentsByCategory.length > 0;
 
       const matchesCategory =
         activeFilters.category.length === 0 || school.assessmentsByCategory.length > 0;
