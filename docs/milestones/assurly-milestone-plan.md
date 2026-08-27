@@ -1,7 +1,7 @@
 # Assurly — Milestone Plan
 
 **Suggested path:** `docs/milestones/assurly-milestone-plan.md`
-**Version:** 2.9
+**Version:** 2.10
 **Date:** 27 August 2026
 **Status:** Approved. M1 open.
 **Owner:** Product Owner
@@ -53,6 +53,7 @@ The agent confirms in its first response which documents it has read and which c
 5. **Document with code.** No change is complete until the API contract, data model bible and changelog reflect it. Docs ship in the same commit as the code.
 6. **Reflect.** Close each session with: what changed, what was deliberately not changed, what the next session needs to know, and any assumptions made.
 7. **Label provisional claims where the reader meets them.** A finding resting on an unverified assumption is marked provisional **at the point of the claim**, not only in the Assumptions section at the foot of the document. A reader who acts on the headline may never reach the footer.
+8. **Establish what an identifier actually contains before reasoning about a failure involving it.** Users report defects by the label they can see; the system routes on a value they cannot. Those are different strings, and reasoning about the reported one is the failure mode. Two sessions diagnosed the wrong character in REQ-010 because the display name was `IT & Data` while `aspect_code` — the value that actually becomes the id and the path segment — was `IT/DATA_OP`. Read the identifier itself: the column, the path segment, the key. Do not form a hypothesis about a string you have not looked at.
 
 ### 2.3 Sequencing gate
 
@@ -145,7 +146,7 @@ Internal is not further subdivided at this stage. Requirements below refer to th
 
 | ID | Milestone | Requirements | Gate |
 |---|---|---|---|
-| **M1** | Stabilise — live defects | AUD-001, DATA-001, DOC-001 → DOC-003, SEC-001, REQ-007 → REQ-012, REQ-027 → REQ-029 | None. Starts immediately. |
+| **M1** | Stabilise — live defects | AUD-001, DATA-001, DOC-001 → DOC-003, SEC-001, REQ-007 → REQ-012, REQ-027 → REQ-031 | None. Starts immediately. |
 | **M2** | Role model | REQ-013 | None |
 | **M3** | Assessment lifecycle | REQ-014 → REQ-016 | M2 complete |
 | **M4** | Evidence model | REQ-017 | **M2 and M3 complete** |
@@ -156,7 +157,7 @@ Internal is not further subdivided at this stage. Requirements below refer to th
 
 ### 4.1 Sequencing rationale
 
-- **M1 first.** Nine live defects, most of them cheap, all of them visible to the early adopter during the exact period they are being asked to trust the platform. (REQ-006 was retired into REQ-017; REQ-027, REQ-028 and REQ-029 added, plus DATA-001 as a manual data task — see §6.)
+- **M1 first.** Eleven live defects, most of them cheap, all of them visible to the early adopter during the exact period they are being asked to trust the platform. (REQ-006 was retired into REQ-017; REQ-027 → REQ-031 added, plus DATA-001 as a manual data task — see §6.)
 - **M2 second.** The role model is now load-bearing: the lifecycle rules in M3, the actions permissions in M7 and the read-only requirement all reference the three tiers. Building any of them before the tiers exist means encoding permissions twice.
 - **M5 before M7.** Aggregate scores are currently distorted by standards that do not apply to a given school. Comparative analytics built on that denominator will need rebuilding. Fix the denominator first.
 - **M3 before M7.** A historical series that cannot be corrected is not worth visualising.
@@ -435,7 +436,13 @@ Production data shows `aspect_code = 'IT/DATA_OP'`, giving `mat_aspect_id = 'HLT
 - **Update API contract §13.** Its current omission *accurately* documents a deficient endpoint, so this is a genuine backend gap and **both the contract and the implementation change** — this is not a documentation-only correction.
 - **Remove the frontend's `|| new Date()` fallback** so a missing value renders as "—" rather than a plausible lie. `VersionHistoryModal.tsx:77` carries the same pattern.
 
-**Confirm what currently writes `updated_at` before implementing.** The column carries `CURRENT_TIMESTAMP on update`, and at least one handler also sets it explicitly (`main.py:1718`). Both paths must be accounted for, or the sort-order exclusion will be silently defeated by the column default.
+**Confirm what currently writes `updated_at` before implementing.** The column carries `CURRENT_TIMESTAMP on update`, and at least one handler also sets it explicitly. Both paths must be accounted for, or the sort-order exclusion will be silently defeated by the column default.
+
+> **Outcome — the third scope item required no code.** Five writers touch `updated_at`, and **all five are material**: the content edit in `PUT /api/standards/{id}`, both branches of delete (archive-rename and deactivate), reinstate, and the column's own `ON UPDATE CURRENT_TIMESTAMP` firing on the `current_version_id`-only write.
+>
+> **There is no `sort_order` write path in the backend at all** — the column appears in the INSERT and in `ORDER BY` clauses and nowhere else — so nothing bumps `updated_at` on a reorder and **there was nothing to stop.** The settled definition holds and is now in the contract; it was already satisfied **by accident**.
+>
+> That is not as comfortable as it sounds. The reason nothing bumps the timestamp on reorder is that **reorder does not persist at all** — see **REQ-030**. When that endpoint is built, the exclusion becomes real work rather than a happy coincidence, and REQ-030 carries it.
 
 ---
 
@@ -491,6 +498,46 @@ The user sees an unexplained server error on an operation the interface offered 
 **Scope:** Make the operation behave predictably when inactive standards reference the aspect. Whether that means widening the guard to count inactive standards, repointing them, or making the FK cascade on update is a design decision for that session — the audit establishes the failure, not the remedy.
 
 **Out of scope:** The `409`-on-active-standards behaviour, which is correct.
+
+---
+
+#### REQ-030 — Reordering standards has never been saved
+**Type:** Defect. **Backend and frontend.**
+
+**Problem:** The frontend persists drag-and-drop reordering by calling `POST /api/standards/reorder` (`assessment-service.ts:295`). **That endpoint does not exist anywhere in the backend** — not in the route table, and a repository-wide search for `reorder` in `assurly-backend/` returns nothing at all. **Confirmed by testing: reordering does not persist and never has.**
+
+The user drags a standard, the list reorders on screen, and the change is gone on reload.
+
+**Scope — backend: build the endpoint.**
+
+- Accepts a **set** of standards with their new `sort_order` values.
+- **Applies them in a single transaction.** Reorder is inherently multi-record, and a partial application leaves the list in an order **nobody chose** — worse than the current failure, which at least leaves the old order intact.
+- **Must not bump `updated_at`.** Reordering is not a material edit, per REQ-011's settled definition. Note the column carries `ON UPDATE CURRENT_TIMESTAMP`, so this is not automatic: an `UPDATE` touching only `sort_order` will still move the timestamp unless the statement sets `updated_at = updated_at` explicitly. **This is the one part of the endpoint that is easy to get wrong.**
+
+**Scope — frontend: surface the failure rather than swallowing it.** A reorder that cannot be saved must tell the user. Today the optimistic reorder is applied to local state and the rejection is not surfaced, which is why this went unnoticed.
+
+**Three paths share the `sort_order` field name and have different verdicts. Recorded together so they are not confused again:**
+
+| Path | State | Verdict |
+|---|---|---|
+| `POST /api/standards` (create) | `sort_order` sets a new standard's **initial position**. Legitimate and in use. | **Leave alone.** |
+| `PUT /api/standards/{id}` (update) | `MatStandardUpdate` declares `sort_order`; the handler **silently ignores it**. A request setting only `sort_order` returns `200` having changed nothing. | **Remove the field from the model.** Do not implement it — a single-record `PUT` is the wrong shape for a multi-record operation. |
+| `POST /api/standards/reorder` | Does not exist. | **Build it.** |
+
+> **Agreed, with a supporting reason.** API contract §16 (Update standard) **never documented `sort_order`** — the request-body table lists `standard_name`, `standard_description`, `standard_type` and `change_reason` only. So the field is undocumented dead weight in the model, not a documented capability being withdrawn, and **removing it needs no contract change**. It brings the model into line with a contract that was already correct.
+
+**Out of scope:** Reordering aspects, which is a separate surface and a separate endpoint.
+
+---
+
+#### REQ-031 — `VersionHistoryModal` still fabricates today's date
+**Type:** Defect. **Frontend, small.** **Assigned to the frontend agent.**
+
+**Problem:** `VersionHistoryModal.tsx:77` carries the same `|| new Date()` fabrication that REQ-011 removed from `SortableStandardCard.tsx`. Where the value is absent it renders today, which reads as data and is not.
+
+**Why it needs its own number:** both agents scoped it out — the backend brief covered the API, the frontend brief covered the standards card — so **it currently belongs to nobody**. It is named in the plan under REQ-011 and in both dev logs, and has still not been picked up.
+
+**Scope:** Show an em dash when the value is absent, matching the treatment now shipped on the standards card.
 
 ---
 
@@ -871,11 +918,13 @@ Not scheduled. Not to be picked up opportunistically.
 | REQ-008 | M1 | Frontend merged (`8390ecd`) — **pending gate 1**. No backend change required | — | ☑ | ☐ |
 | REQ-009 | M1 | Frontend merged (`9a6bda1`) — **pending gate 1**. Backend `MAX(due_date)` aggregate still outstanding | ☐ | ☑ | ☐ |
 | REQ-010 | M1 | Validation+encoding merged, **pending gate 1**; migration **required and unrun**, pending gate 2. Not complete until both | ☑ | ☑ | ☐ |
-| REQ-011 | M1 | Merged both halves (`b701b31`, backend `updated_at`) — **pending gate 1**. Reorder-write scope item was vacuous; see dev log | ☑ | ☑ | ☑ |
+| REQ-011 | M1 | Merged both halves plus `/inactive` — **pending gate 1**. Reorder-write scope item required no code; carried into REQ-030 | ☑ | ☑ | ☑ |
 | REQ-012 | M1 | Merged — **pending gate 1** (OpenAPI-spec confirmation needs a deploy) | ☑ | — | ☑ |
 | REQ-027 | M1 | Frontend merged (`43a92f7`) — live UAT **pending gate 1** | — | ☑ | ☐ |
 | REQ-028 | M1 | Ready — schedule with the REQ-010 migration | ☐ | — | ☐ |
 | REQ-029 | M1 | Ready — backend only | ☐ | — | ☐ |
+| REQ-030 | M1 | Ready — backend builds the endpoint, frontend surfaces the failure | ☐ | ☐ | ☐ |
+| REQ-031 | M1 | Ready — **frontend agent** | — | ☐ | ☐ |
 | DATA-001 | M1 | Ready — **product owner runs manually**, no code | — | — | ☐ |
 | REQ-013 | M2 | Ready | ☐ | ☐ | ☐ |
 | REQ-014 | M3 | Gated on M2 | ☐ | ☐ | ☐ |
@@ -898,6 +947,7 @@ Not scheduled. Not to be picked up opportunistically.
 
 | Version | Date | Change |
 |---|---|---|
+| 2.10 | 27 August 2026 | **REQ-030 added** to M1 (backend and frontend): the frontend persists drag-and-drop reordering by calling `POST /api/standards/reorder`, which **does not exist anywhere in the backend** — confirmed by testing, reordering has never persisted. Backend builds the endpoint, applying a set of `sort_order` values **in a single transaction** (a partial application leaves the list in an order nobody chose) and **without bumping `updated_at`**, which the `ON UPDATE CURRENT_TIMESTAMP` default makes a deliberate act rather than a default. Frontend surfaces the failure instead of swallowing it. Records the verdicts on all three paths sharing the `sort_order` name so they are not confused again: create is legitimate and stays; the `PUT` field is dead and is **removed from the model** rather than implemented, since a single-record `PUT` is the wrong shape for a multi-record operation; the reorder endpoint is built. Removing the `PUT` field needs **no contract change** — §16 never documented it, so the model was over-declaring against a contract that was already correct. **REQ-031 added** to M1 (frontend, small, assigned to the frontend agent): `VersionHistoryModal.tsx` still carries the `|| new Date()` fabrication REQ-011 removed from the standards card; both agents scoped it out, so it belonged to nobody. **REQ-011** records that its third scope item required no code — five writers touch `updated_at` and all are material, and there is no `sort_order` write path at all, so the settled definition was **already satisfied by accident**; the reason is that reorder does not persist, so REQ-030 inherits the real work. **§2.2 gains point 8:** establish what an identifier actually contains before reasoning about a failure involving it — users report by the visible label, the system routes on a value they cannot see, and reasoning about the reported string is the failure mode. Appended rather than inserted, so existing §2.2.7 references stay valid. |
 | 2.9 | 27 August 2026 | **REQ-010's `IT & Data` case is settled, and both hypotheses recorded in v2.8 were wrong.** Production shows `aspect_code = 'IT/DATA_OP'` — **the failing character is a forward slash in the identifier, not the ampersand in the display name**, which is why two sessions diagnosed the wrong character: users report by display name. This is the exception v2.8 itself identified, so **the v2.8 split is reversed on this point — the migration is REQUIRED, not hygiene, and is the only fix for the reported symptom.** `IT\DATA_ST` remains the encoding case, so the two failing aspects fail for two different reasons. The decode mechanism is marked provisional per §2.2.7, to be confirmed against that row after gate 2. **The minting convention is recorded as settled**, correcting an earlier assumption here: `{MAT}-{aspect_code}` is the current path and UUIDs are older, evidenced by both broken rows being `is_custom = 1` in `{MAT}-{CODE}` form. **Consequence: the character validation is not defence-in-depth but the only control preventing further unreachable rows, and is therefore the priority half of REQ-010, ahead of the migration.** HLT was seeded twice, which explains two id eras in `mat_aspects` where **the split does not track `is_custom`** — so **no code may infer anything from the shape of an id.** **§2.4** gains a standing constraint on identifier fields: constrained character set, backend-authoritative with the frontend mirroring only the message, display fields explicitly exempt, and encoding at every interpolation site. **REQ-029 added** to M1 (backend): `aspect_code` is stored mixed-case but `GET /api/standards` and `GET /api/assessments/by-aspect` filter case-sensitively, so those aspects return empty rather than erroring — a silent failure. **DATA-001 added** to M1 (no code, product owner runs it): HLT's `Mock aspect` is wrongly `is_custom = 0`, `Attendance & Behaviour` exists twice under `ab` and `anb`, and `Curriculum and Teaching` has a trailing space. **§2.7** makes explicit that a requirement split across gates is not complete in §8 until every gate containing it has passed. **§2.6** records that no artefact asserts a version — it exists only in dev log prose — and that a single source of truth is needed before 2.0. **§2.5** requires dev log entries for plan-edit sessions and starts the `Deployed:` field from this session. |
 | 2.8 | 26 August 2026 | Applied after the first implementation session; two of the corrections withdraw claims this plan itself made. **New §2.7 Test gates:** work merges continuously to `sprint-2.0` and deploys at gates, not per commit; a gate bundles low-risk changes into one test pass, but anything touching schema, a data migration, or authentication or permissions deploys and is tested **alone**; the product owner runs the gate and declares the result, and **agents do not declare a gate passed**. **§2.6** clarified that a version bump records a **merge, not a deployment**, and the dev log template gains a **`Deployed:`** field so merged-with-an-unapplied-migration and running-in-production stop being indistinguishable; 1.43.1 and 1.43.2 stand. **REQ-027 harm corrected:** the duplicate-row risk was theoretical — `uk_assessment` holds and a production query returned no duplicates, so a second attempt is rejected by the constraint and the real harm is a confusing error after an apparent success. The priority was right; the reasoning was overstated. **REQ-010 migration premise corrected:** rows minted with unescaped characters do **not** stay broken without the migration — percent-encoding transmits the character faithfully and the encoding fix repairs them by itself, the sole exception being an id containing a literal `/`. REQ-010 is therefore **split** per §2.7 into a deployable half (encoding, validation) and a schedulable half (the migration), and is not done in §8 until both gates pass. The permitted set is recorded as settled at `^[A-Za-z0-9_]{2,10}$`, with the reason hyphen is excluded. The **`IT & Data`** case records its two surviving hypotheses — `is_active = 0`, or a renamed default aspect whose code is still `IT` — with external confirmation favouring the second and the settling query pending. **REQ-028 added** to M1 (backend, small): `delete_aspect` guards on active standards only but `fk_mat_standards_aspect` is `ON UPDATE NO ACTION`, so an aspect with only inactive standards fails the archive-rename and surfaces a generic 500; schedule with the REQ-010 migration as the same FK class. **Outstanding recorded in §8:** REQ-012's OpenAPI-spec confirmation and REQ-027's live UAT both need a deploy and are pending gate 1. **§7** records `users-service.ts:55` as the one remaining unencoded path interpolation, latent rather than broken. **§8 also reconciled against frontend work merged while these edits were being written** — REQ-008, REQ-009, REQ-011 and REQ-027 all have their frontend halves merged. Those rows reflect the frontend agent's own dev log entries, not a review of the code by the backend agent. **REQ-011's backend half is now blocking:** the card fallback has been removed, so every standard renders `Updated —` until `GET /api/standards` exposes `updated_at`. |
 | 2.7 | 26 August 2026 | **§2.2** gains point 7: provisional claims are labelled where the reader meets them, not only in an Assumptions section at the foot — added after an AUD-001 finding that flagged its own assumption in a footer and was then acted on as fact. **M4 gate set to "M2 and M3 complete"** in §4 and §6: M2 settles who may upload, M3 settles whether upload to a closed term is permitted, and the endpoints cannot enforce either before they exist. The removed "Q1 answered" clause is not restored. **REQ-017** records the settled limits (single file 25 MB, no count limit) and that **upload is built inside FastAPI** — the project runs exactly one Cloud Run service, which is the backend, with the frontend on Vercel; the previously open "where does upload live" question is closed, and the `.env.example` note calling upload handling "external" is flagged as stale (referring to code replaced 4 June 2026) for correction elsewhere. **REQ-007**: the manual test is complete — 180 of 180 assessments persisted their due date, so the 1,921 nulls are non-use and the create path is sound; the defect is confirmed as the by-aspect transform. Frontend scope gains the date selector modal being unclickable and keyboard-only. **REQ-027 added** to M1 (frontend): created assessments and their terms do not appear until a browser refresh despite a success toast, leading users to create duplicates; scope is cache invalidation on creation for the assessment and term lists, with the related deferred aspect-metrics invalidation edge case to be checked and reported but not fixed. **REQ-013** gains minimal `pytest` coverage in scope, limited to proving the external tier is blocked at endpoint level on every write route, with a note that no test infrastructure exists to extend, and records from SEC-001 that the standards, aspects and action-item DELETE routes are guarded by authentication alone. **M7** records that dashboard `evidence_count` has been structurally zero since it shipped and becomes meaningful only after REQ-017. **§7** records that API contract Known Issue #12 is understated — `standard_type` is missing from the versions array as well as the response dict — as a triage item; the contract was deliberately not amended. |
