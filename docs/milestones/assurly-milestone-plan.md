@@ -698,7 +698,7 @@ Not scheduled. Not to be picked up opportunistically.
 | DOC-001 | M1 | Complete | ☑ | — | ☑ |
 | DOC-002 | M1 | Held to M1 close | ☐ | — | ☐ |
 | DOC-003 | M1 | Ready — docs only | ☐ | — | ☐ |
-| SEC-001 | M1 | Ready | ☐ | — | ☐ |
+| SEC-001 | M1 | Complete — verified and documented | ☑ | — | ☑ |
 | REQ-006 | — | **Retired** — merged into REQ-017 | — | — | — |
 | REQ-007 | M1 | Ready | ☐ | ☐ | ☐ |
 | REQ-008 | M1 | Ready | ☐ | ☐ | ☐ |

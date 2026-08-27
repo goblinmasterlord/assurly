@@ -1,8 +1,8 @@
 # Assurly API Contract
 
 **Status:** Authoritative. Both backend (Claude Code) and frontend (Cursor) reference this doc.
-**Version:** v2.5
-**Last updated:** 4 June 2026
+**Version:** v2.6
+**Last updated:** 26 August 2026
 **Backend base URL:** `http://localhost:8000` (local) / `https://assurly-frontend-400616570417.europe-west2.run.app` (Cloud Run production)
 
 This document defines every HTTP endpoint the frontend calls. If the frontend needs a shape that isn't here, the fix is to **update this doc first**, then code follows. If the backend diverges from what's here, it's a backend bug.
@@ -23,7 +23,38 @@ Assurly uses passwordless magic-link authentication. The full flow:
 
 **JWT payload** includes `sub` (user_id), `email`, `mat_id`, `school_id`, `exp`, `iat`. Tokens expire after 1 hour.
 
-**All endpoints except `/api/auth/request-magic-link`, `/api/auth/verify/{token}`, and `/api/terms` require a valid Bearer token.** Unauthenticated requests receive `401`.
+**All endpoints except `/api/auth/request-magic-link`, `/api/auth/verify/{token}`, `/api/terms` and `/api/auth/cleanup-expired-tokens` require a valid Bearer token.** Unauthenticated requests receive `401`.
+
+`/api/auth/cleanup-expired-tokens` is listed here for accuracy, not by design — see **Authorisation tiers** below and Known Issue #8. It is not a frontend endpoint.
+
+### Authorisation tiers
+
+Authentication (a valid Bearer token) is not the same as authorisation. Three tiers exist in the backend, enforced by FastAPI dependencies. **The OpenAPI spec advertises only `HTTPBearer` and cannot express the second and third tiers, so the spec understates the protection on the endpoints that carry them. Read this table, not the spec, for the security posture.**
+
+| Tier | Dependency | Check | Rejection |
+|---|---|---|---|
+| **Authenticated** | `get_current_user` | Valid, unexpired JWT. | `401` |
+| **MAT administrator** | `verify_mat_admin` | `role_title == "MAT Administrator"`. | `403 "Only MAT Administrators can perform this action"` |
+| **Super admin** | `verify_super_admin` | Caller's email is on the `SUPER_ADMIN_EMAILS` allow-list. | `403 "Super admin access required"` |
+
+**The `SUPER_ADMIN_EMAILS` mechanism.** A comma-separated list of emails supplied as an environment variable, read once at import into a case-insensitive, whitespace-trimmed set. It is **not a database role**, so promoting or demoting a super admin is a deployment, not a data change. Quoting `assurly-backend/.env.example`:
+
+> Comma-separated emails granted access to `/api/admin/*` tooling (mock-data generate/wipe). Case-insensitive; whitespace trimmed. **Leave unset to deny everyone — no DB-level super-admin role exists.**
+
+**Deny by default.** An unset or empty `SUPER_ADMIN_EMAILS` produces an empty allow-list, and every caller is refused. Misconfiguration therefore fails closed, never open. `verify_super_admin` additionally depends on `get_current_user`, so a caller must hold a valid token *before* the allow-list is consulted — an anonymous request to a super-admin endpoint is rejected at the authentication layer with `401`, not at the allow-list with `403`.
+
+**Unauthorised attempts are logged at `WARNING`** with the caller's user ID, email and the requested path, so probing is visible in logs.
+
+**Which endpoints carry which tier:**
+
+| Tier | Endpoints |
+|---|---|
+| Super admin | `POST /api/admin/mock-data/generate`, `DELETE /api/admin/mock-data/wipe` |
+| MAT administrator | `DELETE /api/users/{user_id}` |
+| Authenticated | Everything else, including `DELETE /api/standards/{mat_standard_id}`, `DELETE /api/aspects/{mat_aspect_id}` and `DELETE /api/assessments/{assessment_id}/actions/{action_id}` |
+| **None** | `POST /api/auth/request-magic-link`, `GET /api/auth/verify/{token}` (both public by design), `GET /api/terms` (Known Issue #9), `POST /api/auth/cleanup-expired-tokens` (Known Issue #8) |
+
+> **Note on the delete endpoints in the Authenticated row.** Any authenticated user in the MAT may delete standards, aspects and action items. That is consistent with the Internal tier of the role model, which holds full write access within its MAT — it is not an oversight. The External (trustee/governor) tier, which must have no write access anywhere, **does not yet exist**; until it does, read-only access cannot be granted to anyone. That is REQ-013.
 
 ### MAT isolation
 
@@ -1867,7 +1898,9 @@ Authorization: Bearer <token>
 
 ### Admin tooling — mock data
 
-> ⚠️ **Super-admin only. Destructive operations.** Both endpoints below are gated by the `SUPER_ADMIN_EMAILS` allow-list (comma-separated emails, set via env var; see `assurly-backend/auth_config.py`). The standard MAT-administrator role does NOT grant access — this is a tighter tier. Unauthorised attempts are logged at WARNING.
+> ⚠️ **Super-admin only. Destructive operations.** Both endpoints below are gated by the `SUPER_ADMIN_EMAILS` allow-list (comma-separated emails, set via env var; see `assurly-backend/auth_config.py`). The standard MAT-administrator role does NOT grant access — this is a tighter tier. Unauthorised attempts are logged at WARNING. The mechanism, including its deny-by-default behaviour, is documented under **Conventions → Authorisation tiers**.
+>
+> **The OpenAPI spec does not show this gate.** It advertises `HTTPBearer` on these endpoints and nothing more, so a reader working from the spec alone would conclude that any authenticated user can wipe a MAT's assessments. They cannot — the guard is real and was verified present on both endpoints on 26 August 2026 — but the spec cannot express it.
 >
 > Not exposed in the frontend. Triggered manually via Swagger / curl when populating or clearing demo data for a MAT.
 
@@ -1981,7 +2014,11 @@ Returns a hardcoded `permissions` array and an empty `active_assessments` TODO. 
 
 ### `POST /api/auth/cleanup-expired-tokens` — NOT A FRONTEND ENDPOINT
 
-Admin/cron utility. No auth required (security concern). Not called by the frontend.
+Admin/cron utility. Not called by the frontend.
+
+**The handler declares no dependencies at all** (`main.py:777`) — no `get_current_user`, no tier check, nothing. It is not that the endpoint is authenticated-but-unauthorised; it is entirely open, and anyone who can reach the service can call it. Verified 26 August 2026 by enumerating the dependency list of every route in `main.py`; it is one of only four routes with no dependencies, and the only one of those four that is neither public by design nor already recorded as a known issue for a different reason.
+
+**Harm is low** — the endpoint deletes only already-expired magic-link tokens, which are useless by definition, so the worst outcome is unnecessary database load. It is nonetheless the only *unintentionally* unauthenticated endpoint in the API. See Known Issue #8. **Whether this is deliberate has not been confirmed** and is an open question for the product owner, not an assumption to be made either way.
 
 ---
 
@@ -1996,7 +2033,7 @@ Admin/cron utility. No auth required (security concern). Not called by the front
 | 5 | `GET /api/analytics/trends` | **Resolved 2026-06-04** (changelog v2.5). The dead `exceptional_count` / `exceptional` bucket counting impossible `rating = 5` rows has been dropped. | Resolved | — |
 | 6 | `GET /api/analytics/trends` response | `rating_distribution` still uses string keys (`inadequate`, `concerning`, `good`, `strong`). Keys are now polarity-neutral and aligned with the live 1–4 scale (as of v2.5), but the planned REQ-004 migration to integer keys (`1`, `2`, `3`, `4`) is still future work. | **Cosmetic** | REQ-004 |
 | 7 | `StandardRatingSubmission.rating` Pydantic comment | **Resolved 2026-06-04** (changelog v2.3). The `StandardRatingSubmission` model was deleted alongside the `POST /api/assessments/{assessment_id}/submit` endpoint that used it. | Resolved | — |
-| 8 | `POST /api/auth/cleanup-expired-tokens` (main.py ~L731) | No auth requirement on an admin/cron endpoint. Anyone can call it. | **Low security** | Standalone |
+| 8 | `POST /api/auth/cleanup-expired-tokens` (main.py:777) | No auth requirement on an admin/cron endpoint. Anyone can call it. **Confirmed 26 August 2026 (SEC-001):** the handler declares no dependencies at all. Harm is low — it deletes only already-expired tokens — but it is the only unintentionally unauthenticated endpoint in the API. Whether it is deliberate is unconfirmed. | **Low security** | Standalone |
 | 9 | `GET /api/terms` (main.py ~L2402) | No auth requirement. Only unprotected data endpoint. Terms are public reference data so risk is low, but inconsistent with other endpoints. | **Low** | Standalone |
 | 10 | `PUT /api/assessments/{assessment_id}` and `POST /api/assessments/bulk-update` | **Resolved 2026-05-28** — superseded by the REQ-002 rework. Actions are no longer a free-text field on the assessment; they live in the `assessment_actions` child table and are managed via the dedicated endpoints in §32a-d. | Resolved | — |
 | 11 | `GET /api/assessments/by-aspect/{aspect_code}` | **Resolved 2026-05-28** — `standard_type` is now added to the per-standard response dict. `actions` is no longer part of this payload (see §32a-d). | Resolved | — |
@@ -2009,6 +2046,7 @@ Admin/cron utility. No auth required (security concern). Not called by the front
 
 | Version | Date | Change |
 |---|---|---|
+| v2.6 | 2026-08-26 | **SEC-001.** Documentation only — no endpoint, shape or behaviour changed. Added a **Authorisation tiers** section under Conventions, documenting the three dependency-enforced tiers (`get_current_user`, `verify_mat_admin`, `verify_super_admin`), the `SUPER_ADMIN_EMAILS` mechanism and its **deny-by-default** behaviour (unset ⇒ empty allow-list ⇒ everyone refused), and a table of which endpoints carry which tier. This exists because **the OpenAPI spec advertises only `HTTPBearer` and cannot express the upper two tiers**, so the spec understates the protection on the destructive admin endpoints — an earlier audit read the spec and concluded `DELETE /api/admin/mock-data/wipe` was unguarded. It is not; the guard was verified present on both admin endpoints. Corrected the Authentication section's list of endpoints not requiring a Bearer token, which omitted `POST /api/auth/cleanup-expired-tokens` — that endpoint declares no dependencies at all, which is now stated in its Deprecated-endpoints entry and in Known Issue #8, with the caveat that whether it is deliberate remains unconfirmed. |
 | v1 | 2026-04-27 | Initial contract. Documents all live endpoints from `main.py`, target state for REQ-002/003/004/005 with `🚧 In-flight` tags, deprecated endpoints, and known backend issues. |
 | v1.1 | 2026-05-21 | Renamed `aspect_category` enum value `"ofsted"` → `"strategic"` wherever it appears as a request body field, response field, or query param (List Aspects, Create Aspect, Update Aspect, Analytics Trends) and in JSON examples. Allowed values are now `"operational"` / `"strategic"`. |
 | v1.2 | 2026-05-27 | `GET /api/assessments` response now includes `school_type` (string) and `is_central_office` (boolean) on each group row, sourced from the `schools` table. Restores the Trust/School selector on the Assessments screen. |
