@@ -133,7 +133,9 @@ export function SortableStandardCard({ standard, onEdit, onHistory, onDelete }: 
                         <div className="flex items-center gap-4 text-xs text-muted-foreground">
                             <span className="flex items-center">
                                 <History className="mr-1 h-3 w-3" />
-                                Updated {format(new Date(standard.updated_at || new Date()), 'MMM d, yyyy')}
+                                {standard.updated_at
+                                    ? `Updated ${format(new Date(standard.updated_at), 'MMM d, yyyy')}`
+                                    : 'Updated —'}
                             </span>
                         </div>
                     </div>

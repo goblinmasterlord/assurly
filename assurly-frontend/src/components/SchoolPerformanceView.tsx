@@ -68,7 +68,8 @@ import {
   InlineRefreshSkeleton 
 } from "@/components/ui/skeleton-loaders";
 import { getAspectDisplayName, calculateSchoolStatus, getStatusColor, getStatusIcon } from "@/lib/assessment-utils";
-import { getStatusLabel } from "@/utils/assessment";
+import { aspectCodeToCategory } from "@/lib/data-transformers";
+import { getStatusLabel, isOverdue } from "@/utils/assessment";
 import {
   getPerformanceBandBadgeClasses,
   PERFORMANCE_BAND_LABELS,
@@ -517,47 +518,19 @@ export function SchoolPerformanceView({ assessments, refreshAssessments, isLoadi
     { label: "Overdue", value: "overdue" }
   ];
 
-  // Create filter options for multi-select components - USE MAT-SPECIFIC ASPECTS
-  // Map aspect codes to category names for filtering compatibility with assessment.category
-  const categoryOptions: MultiSelectOption[] = aspects.map(aspect => {
-    // Map aspect_code to legacy category format (EDU -> education, HR -> hr, etc.)
-    const aspectCode = aspect.aspect_code.toUpperCase();
-    const categoryMap: Record<string, string> = {
-      'EDU': 'education',
-      'HR': 'hr',
-      'FIN': 'finance',
-      'EST': 'estates',
-      'GOV': 'governance',
-      'IT': 'it',
-      'IS': 'is',
-    };
-    const categoryValue = categoryMap[aspectCode] || aspectCode.toLowerCase();
-    
-    return {
-      label: aspect.aspect_name,
-      value: categoryValue
-    };
-  });
+  // Aspect filter values must match assessment.category (set via aspectCodeToCategory in transformers)
+  const categoryOptions: MultiSelectOption[] = aspects.map((aspect) => ({
+    label: aspect.aspect_name,
+    value: aspectCodeToCategory(aspect.aspect_code),
+  }));
 
   const uniqueSchools = [...new Set(filteredByTermAssessments.map(a => a.school?.id).filter(Boolean))];
 
-  // Map "category value" (e.g. education/hr/ld) to aspect metadata (name/category).
+  // Map category filter value → aspect metadata (same key as assessment.category)
   const categoryValueToAspect = useMemo(() => {
-    const categoryMap: Record<string, string> = {
-      EDU: "education",
-      HR: "hr",
-      FIN: "finance",
-      EST: "estates",
-      GOV: "governance",
-      IT: "it",
-      IS: "is",
-    };
-
     const map = new Map<string, Aspect>();
     aspects.forEach((aspect) => {
-      const aspectCode = aspect.aspect_code.toUpperCase();
-      const categoryValue = (categoryMap[aspectCode] || aspectCode.toLowerCase()).toLowerCase();
-      map.set(categoryValue, aspect);
+      map.set(aspectCodeToCategory(aspect.aspect_code), aspect);
     });
     return map;
   }, [aspects]);
@@ -866,8 +839,49 @@ export function SchoolPerformanceView({ assessments, refreshAssessments, isLoadi
   const filteredSchoolData = useMemo(() => {
     // Use optimistic filters when pending, otherwise use actual filters
     const activeFilters = isPending ? optimisticFilters : filters;
-    
-    let filtered = schoolPerformanceData.filter(school => {
+
+    const aspectMatchesStatus = (
+      cat: SchoolPerformance["assessmentsByCategory"][number],
+      status: string
+    ): boolean => {
+      switch (status) {
+        case "completed":
+          return cat.status === "completed";
+        case "in-progress":
+          return cat.status === "in_progress";
+        case "not-started":
+          return cat.status === "not_started";
+        case "overdue":
+          return isOverdue({
+            status: cat.status,
+            due_date: cat.dueDate ?? null,
+          });
+        default:
+          return false;
+      }
+    };
+
+    // Aspect/status filters narrow assessmentsByCategory so expanded rows show only
+    // matching aspects; schools with no remaining aspects are dropped (REQ-008/009).
+    let filtered = schoolPerformanceData
+      .map((school) => {
+        let assessmentsByCategory = school.assessmentsByCategory;
+
+        if (activeFilters.category.length > 0) {
+          assessmentsByCategory = assessmentsByCategory.filter((cat) =>
+            activeFilters.category.includes(cat.category)
+          );
+        }
+
+        if (activeFilters.status.length > 0) {
+          assessmentsByCategory = assessmentsByCategory.filter((cat) =>
+            activeFilters.status.some((status) => aspectMatchesStatus(cat, status))
+          );
+        }
+
+        return { ...school, assessmentsByCategory };
+      })
+      .filter((school) => {
       const matchesSearch = searchTerm === "" ||
         (school.school?.name || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
         (school.school?.code && school.school.code.toLowerCase().includes(searchTerm.toLowerCase()));
@@ -879,21 +893,11 @@ export function SchoolPerformanceView({ assessments, refreshAssessments, isLoadi
         )
       );
 
-      const matchesStatus = activeFilters.status.length === 0 || activeFilters.status.some(status => {
-        return school.assessmentsByCategory.some(cat => {
-          switch (status) {
-            case "completed": return cat.status === "completed";
-            case "in-progress": return cat.status === "in_progress";
-            case "not-started": return cat.status === "not_started";
-            case "overdue": return cat.status === "not_started"; // Overdue is derived, not stored
-            default: return false;
-          }
-        });
-      });
+      const matchesStatus =
+        activeFilters.status.length === 0 || school.assessmentsByCategory.length > 0;
 
-      const matchesCategory = activeFilters.category.length === 0 || activeFilters.category.some(category => {
-        return school.assessmentsByCategory.some(cat => cat.category === category);
-      });
+      const matchesCategory =
+        activeFilters.category.length === 0 || school.assessmentsByCategory.length > 0;
 
       const matchesSchool = activeFilters.school.length === 0 || activeFilters.school.includes(school.school?.id || '');
       
