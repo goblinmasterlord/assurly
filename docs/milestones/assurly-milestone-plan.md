@@ -738,7 +738,7 @@ Not scheduled. Not to be picked up opportunistically.
 | REQ-007 | M1 | Ready | ☐ | ☐ | ☐ |
 | REQ-008 | M1 | Ready | ☐ | ☐ | ☐ |
 | REQ-009 | M1 | Ready | ☐ | ☐ | ☐ |
-| REQ-010 | M1 | Ready | ☐ | ☐ | ☐ |
+| REQ-010 | M1 | Code fixed — **migration written, not run**; `IT & Data` still open | ☑ | ☑ | ☐ |
 | REQ-011 | M1 | Ready | ☐ | ☐ | ☐ |
 | REQ-012 | M1 | Backend fixed — **awaiting deploy verification** | ☑ | — | ☑ |
 | REQ-027 | M1 | Ready — frontend only | — | ☐ | ☐ |

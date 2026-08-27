@@ -26,7 +26,14 @@ import { type Aspect } from '@/types/assessment';
 
 const formSchema = z.object({
     aspect_name: z.string().min(3, 'Name must be at least 3 characters'),
-    aspect_code: z.string().min(2, 'Code must be at least 2 characters').max(10, 'Code must be less than 10 characters'),
+    // The code becomes part of mat_aspect_id ({MAT}-{CODE}), which travels in
+    // the URL path — see REQ-010. Keep this in step with ASPECT_CODE_PATTERN in
+    // the backend, which is authoritative.
+    aspect_code: z
+        .string()
+        .min(2, 'Code must be at least 2 characters')
+        .max(10, 'Code must be less than 10 characters')
+        .regex(/^[A-Za-z0-9_]+$/, 'Code can use only letters, digits and underscore'),
     aspect_description: z.string().optional(),
     aspect_category: z.enum(['strategic', 'operational']).optional(),
 });

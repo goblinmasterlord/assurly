@@ -8,6 +8,7 @@ import pymysql
 import os
 import logging
 import random
+import re
 from datetime import datetime, date
 from decimal import Decimal
 import uuid
@@ -278,6 +279,20 @@ class MatAspectBase(BaseModel):
     aspect_category: str = 'operational'  # 'strategic' or 'operational'
     sort_order: int = 0
 
+# mat_aspect_id is minted as {MAT}-{ASPECT_CODE}, and that id travels in the
+# URL path. A code containing a path separator therefore produces an id that
+# cannot be addressed: '/' adds a segment and '\' is rewritten to '/' by the
+# browser's URL parser, so the route stops matching and the caller sees a 404
+# on a row that exists (REQ-010). Constrain the code at the point it is
+# accepted rather than escaping the damage downstream.
+#
+# Permitted: ASCII letters, digits and underscore, 2-10 characters.
+# Hyphen is deliberately excluded: it separates {MAT}-{CODE} and marks the
+# '-deleted-<ts>' archive rename, so allowing it inside a code makes both
+# patterns ambiguous.
+ASPECT_CODE_PATTERN = re.compile(r'^[A-Za-z0-9_]{2,10}$')
+
+
 class MatAspectCreate(BaseModel):
     aspect_code: str
     aspect_name: str
@@ -285,6 +300,15 @@ class MatAspectCreate(BaseModel):
     aspect_category: str = 'operational'  # 'strategic' or 'operational'
     sort_order: int = 0
     source_aspect_id: Optional[str] = None  # If copying from default
+
+    @validator('aspect_code')
+    def validate_aspect_code(cls, v):
+        if not ASPECT_CODE_PATTERN.match(v or ''):
+            raise ValueError(
+                "aspect_code must be 2-10 characters using only letters, "
+                "digits and underscore (no spaces, hyphens or punctuation)"
+            )
+        return v
 
 class MatAspectUpdate(BaseModel):
     aspect_name: Optional[str] = None

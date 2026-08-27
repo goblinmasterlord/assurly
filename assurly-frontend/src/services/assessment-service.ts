@@ -66,7 +66,7 @@ export const getAssessments = async (filters?: {
  */
 export const getAssessmentById = async (assessmentId: string): Promise<Assessment> => {
   try {
-    const response = await apiClient.get<Assessment>(`/api/assessments/${assessmentId}`);
+    const response = await apiClient.get<Assessment>(`/api/assessments/${encodeURIComponent(assessmentId)}`);
     return transformAssessment(response.data);
   } catch (error) {
     console.error(`Failed to fetch assessment ${assessmentId}:`, error);
@@ -107,7 +107,7 @@ export const updateAssessment = async (
   update: AssessmentUpdate
 ): Promise<void> => {
   try {
-    await apiClient.put(`/api/assessments/${assessmentId}`, {
+    await apiClient.put(`/api/assessments/${encodeURIComponent(assessmentId)}`, {
       rating: update.rating,
       evidence_comments: update.evidence_comments
     });
@@ -188,7 +188,7 @@ export const getStandards = async (filters?: {
  */
 export const getStandardById = async (matStandardId: string): Promise<Standard> => {
   try {
-    const response = await apiClient.get<Standard>(`/api/standards/${matStandardId}`);
+    const response = await apiClient.get<Standard>(`/api/standards/${encodeURIComponent(matStandardId)}`);
     return transformStandard(response.data);
   } catch (error) {
     console.error(`Failed to fetch standard ${matStandardId}:`, error);
@@ -205,7 +205,7 @@ export const updateStandard = async (
   update: StandardUpdate
 ): Promise<void> => {
   try {
-    await apiClient.put(`/api/standards/${matStandardId}`, {
+    await apiClient.put(`/api/standards/${encodeURIComponent(matStandardId)}`, {
       standard_name: update.standard_name,
       standard_description: update.standard_description,
       standard_type: update.standard_type,
@@ -247,7 +247,7 @@ export const createStandard = async (data: {
  */
 export const deleteStandard = async (matStandardId: string): Promise<DeleteStandardResponse> => {
   try {
-    const response = await apiClient.delete<DeleteStandardResponse>(`/api/standards/${matStandardId}`);
+    const response = await apiClient.delete<DeleteStandardResponse>(`/api/standards/${encodeURIComponent(matStandardId)}`);
     return response.data;
   } catch (error) {
     console.error(`Failed to delete standard ${matStandardId}:`, error);
@@ -261,7 +261,7 @@ export const deleteStandard = async (matStandardId: string): Promise<DeleteStand
  */
 export const reinstateStandard = async (matStandardId: string): Promise<ReinstateResponse> => {
   try {
-    const response = await apiClient.post<ReinstateResponse>(`/api/standards/${matStandardId}/reinstate`);
+    const response = await apiClient.post<ReinstateResponse>(`/api/standards/${encodeURIComponent(matStandardId)}/reinstate`);
     return response.data;
   } catch (error) {
     console.error(`Failed to reinstate standard ${matStandardId}:`, error);
@@ -329,7 +329,7 @@ export const getAspects = async (filters?: {
  */
 export const getAspectById = async (matAspectId: string): Promise<Aspect> => {
   try {
-    const response = await apiClient.get<Aspect>(`/api/aspects/${matAspectId}`);
+    const response = await apiClient.get<Aspect>(`/api/aspects/${encodeURIComponent(matAspectId)}`);
     return transformAspect(response.data);
   } catch (error) {
     console.error(`Failed to fetch aspect ${matAspectId}:`, error);
@@ -374,7 +374,7 @@ export const updateAspect = async (
   }
 ): Promise<void> => {
   try {
-    await apiClient.put(`/api/aspects/${matAspectId}`, data);
+    await apiClient.put(`/api/aspects/${encodeURIComponent(matAspectId)}`, data);
   } catch (error) {
     console.error(`Failed to update aspect ${matAspectId}:`, error);
     throw new Error('Failed to update aspect. Please try again.');
@@ -387,7 +387,7 @@ export const updateAspect = async (
  */
 export const deleteAspect = async (matAspectId: string): Promise<DeleteAspectResponse> => {
   try {
-    const response = await apiClient.delete<DeleteAspectResponse>(`/api/aspects/${matAspectId}`);
+    const response = await apiClient.delete<DeleteAspectResponse>(`/api/aspects/${encodeURIComponent(matAspectId)}`);
     return response.data;
   } catch (error) {
     console.error(`Failed to delete aspect ${matAspectId}:`, error);
@@ -401,7 +401,7 @@ export const deleteAspect = async (matAspectId: string): Promise<DeleteAspectRes
  */
 export const reinstateAspect = async (matAspectId: string): Promise<ReinstateResponse> => {
   try {
-    const response = await apiClient.post<ReinstateResponse>(`/api/aspects/${matAspectId}/reinstate`);
+    const response = await apiClient.post<ReinstateResponse>(`/api/aspects/${encodeURIComponent(matAspectId)}/reinstate`);
     return response.data;
   } catch (error) {
     console.error(`Failed to reinstate aspect ${matAspectId}:`, error);
