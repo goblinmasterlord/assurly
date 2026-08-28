@@ -448,7 +448,7 @@ The migration would suspend foreign-key checks and rewrite primary keys across t
 >
 > **2. These two aspects cannot be safely deleted.** `delete_aspect` archive-renames the primary key, which would hit **exactly the foreign-key collision REQ-028 describes**. Deleting either is not a routine operation on these rows.
 >
-> **Keep the written migration script** — `docs/migrations/2026-08-26-REQ-010-aspect-code-sanitisation.sql`, to be moved to `docs/archive/` — against the possibility that either caveat becomes real.
+> **The written migration script is kept** at `docs/archive/2026-08-26-REQ-010-aspect-code-sanitisation.sql` (moved there in `c344a2e`) against the possibility that either caveat becomes real. Note `docs/migrations/` no longer exists — it held only this script.
 
 > ### ⚠️ The `%2F` decode diagnosis is DISPROVED. It must not be left standing as confirmed.
 >

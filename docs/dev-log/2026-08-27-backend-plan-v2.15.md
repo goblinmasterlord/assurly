@@ -108,6 +108,11 @@ rather than a matter of judgement per item.
   status row both still said "last in M1"; both corrected to M2.
 - Confirmed the mid-session "file modified on disk" notice was my own scripted edits, not a
   concurrent write, by checking `git status` and the branch head before continuing.
+- **Post-merge correction.** The product owner moved the migration script to `docs/archive/`
+  in `c344a2e` while this session was running. The plan's REQ-010 caveat still read "to be
+  moved to `docs/archive/`", which was stale the moment that landed; corrected to record the
+  actual location and the commit. `docs/migrations/` no longer exists — it held only that
+  script. Dev log references to the old path are historical and left alone.
 - **Not verified:** anything in production.
 
 ---
