@@ -1,7 +1,7 @@
 # Assurly — Milestone Plan
 
 **Suggested path:** `docs/milestones/assurly-milestone-plan.md`
-**Version:** 2.12
+**Version:** 2.13
 **Date:** 27 August 2026
 **Status:** Approved. M1 open.
 **Owner:** Product Owner
@@ -124,6 +124,32 @@ These do not join a bundle. The reasoning is that their failure modes are not ad
 
 **Each gate's checklist is derived from the requirements it contains** — the per-requirement verification notes are the raw material, not a separate document.
 
+#### Gate 3 — aspects work on `mat_aspects`
+
+Recorded here rather than under a single requirement because it spans three (**REQ-010**'s migration, **REQ-012**'s remaining endpoint, **REQ-028**) and the **ordering between them matters**.
+
+**Task 1 — DIAGNOSTIC, before any migration runs.**
+
+Three hypotheses for `GET /api/aspects/inactive` returning `[]` have now been disproved, and **the branch handler cannot produce `200` with an empty array**: it re-raises exceptions as `500` rather than swallowing them, it performs no post-fetch filtering between `fetchall()` and `return`, and no fourth route shadowing exists (`/inactive` at L2154 precedes the only parameterised `GET` at L2198). **The deployed behaviour is therefore not explicable by the branch code.**
+
+Run the **complete** handler query — the `LEFT JOIN aspects`, the computed `is_modified`, and the `standards_count` correlated subquery, **not the `WHERE` clause alone** — with `%s` bound to the JWT's `mat_id`, against the database the deployed service connects to.
+
+**If it returns the row, the fault is environmental and no amount of reading `main.py` will find it.**
+
+> **Do not read more code before running it.** Three rounds of reading have produced three disproved hypotheses. The remaining difference is between the code and its execution, and only execution will show it.
+
+**Task 2 — the migration, with a precondition.**
+
+> ⚠️ **A manual `UPDATE` against `mat_aspects` in Cloud SQL Studio reported success and did not persist**, which is consistent with **autocommit being disabled** on that connection.
+>
+> **The migration must therefore end with an explicit `COMMIT`, and must verify its effect by re-querying after the commit — not by trusting the statement result.** The existing script already ends with a commented-out `COMMIT;` and post-commit verification in §3; that is now a hard requirement rather than good practice.
+>
+> **A migration that reports success without applying is the worst available failure mode for this change.** It leaves the data broken, the operator believing it fixed, and the next person reading a plan that says it was done.
+
+Also verify **before** running: the migration's remaining target is `IT\DATA_ST` only, since `IT/DATA_OP` was repaired manually at gate 2. A primary-key rewrite matching zero rows should not be run.
+
+---
+
 **A requirement split across gates is not complete in §8 until every gate containing it has passed.** This is explicit and not a matter of judgement: a requirement with a deployable half and a schedulable half (see REQ-010) belongs to **two** gates, and passing the first does not close it. Half-shipped is not shipped.
 
 ---
@@ -146,7 +172,7 @@ Internal is not further subdivided at this stage. Requirements below refer to th
 
 | ID | Milestone | Requirements | Gate |
 |---|---|---|---|
-| **M1** | Stabilise — live defects | AUD-001, DATA-001, DOC-001 → DOC-003, SEC-001, REQ-007 → REQ-012, REQ-027 → REQ-037 | None. Starts immediately. |
+| **M1** | Stabilise — live defects | AUD-001, DATA-001, DOC-001 → DOC-003, SEC-001, REQ-007 → REQ-012, REQ-027 → REQ-038 | None. Starts immediately. |
 | **M2** | Role model | REQ-013 | None |
 | **M3** | Assessment lifecycle | REQ-014 → REQ-016 | M2 complete |
 | **M4** | Evidence model | REQ-017 | **M2 and M3 complete** |
@@ -157,7 +183,7 @@ Internal is not further subdivided at this stage. Requirements below refer to th
 
 ### 4.1 Sequencing rationale
 
-- **M1 first.** Sixteen live defects and enhancements, most of them cheap, all of them visible to the early adopter during the exact period they are being asked to trust the platform. (REQ-006 was retired into REQ-017; REQ-027 → REQ-037 added, plus DATA-001 as a manual data task — see §6.)
+- **M1 first.** Seventeen live defects and enhancements, most of them cheap, all of them visible to the early adopter during the exact period they are being asked to trust the platform. (REQ-006 was retired into REQ-017; REQ-027 → REQ-038 added, plus DATA-001 as a manual data task — see §6.)
 - **M2 second.** The role model is now load-bearing: the lifecycle rules in M3, the actions permissions in M7 and the read-only requirement all reference the three tiers. Building any of them before the tiers exist means encoding permissions twice.
 - **M5 before M7.** Aggregate scores are currently distorted by standards that do not apply to a given school. Comparative analytics built on that denominator will need rebuilding. Fix the denominator first.
 - **M3 before M7.** A historical series that cannot be corrected is not worth visualising.
@@ -397,8 +423,18 @@ Production data shows `aspect_code = 'IT/DATA_OP'`, giving `mat_aspect_id = 'HLT
 
 | Half | Contents | Gate | Fixes |
 |---|---|---|---|
-| **Validation + encoding** | Call-site `encodeURIComponent`; `aspect_code` validation in Pydantic and Zod. | Bundled — low risk, no schema or permissions change. | `IT\DATA_ST`, and **prevents any further unreachable rows** |
-| **Migration** | `docs/migrations/2026-08-26-REQ-010-aspect-code-sanitisation.sql`. | **Alone** — a data migration, so §2.7 bars it from a bundle. | `IT/DATA_OP`, the reported symptom |
+| **Validation + encoding** | Call-site `encodeURIComponent`; `aspect_code` validation in Pydantic and Zod. | **Gate 2 — PASSED.** | `IT\DATA_ST`, and **prevents any further unreachable rows** |
+| **Migration** | `docs/migrations/2026-08-26-REQ-010-aspect-code-sanitisation.sql`. | **Gate 3, alone** — a data migration, so §2.7 bars it from a bundle. | `IT/DATA_OP` — **but see below: already repaired manually** |
+
+> ### Gate 2 result — passed, and it converts the migration's justification from analysis to observation.
+>
+> **The forward slash is confirmed as the cause by direct test.** The aspect with `aspect_code = 'IT/DATA_OP'` could not be renamed through the interface. After its `aspect_code` was changed manually to `IT_DATA_OP`, **the rename succeeded.** One variable changed, one outcome changed.
+>
+> That matters beyond closing the question. Every previous statement about `%2F` decoding to `/` before Starlette routes was **analysis**, flagged provisional under §2.2.7 across three plan versions. It is now **observed**. The provisional label can come off.
+>
+> **Consequence — the migration's scope reduces to `IT\DATA_ST` alone.** `IT/DATA_OP` is already repaired by that manual change, so the row the migration was written for no longer needs it. **Verify that `IT\DATA_ST` still needs the migration before running it** — if it was also touched manually, the migration may have nothing to do, and running a primary-key rewrite that matches zero rows is a worse outcome than not running it.
+
+**REQ-010 remains OPEN.** Only its gate-2 half is complete; §2.7 keeps a split requirement open until every gate containing it has passed.
 
 **Both halves are required and neither substitutes for the other.** REQ-010 is not "done" in §8 until both gates have passed (§2.7). The migration rewrites primary keys under `fk_mat_standards_aspect` and `fk_assignments_aspect`, both `ON UPDATE NO ACTION`; per §2.4 the SQL and rollback note are written by an agent and applied manually.
 
@@ -644,6 +680,17 @@ The user drags a standard, the list reorders on screen, and the change is gone o
 
 ---
 
+#### REQ-038 — Aspect rename does not update the page header
+**Type:** Defect. **Frontend.**
+
+**Problem:** Renaming an aspect updates the name in the **aspects list** but not in the **page header**. The same applies to the aspect **description**. The write succeeds; one surface refreshes and another does not, so the interface disagrees with itself until a reload.
+
+**Cause, unconfirmed:** stale local state after a successful mutation — the header is presumably reading a copy captured before the update rather than the refreshed collection.
+
+**Same family as REQ-027**, which was stale-cache-after-create on the assessments surface. **Different surface, and possibly a different mechanism** — REQ-027 was an uninvalidated request cache, whereas this may be a component holding its own copy. **Check whether they share a cause and report.** If they do, the fix is one change; if not, fixing this by analogy to REQ-027 will miss.
+
+---
+
 #### DATA-001 — HLT tenant data cleanup
 **Type:** Data. **No code.** Run manually by the product owner.
 
@@ -654,6 +701,9 @@ Three defects in HLT's aspect data, found while investigating REQ-010 and REQ-02
 | `Mock aspect` | Marked `is_custom = 0`, as though it were a platform default. It is not. |
 | `Attendance & Behaviour` | **Exists twice**, under codes `ab` and `anb`. |
 | `Curriculum and Teaching` | **Trailing space** in `aspect_name`. |
+| `Mock aspect` | **`source_aspect_id` is an empty string, not NULL.** An anomalous foreign-key value — the column is `char(36) NULL` referencing `aspects.aspect_id`, where NULL means "no source" and `''` means "a source whose id is the empty string". |
+
+> **The empty-string `source_aspect_id` is the concrete instance of the two-definitions problem**, not merely untidy data. The computed `is_custom` used by `GET /api/aspects/{id}` and `PUT /api/aspects/{id}` tests `source_aspect_id IS NULL` — and `''` is **not** NULL, so those two endpoints classify this row as a **default**. The stored column happens to agree at `0`, so the disagreement is currently invisible; it stops being invisible the moment either value is corrected without the other. **Fix both together or neither.**
 
 **Do not write or run SQL for this under any requirement.** It is tenant data, the correct resolution for the duplicate is a product decision (which row survives, and what happens to anything referencing the other), and none of it is urgent.
 
@@ -1044,9 +1094,9 @@ Not scheduled. Not to be picked up opportunistically.
 | REQ-007 | M1 | Ready | ☐ | ☐ | ☐ |
 | REQ-008 | M1 | **Gate 1 PASSED** in production | — | ☑ | ☑ |
 | REQ-009 | M1 | Frontend **gate 1 PASSED**. Backend `MAX(due_date)` aggregate still outstanding | ☐ | ☑ | ☐ |
-| REQ-010 | M1 | Validation+encoding merged, **pending gate 1**; migration **required and unrun**, pending gate 2. Not complete until both | ☑ | ☑ | ☐ |
+| REQ-010 | M1 | **OPEN.** Encoding + validation **PASSED gate 2**. Migration unrun, **pending gate 3**, scope reduced to `IT\DATA_ST`. Not complete until both | ☑ | ☑ | ☐ |
 | REQ-011 | M1 | **Gate 1 PASSED**, both halves | ☑ | ☑ | ☑ |
-| REQ-012 | M1 | **OPEN.** Route order confirmed; `/standards/inactive` passed; **`/aspects/inactive` unverified** | ☑ | — | ☑ |
+| REQ-012 | M1 | **OPEN.** `/standards/inactive` passed; **`/aspects/inactive` returns `[]`, cause unknown** — gate 3 task 1 | ☑ | — | ☑ |
 | REQ-027 | M1 | **Gate 1 PASSED** in production | — | ☑ | ☑ |
 | REQ-028 | M1 | Ready — **normal M1 priority** (v2.11 reduction reversed). Ships with the REQ-010 migration | ☐ | — | ☐ |
 | REQ-029 | M1 | Ready — backend only | ☐ | — | ☐ |
@@ -1058,6 +1108,7 @@ Not scheduled. Not to be picked up opportunistically.
 | REQ-035 | M1 | **Pending a decision**, not investigation — schema change confirmed necessary | ☐ | ☐ | ☐ |
 | REQ-036 | M1 | **Lowest priority, last in M1.** Deferrable. Product decision first — do not implement. Depends on REQ-037 | — | ☐ | ☐ |
 | REQ-037 | M1 | Ready — frontend. Build the inactive aspects view | — | ☐ | ☐ |
+| REQ-038 | M1 | Ready — frontend. Check shared cause with REQ-027 | — | ☐ | ☐ |
 | DATA-001 | M1 | Ready — **product owner runs manually**, no code | — | — | ☐ |
 | REQ-013 | M2 | Ready | ☐ | ☐ | ☐ |
 | REQ-014 | M3 | Gated on M2 | ☐ | ☐ | ☐ |
@@ -1080,6 +1131,7 @@ Not scheduled. Not to be picked up opportunistically.
 
 | Version | Date | Change |
 |---|---|---|
+| 2.13 | 27 August 2026 | **Gate 2 result: REQ-010's encoding and validation half passes in production**, and the evidence **converts the migration's justification from analysis to observation.** The aspect with `aspect_code = 'IT/DATA_OP'` could not be renamed through the interface; after its code was changed manually to `IT_DATA_OP`, the rename succeeded. **The forward slash is confirmed as the cause by direct test** — the `%2F` decode mechanism carried a §2.2.7 provisional label across three plan versions and the label now comes off. **Consequence: the gate-3 migration's scope reduces to `IT\DATA_ST` alone**, since `IT/DATA_OP` is already repaired by that manual change; **verify that row still needs it before running**, because a primary-key rewrite matching zero rows should not be run. **REQ-010 remains OPEN** — only its gate-2 half is complete. **A Gate 3 block added to §2.7**, recorded at gate level rather than under one requirement because it spans three (REQ-010's migration, REQ-012's remaining endpoint, REQ-028) and the ordering between them matters. **Task 1 is diagnostic and comes before any migration runs:** three hypotheses for `/api/aspects/inactive` returning `[]` have been disproved and **the branch handler cannot produce a `200` with an empty array** — it re-raises as `500`, performs no post-fetch filtering, and has no fourth shadowing — so the deployed behaviour is not explicable by the branch code. Run the **complete** handler query, including the join, the computed `is_modified` and the `standards_count` subquery, with `%s` bound to the JWT's `mat_id`, against the database the deployed service connects to; if it returns the row the fault is environmental. **Do not read more code before running it.** **Task 2 adds a migration precondition:** a manual `UPDATE` against `mat_aspects` in Cloud SQL Studio **reported success and did not persist**, consistent with autocommit being disabled, so the migration **must end with an explicit `COMMIT` and must verify by re-querying after commit rather than trusting the statement result** — a migration that reports success without applying is the worst available failure mode for this change. **REQ-038 added** (M1, frontend): renaming an aspect updates the aspects list but not the page header, and the same applies to the description — stale local state after a successful mutation; same family as REQ-027 but a different surface, so check whether they share a cause and report. **DATA-001 gains a fourth row:** `Mock aspect` carries `source_aspect_id` as an **empty string rather than NULL**, an anomalous foreign-key value which is **the concrete instance of the two-definitions problem** — the computed `is_custom` tests `source_aspect_id IS NULL`, and `''` is not NULL, so the detail and update endpoints classify this row as a default while the stored column happens to agree; fix both together or neither. |
 | 2.12 | 27 August 2026 | **REQ-028 restored to normal M1 priority — the v2.11 reduction is reversed because its premise was wrong.** `StandardsManagement.tsx:408-419` exposes Delete Aspect gated on `is_custom`, and custom is exactly the branch that archive-renames the primary key and collides with `fk_mat_standards_aspect`. **The exposed path is the broken one and the safe path is hidden:** a custom aspect with zero active and one or more inactive standards produces a 500 from the UI today, with no useful message. It still ships with the REQ-010 migration per §2.7, since both turn on the same FK. **REQ-036 split** — it was two pieces of work of different natures under one number. REQ-036 is now **expose deletion for DEFAULT aspects only**: deletion is already fully wired for customs, so this is exposure rather than construction, and **a product decision first — do not implement, surface the decision**, since hiding deletion for platform templates may be deliberate. **REQ-037 added** (M1, frontend): **build the inactive aspects view.** No equivalent of `InactiveStandardsModal` exists for aspects, yet `use-standards-persistence.ts:328` tells users on deactivation that they can reinstate "from the inactive aspects section" — **the application promises a capability it does not have.** Model on `InactiveStandardsModal`. REQ-036 now depends on REQ-037, not the reverse: exposing deactivation for defaults without somewhere to see the result would hide rows the user cannot then reinstate. **Recorded that `/api/aspects/inactive` has almost certainly never had a consumer**, which is the clean explanation for why its route shadowing survived while the standards equivalent — which does have one — did not. **REQ-012** records that REQ-037 gives the endpoint its first real consumer and makes UI verification possible, while noting the direct call closes REQ-012 sooner and remains outstanding. **REQ-030** records that it is the **third** literal-after-parameterised shadowing in `main.py`, which makes it **a property of the file rather than three separate errors**, and that the fix must avoid re-committing it. **REQ-013's test scope gains a second assertion:** that every literal path precedes its parameterised sibling — a short test catching a defect class this codebase demonstrably produces. **That is now the second independent argument for building test infrastructure in M2**; the first was that the external tier's write-blocking is otherwise unprovable. **REQ-035 is pending a decision, not an investigation:** `mat_standards` has `created_by_user_id` and no `updated_by`, so a schema change is confirmed necessary; `assessments.updated_by` is the pattern to mirror and the only open question is whether to copy it. |
 | 2.11 | 27 August 2026 | **Gate 1 result recorded.** REQ-008, REQ-009 (frontend), REQ-011 (both halves) and REQ-027 **pass in production**. REQ-012's route ordering is **confirmed fixed against the live spec** and `/api/standards/inactive` passes — four deactivated defaults returned where previously none. Deleted **custom** standards are correctly excluded and the application warns at the point of deletion that customs are unrecoverable; **recorded as correct by design so it is not later "fixed"**. **`/api/aspects/inactive` is UNVERIFIED, not failed** — it was not exercised; one row is expected (`Mock aspect`), and **REQ-012 stays open** until it is called directly. **REQ-030 amended twice from gate 1:** the failure is a **405, not a 404** — `POST /api/standards/reorder` is matched by `GET /api/standards/{mat_standard_id}` with the id `reorder`, so the new endpoint **must be registered above the parameterised route**, the same shadowing class REQ-012 just fixed; and the frontend already surfaces the failure with an error toast, so frontend scope reduces to verifying the success path. **REQ-032 added** (frontend): the Assessments view truncates to 10 aspects with no pagination, scroll or total — silent truncation, fixed with a page-size selector, navigation, scrolling and a range/total counter. **REQ-033 added** (frontend): the application goes click-dead after deleting a standard until a full refresh, likely a dialog overlay that fails to unmount; investigate with REQ-007's unclickable date picker, which presents the same symptom, and report whether they share a cause. **REQ-034 added** (frontend, small): Expand All on Overview. **REQ-035 added** (backend then frontend): show who made the last update — **`mat_standards` has `created_by_user_id` but no `updated_by`, so this needs a schema change**; `assessments.updated_by` is the precedent to mirror, and the agent reports before implementing. **REQ-036 added** (frontend, lowest priority, last in M1, deferrable): aspect deletion — **corrected against the code, deletion is already exposed for *custom* aspects and missing only for defaults**, so the scope is exposure and a product decision, not building the flow. **REQ-028's reachability corrected**: the latent 500 is **not** unreachable — deletion is exposed for customs, which is exactly the archive-rename branch that triggers the FK failure; priority is lowered as instructed but the defect is user-facing. **REQ-013 gains** the role-determined default landing view: central team to Overview, school-based including Headteachers to Assessments, both reachable by everyone. **Open question recorded** under REQ-036: no `InactiveAspectsModal` exists while `InactiveStandardsModal` does, and a toast promises an "inactive aspects section" that was never built — so `/api/aspects/inactive` has likely never had a consumer, which explains why its shadowing went unnoticed. |
 | 2.10 | 27 August 2026 | **REQ-030 added** to M1 (backend and frontend): the frontend persists drag-and-drop reordering by calling `POST /api/standards/reorder`, which **does not exist anywhere in the backend** — confirmed by testing, reordering has never persisted. Backend builds the endpoint, applying a set of `sort_order` values **in a single transaction** (a partial application leaves the list in an order nobody chose) and **without bumping `updated_at`**, which the `ON UPDATE CURRENT_TIMESTAMP` default makes a deliberate act rather than a default. Frontend surfaces the failure instead of swallowing it. Records the verdicts on all three paths sharing the `sort_order` name so they are not confused again: create is legitimate and stays; the `PUT` field is dead and is **removed from the model** rather than implemented, since a single-record `PUT` is the wrong shape for a multi-record operation; the reorder endpoint is built. Removing the `PUT` field needs **no contract change** — §16 never documented it, so the model was over-declaring against a contract that was already correct. **REQ-031 added** to M1 (frontend, small, assigned to the frontend agent): `VersionHistoryModal.tsx` still carries the `|| new Date()` fabrication REQ-011 removed from the standards card; both agents scoped it out, so it belonged to nobody. **REQ-011** records that its third scope item required no code — five writers touch `updated_at` and all are material, and there is no `sort_order` write path at all, so the settled definition was **already satisfied by accident**; the reason is that reorder does not persist, so REQ-030 inherits the real work. **§2.2 gains point 8:** establish what an identifier actually contains before reasoning about a failure involving it — users report by the visible label, the system routes on a value they cannot see, and reasoning about the reported string is the failure mode. Appended rather than inserted, so existing §2.2.7 references stay valid. |
