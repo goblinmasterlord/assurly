@@ -52,7 +52,7 @@ export const createUser = async (userData: {
  */
 export const deleteUser = async (userId: string): Promise<void> => {
   try {
-    await apiClient.delete(`/api/users/${userId}`);
+    await apiClient.delete(`/api/users/${encodeURIComponent(userId)}`);
   } catch (error: any) {
     console.error('Failed to delete user:', error);
     const errorMessage = error.response?.data?.detail || error.message || 'Failed to deactivate user. Please try again.';
