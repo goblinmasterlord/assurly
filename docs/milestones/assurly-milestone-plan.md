@@ -1,7 +1,7 @@
 # Assurly — Milestone Plan
 
 **Suggested path:** `docs/milestones/assurly-milestone-plan.md`
-**Version:** 2.11
+**Version:** 2.12
 **Date:** 27 August 2026
 **Status:** Approved. M1 open.
 **Owner:** Product Owner
@@ -146,7 +146,7 @@ Internal is not further subdivided at this stage. Requirements below refer to th
 
 | ID | Milestone | Requirements | Gate |
 |---|---|---|---|
-| **M1** | Stabilise — live defects | AUD-001, DATA-001, DOC-001 → DOC-003, SEC-001, REQ-007 → REQ-012, REQ-027 → REQ-036 | None. Starts immediately. |
+| **M1** | Stabilise — live defects | AUD-001, DATA-001, DOC-001 → DOC-003, SEC-001, REQ-007 → REQ-012, REQ-027 → REQ-037 | None. Starts immediately. |
 | **M2** | Role model | REQ-013 | None |
 | **M3** | Assessment lifecycle | REQ-014 → REQ-016 | M2 complete |
 | **M4** | Evidence model | REQ-017 | **M2 and M3 complete** |
@@ -157,7 +157,7 @@ Internal is not further subdivided at this stage. Requirements below refer to th
 
 ### 4.1 Sequencing rationale
 
-- **M1 first.** Fifteen live defects and enhancements, most of them cheap, all of them visible to the early adopter during the exact period they are being asked to trust the platform. (REQ-006 was retired into REQ-017; REQ-027 → REQ-036 added, plus DATA-001 as a manual data task — see §6.)
+- **M1 first.** Sixteen live defects and enhancements, most of them cheap, all of them visible to the early adopter during the exact period they are being asked to trust the platform. (REQ-006 was retired into REQ-017; REQ-027 → REQ-037 added, plus DATA-001 as a manual data task — see §6.)
 - **M2 second.** The role model is now load-bearing: the lifecycle rules in M3, the actions permissions in M7 and the read-only requirement all reference the three tiers. Building any of them before the tiers exist means encoding permissions twice.
 - **M5 before M7.** Aggregate scores are currently distorted by standards that do not apply to a given school. Comparative analytics built on that denominator will need rebuilding. Fix the denominator first.
 - **M3 before M7.** A historical series that cannot be corrected is not worth visualising.
@@ -473,7 +473,9 @@ Production data shows `aspect_code = 'IT/DATA_OP'`, giving `mat_aspect_id = 'HLT
 >
 > **`GET /api/aspects/inactive` — UNVERIFIED, not failed.** It was simply not exercised; the retest covered the standards endpoint only. HLT has one inactive default aspect (`Mock aspect`, `is_custom = 0`, `is_active = 0`), so **one row is expected**. **REQ-012 remains open until that endpoint is called directly.**
 >
-> See also the open question under REQ-036: it is likely that **nothing in the application has ever called `/api/aspects/inactive`**, which would explain why the shadowing went unnoticed on that route.
+> **Why that endpoint in particular was never checked:** nothing in the application has ever called `/api/aspects/inactive` — see **REQ-037**. A defect in an endpoint with no consumer is invisible by construction, which is why this route's shadowing survived while the standards equivalent, backed by `InactiveStandardsModal`, did not.
+>
+> **Once REQ-037 ships, the aspects endpoint gains its first real consumer** and can be verified through the interface rather than by direct call. **That is not a reason to wait.** The direct call closes REQ-012 sooner and remains outstanding.
 
 **Frontend:** none. `getInactiveAspects` already calls the correct path (`assessment-service.ts:418`) and has been receiving a 404 from a correctly-formed request.
 
@@ -507,13 +509,15 @@ The user sees an unexplained server error on an operation the interface offered 
 
 **Same FK class as REQ-010's migration** — a PK rewrite under a non-cascading foreign key. **Schedule in the same session as that migration, per §2.7:** both concern the same constraint, and whoever loads that context should spend it once.
 
-> **Priority lowered — but read the reachability correction below before treating it as theoretical.**
+> ### Normal M1 priority. The v2.11 reduction is reversed — its premise was wrong.
 >
-> The intended basis for lowering priority was that no UI exposes aspect deletion, making the 500 reachable only by calling the endpoint directly. **That is not accurate.** `StandardsManagement.tsx:408-419` renders a **Delete Aspect** menu item, gated on `currentAspect.is_custom`. So deletion **is** exposed in the application — for **custom** aspects only.
+> v2.11 lowered this on the basis that no UI exposes aspect deletion, making the 500 reachable only by direct call. **`StandardsManagement.tsx:408-419` renders a Delete Aspect menu item, gated on `currentAspect.is_custom`.** Deletion is exposed — for **custom** aspects.
 >
-> That matters because **custom is precisely the branch that triggers this defect.** `delete_aspect` archive-renames the primary key for customs (`main.py:2397-2404`) and merely sets `is_active = 0` for defaults. The PK rewrite is the thing that collides with `fk_mat_standards_aspect`. **So the failure is reachable from the UI today**, for a custom aspect with zero active and one or more inactive standards.
+> **The exposed path is the broken one and the safe path is hidden.** `delete_aspect` archive-renames the primary key for customs (`main.py:2397-2404`) and merely sets `is_active = 0` for defaults. The PK rewrite is what collides with `fk_mat_standards_aspect` (`ON UPDATE NO ACTION`). So the only deletion a user can actually perform is the one that can fail — and the branch that cannot fail is the one hidden behind the `is_custom` gate.
 >
-> Priority is lowered as instructed and it still ships with the REQ-010 migration in the same session. **But it is user-facing, not merely direct-call, and the product owner may wish to revisit that on the corrected facts.**
+> **A custom aspect with zero active and one or more inactive standards produces a 500 from the UI today, with no useful message.** The user is told nothing beyond a generic server error, on an operation the interface offered them.
+>
+> **Restored to normal M1 priority.** It still ships with the REQ-010 migration in the same session per §2.7, since both turn on the same foreign key.
 
 **Scope:** Make the operation behave predictably when inactive standards reference the aspect. Whether that means widening the guard to count inactive standards, repointing them, or making the FK cascade on update is a design decision for that session — the audit establishes the failure, not the remedy.
 
@@ -549,7 +553,9 @@ The user drags a standard, the list reorders on screen, and the change is gone o
 
 > **Amended after gate 1 testing — two corrections.**
 >
-> **1. The failure is a `405`, not a `404`.** `POST /api/standards/reorder` is being matched by `GET /api/standards/{mat_standard_id}` with `mat_standard_id = "reorder"`; the path matches, the method does not, so Starlette answers `405 Method Not Allowed`. **The new endpoint must therefore be registered ABOVE the parameterised route** — the same shadowing class REQ-012 has just fixed for the two `/inactive` routes, and the third instance of it in this file. Registering it below would leave the `405` in place and look like the endpoint had not been built.
+> **1. The failure is a `405`, not a `404`.** `POST /api/standards/reorder` is being matched by `GET /api/standards/{mat_standard_id}` with `mat_standard_id = "reorder"`; the path matches, the method does not, so Starlette answers `405 Method Not Allowed`. **The new endpoint must therefore be registered ABOVE the parameterised route.** Registering it below would leave the `405` in place and look like the endpoint had not been built.
+>
+> **This is the THIRD literal-after-parameterised shadowing found in `main.py`**, after the two REQ-012 fixed. Three instances of one mistake in one file is **a property of the file, not three separate errors** — the file is long, routes are appended at the end, and nothing makes registration order visible to whoever is adding one. **The REQ-030 fix must avoid re-committing it**, which means placing the new route deliberately rather than at the end of the Standards block. See REQ-013's test scope for the check that would catch the fourth.
 >
 > **2. Frontend scope reduces.** The frontend **already surfaces the failure** with an error toast, so it is not swallowing anything. **Frontend scope is now: verify the success path** once the endpoint exists.
 
@@ -624,9 +630,13 @@ The user drags a standard, the list reorders on screen, and the change is gone o
 
 **Problem:** Standards show *when* they were last updated (REQ-011) but not *by whom*. The two questions are usually asked together.
 
-> ⚠️ **Establish the schema position first — the answer is already known and it is not free.** `mat_standards` records **`created_by_user_id`** but has **no `updated_by` column** (data model §11). So this **requires a schema change**, which per §2.4 means a migration written by an agent and applied manually, and per §2.7 a gate of its own.
+> ### Answered. **Pending a decision, not pending investigation.**
 >
-> **Report before implementing.** There is precedent to follow rather than invent: `assessments.updated_by` already exists as `char(36)` with FK `fk_assessments_updated_by` (`ON UPDATE CASCADE`, `ON DELETE SET NULL`), and the data model notes it is populated on UPDATE and NULL on initial INSERT. Mirroring that shape on `mat_standards` is the obvious proposal, but it is a proposal, not a decision.
+> `mat_standards` records **`created_by_user_id`** but has **no `updated_by` column** (data model §11). **A schema change is required** — that is settled, not open. Per §2.4 the migration is written by an agent and applied manually; per §2.7 it deploys and is tested alone.
+>
+> **The open question is narrower than it was:** whether to copy the existing pattern, not whether a migration is needed. `assessments.updated_by` already exists as `char(36)` with FK `fk_assessments_updated_by` (`ON UPDATE CASCADE`, `ON DELETE SET NULL`), populated on UPDATE and NULL on initial INSERT. **Mirroring it on `mat_standards` is the proposal.** The inconsistency between the two tables is itself the reason this costs a migration.
+>
+> **Do not open this with another audit.** The investigation is done; what is needed is a yes or no on the pattern.
 
 **Also note:** historical rows will have no value, exactly as `assessments.updated_by` does for rows predating its addition. The interface needs a defined treatment for "unknown" that is **not** a fabricated name — the REQ-011 lesson applies directly.
 
@@ -651,31 +661,40 @@ Three defects in HLT's aspect data, found while investigating REQ-010 and REQ-02
 
 ---
 
-#### REQ-036 — Aspect deletion is not exposed for default aspects
+#### REQ-036 — Expose deletion for DEFAULT aspects
 **Type:** Enhancement. **Frontend.** **Lowest priority in M1 — place last. Deferrable out of M1 if the milestone runs long.**
 
-**Problem, as corrected against the code.** The requirement was raised as "the application exposes no way to delete an aspect". That is **half right, and the half that is wrong changes the scope.**
+**Split from the original REQ-036 in v2.12**, which bundled two pieces of work with different natures under one number. Building the inactive-aspects view is now **REQ-037**. This requirement is the exposure question only.
 
-`StandardsManagement.tsx:408-419` renders a **Delete Aspect** dropdown item — gated on `currentAspect.is_custom`. So:
+**Position, established against the code.** Deletion is **already fully wired for custom aspects** — the menu item at `StandardsManagement.tsx:408-419`, the shared `DeleteConfirmationModal`, the handler, the toasts. `DELETE /api/aspects/{mat_aspect_id}` handles both kinds, deactivating defaults (`is_active = 0`, reinstatable) and archive-renaming customs (permanent).
 
 | Aspect type | Deletion exposed? |
 |---|---|
-| **Custom** | **Yes** — menu item, shared `DeleteConfirmationModal`, handler, toasts, all present and wired |
+| **Custom** | **Yes** — complete and working |
 | **Default** | **No** — the menu item is not rendered |
 
-`DELETE /api/aspects/{mat_aspect_id}` exists and handles both, deactivating defaults (`is_active = 0`, reinstatable) and archive-renaming customs (permanent).
+**So this is exposure, not construction. And it is a product decision first.**
 
-**So this is not "build the flow" — the flow exists. It is "expose it for defaults", which is smaller, and it is a product decision first.** Hiding deletion for platform defaults may well be deliberate: defaults are templates a MAT adopted, and deactivating one is a different act from deleting something the MAT authored. **Confirm the intent before building.**
+> **Do not implement. Surface the decision.** Hiding deletion for platform defaults may well be deliberate: a default is a template the MAT adopted, and deactivating it is a different act from deleting something the MAT authored. **Establish the intent before any code is written.** If the answer is "deliberate", this requirement closes with a note rather than a change.
 
-**Scope, if confirmed:** render the control for default aspects too, matching the standards deletion pattern — including the not-recoverable warning, which applies to **customs only** and must not be shown for defaults, since defaults are reinstatable.
+**Scope, only if the decision is to expose it:** render the control for default aspects, matching the standards pattern — and **not** showing the not-recoverable warning, which applies to customs only. Defaults are reinstatable, so warning otherwise would be false.
 
-> **Open question — resolve before scoping.** If no interface deletes default aspects, it is likely **no interface lists inactive ones either**, which would mean `/api/aspects/inactive` has **never had a consumer**.
->
-> **Partly confirmed already:** `InactiveStandardsModal.tsx` exists and calls `getInactiveStandards()`. There is **no** equivalent aspects component — the `admin/standards/` directory contains no `InactiveAspectsModal`. Meanwhile `use-standards-persistence.ts:328` tells the user on deactivation that "You can reinstate it later from the **inactive aspects section**" — **a section that does not exist.** (That toast is itself currently unreachable, since it fires only for reinstatable aspects, which are defaults, which cannot be deleted from the UI.)
->
-> **REQ-036 may therefore need an inactive-aspects view built rather than extended**, and that is a materially larger job than adding a menu item. Establish this before committing to the estimate. It also explains the gate 1 gap: nothing in the application has ever called `/api/aspects/inactive`, which is why its route shadowing went unnoticed.
+**Depends on REQ-037.** Exposing deactivation for defaults without an inactive-aspects view would deactivate rows the user then cannot see or reinstate.
 
 ---
+
+#### REQ-037 — Build the inactive aspects view
+**Type:** Defect. **Frontend.**
+
+**Problem:** **The application promises a capability it does not have.** On deactivating an aspect, `use-standards-persistence.ts:328` tells the user: *"Aspect has been deactivated. You can reinstate it later from the inactive aspects section."*
+
+**That section was never built.** `InactiveStandardsModal.tsx` exists for standards; there is **no equivalent for aspects** anywhere in `components/admin/standards/`.
+
+**Scope:** Build the inactive aspects view, **modelled on `InactiveStandardsModal`** — same shape, same placement, calling `GET /api/aspects/inactive` and offering reinstatement via `POST /api/aspects/{mat_aspect_id}/reinstate`. Both endpoints already exist.
+
+> **`/api/aspects/inactive` has almost certainly never had a consumer.** Nothing in the frontend calls `getInactiveAspects()`. **This is the clean explanation for the gate 1 gap**: the route-shadowing defect REQ-012 fixed sat on that endpoint unnoticed, while the standards equivalent — which *does* have a consumer in `InactiveStandardsModal` — would have been visible to anyone using the feature. A defect in an endpoint nobody calls is invisible by construction.
+
+**Note the current failure is silent, not loud.** The toast fires only for reinstatable aspects, which are defaults, which cannot presently be deleted from the UI at all (REQ-036) — so today the promise is unreachable rather than broken. **It becomes a visible lie the moment REQ-036 exposes deletion for defaults**, which is why REQ-036 depends on this and not the other way round.
 
 ### M2 — Role model
 
@@ -695,7 +714,14 @@ Three defects in HLT's aspect data, found while investigating REQ-010 and REQ-02
 - User management flow for inviting and assigning the external role.
 - **Role-determined default landing view.** Central team members land on **Overview**; school-based members, **including Headteachers**, land on **Assessments**. **Both views remain reachable by everyone — only the default differs.** This is a role-model concern and belongs with the tier work, not with the views themselves: putting it in either view's requirement would scatter the role logic across surfaces, which is the duplication §4.1 gives as the reason M2 precedes M3.
 
-**Scope — tests. Minimal `pytest` coverage is in scope for this requirement, limited to permission enforcement:** that the external tier is **blocked at endpoint level on every write route**. This is not a general test suite and must not grow into one — the claim being tested is the one the requirement stands or falls on, and it is the claim a UI demo cannot prove.
+**Scope — tests. Minimal `pytest` coverage is in scope for this requirement**, limited to two assertions:
+
+1. **Permission enforcement** — that the external tier is **blocked at endpoint level on every write route**. This is the claim the requirement stands or falls on, and the one a UI demo cannot prove.
+2. **Route ordering** — that **every literal path precedes its parameterised sibling**. A short test over the registered route table, and it catches a defect class this codebase **demonstrably produces**: three instances in `main.py` so far (the two `/inactive` routes REQ-012 fixed, and `POST /api/standards/reorder` under REQ-030).
+
+This is not a general test suite and must not grow into one.
+
+**These are now two independent arguments for building the test infrastructure in M2**, which matters because the infrastructure is the expensive part. The first is that the external tier's write-blocking is otherwise unprovable. The second is that route shadowing is silent — it produces a `404` or `405` that looks like a missing endpoint — and has already cost this programme three defects and two sessions of diagnosis.
 
 Note the starting position: **`assurly-backend/test_phase2_auth.py` is the only test file in the repository** (four tests, all auth primitives — JWT creation, MAT-wide access, response formatting, magic-link generation). Nothing covers authorisation. **There is no infrastructure to extend**, so REQ-013 carries the cost of establishing it as well as the cost of the tests themselves. Budget accordingly.
 
@@ -1022,15 +1048,16 @@ Not scheduled. Not to be picked up opportunistically.
 | REQ-011 | M1 | **Gate 1 PASSED**, both halves | ☑ | ☑ | ☑ |
 | REQ-012 | M1 | **OPEN.** Route order confirmed; `/standards/inactive` passed; **`/aspects/inactive` unverified** | ☑ | — | ☑ |
 | REQ-027 | M1 | **Gate 1 PASSED** in production | — | ☑ | ☑ |
-| REQ-028 | M1 | Ready — schedule with the REQ-010 migration | ☐ | — | ☐ |
+| REQ-028 | M1 | Ready — **normal M1 priority** (v2.11 reduction reversed). Ships with the REQ-010 migration | ☐ | — | ☐ |
 | REQ-029 | M1 | Ready — backend only | ☐ | — | ☐ |
 | REQ-030 | M1 | Ready — backend builds the endpoint **above** the parameterised route; frontend verifies the success path | ☐ | ☐ | ☐ |
 | REQ-031 | M1 | Ready — **frontend agent** | — | ☐ | ☐ |
 | REQ-032 | M1 | Ready — frontend | — | ☐ | ☐ |
 | REQ-033 | M1 | Ready — frontend. Investigate with REQ-007's modal | — | ☐ | ☐ |
 | REQ-034 | M1 | Ready — frontend, small | — | ☐ | ☐ |
-| REQ-035 | M1 | **Report before implementing** — needs a schema change | ☐ | ☐ | ☐ |
-| REQ-036 | M1 | **Lowest priority, last in M1.** Deferrable. Scope depends on an open question | — | ☐ | ☐ |
+| REQ-035 | M1 | **Pending a decision**, not investigation — schema change confirmed necessary | ☐ | ☐ | ☐ |
+| REQ-036 | M1 | **Lowest priority, last in M1.** Deferrable. Product decision first — do not implement. Depends on REQ-037 | — | ☐ | ☐ |
+| REQ-037 | M1 | Ready — frontend. Build the inactive aspects view | — | ☐ | ☐ |
 | DATA-001 | M1 | Ready — **product owner runs manually**, no code | — | — | ☐ |
 | REQ-013 | M2 | Ready | ☐ | ☐ | ☐ |
 | REQ-014 | M3 | Gated on M2 | ☐ | ☐ | ☐ |
@@ -1053,6 +1080,7 @@ Not scheduled. Not to be picked up opportunistically.
 
 | Version | Date | Change |
 |---|---|---|
+| 2.12 | 27 August 2026 | **REQ-028 restored to normal M1 priority — the v2.11 reduction is reversed because its premise was wrong.** `StandardsManagement.tsx:408-419` exposes Delete Aspect gated on `is_custom`, and custom is exactly the branch that archive-renames the primary key and collides with `fk_mat_standards_aspect`. **The exposed path is the broken one and the safe path is hidden:** a custom aspect with zero active and one or more inactive standards produces a 500 from the UI today, with no useful message. It still ships with the REQ-010 migration per §2.7, since both turn on the same FK. **REQ-036 split** — it was two pieces of work of different natures under one number. REQ-036 is now **expose deletion for DEFAULT aspects only**: deletion is already fully wired for customs, so this is exposure rather than construction, and **a product decision first — do not implement, surface the decision**, since hiding deletion for platform templates may be deliberate. **REQ-037 added** (M1, frontend): **build the inactive aspects view.** No equivalent of `InactiveStandardsModal` exists for aspects, yet `use-standards-persistence.ts:328` tells users on deactivation that they can reinstate "from the inactive aspects section" — **the application promises a capability it does not have.** Model on `InactiveStandardsModal`. REQ-036 now depends on REQ-037, not the reverse: exposing deactivation for defaults without somewhere to see the result would hide rows the user cannot then reinstate. **Recorded that `/api/aspects/inactive` has almost certainly never had a consumer**, which is the clean explanation for why its route shadowing survived while the standards equivalent — which does have one — did not. **REQ-012** records that REQ-037 gives the endpoint its first real consumer and makes UI verification possible, while noting the direct call closes REQ-012 sooner and remains outstanding. **REQ-030** records that it is the **third** literal-after-parameterised shadowing in `main.py`, which makes it **a property of the file rather than three separate errors**, and that the fix must avoid re-committing it. **REQ-013's test scope gains a second assertion:** that every literal path precedes its parameterised sibling — a short test catching a defect class this codebase demonstrably produces. **That is now the second independent argument for building test infrastructure in M2**; the first was that the external tier's write-blocking is otherwise unprovable. **REQ-035 is pending a decision, not an investigation:** `mat_standards` has `created_by_user_id` and no `updated_by`, so a schema change is confirmed necessary; `assessments.updated_by` is the pattern to mirror and the only open question is whether to copy it. |
 | 2.11 | 27 August 2026 | **Gate 1 result recorded.** REQ-008, REQ-009 (frontend), REQ-011 (both halves) and REQ-027 **pass in production**. REQ-012's route ordering is **confirmed fixed against the live spec** and `/api/standards/inactive` passes — four deactivated defaults returned where previously none. Deleted **custom** standards are correctly excluded and the application warns at the point of deletion that customs are unrecoverable; **recorded as correct by design so it is not later "fixed"**. **`/api/aspects/inactive` is UNVERIFIED, not failed** — it was not exercised; one row is expected (`Mock aspect`), and **REQ-012 stays open** until it is called directly. **REQ-030 amended twice from gate 1:** the failure is a **405, not a 404** — `POST /api/standards/reorder` is matched by `GET /api/standards/{mat_standard_id}` with the id `reorder`, so the new endpoint **must be registered above the parameterised route**, the same shadowing class REQ-012 just fixed; and the frontend already surfaces the failure with an error toast, so frontend scope reduces to verifying the success path. **REQ-032 added** (frontend): the Assessments view truncates to 10 aspects with no pagination, scroll or total — silent truncation, fixed with a page-size selector, navigation, scrolling and a range/total counter. **REQ-033 added** (frontend): the application goes click-dead after deleting a standard until a full refresh, likely a dialog overlay that fails to unmount; investigate with REQ-007's unclickable date picker, which presents the same symptom, and report whether they share a cause. **REQ-034 added** (frontend, small): Expand All on Overview. **REQ-035 added** (backend then frontend): show who made the last update — **`mat_standards` has `created_by_user_id` but no `updated_by`, so this needs a schema change**; `assessments.updated_by` is the precedent to mirror, and the agent reports before implementing. **REQ-036 added** (frontend, lowest priority, last in M1, deferrable): aspect deletion — **corrected against the code, deletion is already exposed for *custom* aspects and missing only for defaults**, so the scope is exposure and a product decision, not building the flow. **REQ-028's reachability corrected**: the latent 500 is **not** unreachable — deletion is exposed for customs, which is exactly the archive-rename branch that triggers the FK failure; priority is lowered as instructed but the defect is user-facing. **REQ-013 gains** the role-determined default landing view: central team to Overview, school-based including Headteachers to Assessments, both reachable by everyone. **Open question recorded** under REQ-036: no `InactiveAspectsModal` exists while `InactiveStandardsModal` does, and a toast promises an "inactive aspects section" that was never built — so `/api/aspects/inactive` has likely never had a consumer, which explains why its shadowing went unnoticed. |
 | 2.10 | 27 August 2026 | **REQ-030 added** to M1 (backend and frontend): the frontend persists drag-and-drop reordering by calling `POST /api/standards/reorder`, which **does not exist anywhere in the backend** — confirmed by testing, reordering has never persisted. Backend builds the endpoint, applying a set of `sort_order` values **in a single transaction** (a partial application leaves the list in an order nobody chose) and **without bumping `updated_at`**, which the `ON UPDATE CURRENT_TIMESTAMP` default makes a deliberate act rather than a default. Frontend surfaces the failure instead of swallowing it. Records the verdicts on all three paths sharing the `sort_order` name so they are not confused again: create is legitimate and stays; the `PUT` field is dead and is **removed from the model** rather than implemented, since a single-record `PUT` is the wrong shape for a multi-record operation; the reorder endpoint is built. Removing the `PUT` field needs **no contract change** — §16 never documented it, so the model was over-declaring against a contract that was already correct. **REQ-031 added** to M1 (frontend, small, assigned to the frontend agent): `VersionHistoryModal.tsx` still carries the `|| new Date()` fabrication REQ-011 removed from the standards card; both agents scoped it out, so it belonged to nobody. **REQ-011** records that its third scope item required no code — five writers touch `updated_at` and all are material, and there is no `sort_order` write path at all, so the settled definition was **already satisfied by accident**; the reason is that reorder does not persist, so REQ-030 inherits the real work. **§2.2 gains point 8:** establish what an identifier actually contains before reasoning about a failure involving it — users report by the visible label, the system routes on a value they cannot see, and reasoning about the reported string is the failure mode. Appended rather than inserted, so existing §2.2.7 references stay valid. |
 | 2.9 | 27 August 2026 | **REQ-010's `IT & Data` case is settled, and both hypotheses recorded in v2.8 were wrong.** Production shows `aspect_code = 'IT/DATA_OP'` — **the failing character is a forward slash in the identifier, not the ampersand in the display name**, which is why two sessions diagnosed the wrong character: users report by display name. This is the exception v2.8 itself identified, so **the v2.8 split is reversed on this point — the migration is REQUIRED, not hygiene, and is the only fix for the reported symptom.** `IT\DATA_ST` remains the encoding case, so the two failing aspects fail for two different reasons. The decode mechanism is marked provisional per §2.2.7, to be confirmed against that row after gate 2. **The minting convention is recorded as settled**, correcting an earlier assumption here: `{MAT}-{aspect_code}` is the current path and UUIDs are older, evidenced by both broken rows being `is_custom = 1` in `{MAT}-{CODE}` form. **Consequence: the character validation is not defence-in-depth but the only control preventing further unreachable rows, and is therefore the priority half of REQ-010, ahead of the migration.** HLT was seeded twice, which explains two id eras in `mat_aspects` where **the split does not track `is_custom`** — so **no code may infer anything from the shape of an id.** **§2.4** gains a standing constraint on identifier fields: constrained character set, backend-authoritative with the frontend mirroring only the message, display fields explicitly exempt, and encoding at every interpolation site. **REQ-029 added** to M1 (backend): `aspect_code` is stored mixed-case but `GET /api/standards` and `GET /api/assessments/by-aspect` filter case-sensitively, so those aspects return empty rather than erroring — a silent failure. **DATA-001 added** to M1 (no code, product owner runs it): HLT's `Mock aspect` is wrongly `is_custom = 0`, `Attendance & Behaviour` exists twice under `ab` and `anb`, and `Curriculum and Teaching` has a trailing space. **§2.7** makes explicit that a requirement split across gates is not complete in §8 until every gate containing it has passed. **§2.6** records that no artefact asserts a version — it exists only in dev log prose — and that a single source of truth is needed before 2.0. **§2.5** requires dev log entries for plan-edit sessions and starts the `Deployed:` field from this session. |
