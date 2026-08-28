@@ -1,7 +1,7 @@
 # Assurly — Milestone Plan
 
 **Suggested path:** `docs/milestones/assurly-milestone-plan.md`
-**Version:** 2.15
+**Version:** 2.16
 **Date:** 27 August 2026
 **Status:** Approved. M1 open.
 **Owner:** Product Owner
@@ -54,6 +54,7 @@ The agent confirms in its first response which documents it has read and which c
 6. **Reflect.** Close each session with: what changed, what was deliberately not changed, what the next session needs to know, and any assumptions made.
 7. **Label provisional claims where the reader meets them.** A finding resting on an unverified assumption is marked provisional **at the point of the claim**, not only in the Assumptions section at the foot of the document. A reader who acts on the headline may never reach the footer.
 8. **Establish what an identifier actually contains before reasoning about a failure involving it.** Users report defects by the label they can see; the system routes on a value they cannot. Those are different strings, and reasoning about the reported one is the failure mode. Two sessions diagnosed the wrong character in REQ-010 because the display name was `IT & Data` while `aspect_code` — the value that actually becomes the id and the path segment — was `IT/DATA_OP`. Read the identifier itself: the column, the path segment, the key. Do not form a hypothesis about a string you have not looked at.
+9. **In a multi-tenant system, establish which tenant a result belongs to before reasoning about whether the result is correct.** **An answer that is right for a different tenant is indistinguishable from a wrong answer.** Every authenticated endpoint here scopes on `mat_id` derived from the JWT, so "the endpoint returned the wrong thing" and "you asked as the wrong user" produce identical evidence. Ask which tenant the token is scoped to **first** — before the query, before the code, before the hypothesis.
 
 ### 2.3 Sequencing gate
 
@@ -178,7 +179,7 @@ Internal is not further subdivided at this stage. Requirements below refer to th
 | ID | Milestone | Requirements | Gate |
 |---|---|---|---|
 | **M1** | Stabilise — live defects | AUD-001, DATA-001, DOC-001 → DOC-003, SEC-001, REQ-007 → REQ-012, REQ-027 → REQ-031, REQ-033, REQ-038 | None. Starts immediately. |
-| **M2** | Role model, plus the additions displaced from M1 | REQ-013, REQ-032, REQ-034 → REQ-037 | None |
+| **M2** | Role model, plus the additions displaced from M1 | REQ-013, REQ-032, REQ-034 → REQ-037, REQ-039 | None |
 | **M3** | Assessment lifecycle | REQ-014 → REQ-016 | M2 complete |
 | **M4** | Evidence model | REQ-017 | **M2 and M3 complete** |
 | **M5** | Applicability | REQ-018 | None |
@@ -537,6 +538,23 @@ The migration would suspend foreign-key checks and rewrite primary keys across t
 >
 > **Why that endpoint in particular was never checked:** nothing in the application has ever called `/api/aspects/inactive` — see **REQ-037**. A defect in an endpoint with no consumer is invisible by construction, which is why this route's shadowing survived while the standards equivalent, backed by `InactiveStandardsModal`, did not.
 
+> ### ✅ v2.16 — RETIRED. Not fixed. **It was never a defect.**
+>
+> **`GET /api/aspects` returned six aspects, all with `mat_id = 'OLT'`. The call was authenticated as an OLT user, and OLT has six aspects.** The endpoint returned exactly what it should.
+>
+> `/api/aspects/inactive` filters on `mat_id` from the same JWT, and **OLT has no inactive default aspects** — `Mock aspect` belongs to **HLT**. **The empty array was correct behaviour throughout.** So was the 6-of-17 count: 17 is HLT's active row count, and the question was being asked as OLT.
+>
+> **What this cost: five hypotheses across four sessions** — route shadowing, MAT scoping mismatch, NULL flags, a swallowed exception, and an environmental mismatch — **three disproved by code reading, one by production query, on an endpoint that was working the whole time.**
+>
+> **Nobody asked which tenant the token was scoped to.** That is the part worth sitting with. The handler scopes on precisely that: `current_mat_id: str = Depends(get_current_mat)`, and `get_current_mat` returns `current_user.mat_id` from the JWT. It was read, quoted in a report, and used to *rule out* a MAT-scoping hypothesis — while the question "scoped to which MAT?" was never put.
+>
+> **Recorded as §2.2.9.** In a multi-tenant system, an answer that is right for a different tenant is indistinguishable from a wrong answer, and the two produce identical evidence.
+>
+> **REQ-012 closes once the same call is made as an HLT user and returns `Mock aspect`.** That is the only outstanding step.
+
+<details>
+<summary>Superseded — the v2.15 "widened defect" entry, retained because four sessions acted on it</summary>
+
 > ### ⚠️ v2.15 — the defect has WIDENED, and is no longer about the inactive endpoint.
 >
 > **Everything about the inactive handler checks out.** Run against production with `mat_id` bound to `'HLT'`, **the handler's complete query returns the qualifying row.** The SQL is correct, the data is correct, `is_modified` and `standards_count` compute correctly, and the `LEFT JOIN` to the `aspects` seed table drops nothing. The deployed build is current — `updated_at` is present in `MatStandardResponse` in the live spec — and the service's `DB_NAME` and `DB_USER` match the connection the query was run on. **The environmental hypothesis is dead too.**
@@ -552,6 +570,10 @@ The migration would suspend foreign-key checks and rewrite primary keys across t
 > **(2) decides what this is.** If the UI shows 17, the endpoint is broken and something else feeds the screen. **If it shows 6, the customer has been using a screen with most of its data missing** — and that is a different severity, a different disclosure question, and probably a different milestone position.
 >
 > **Four hypotheses have now been disproved** — route shadowing, MAT scoping, NULL flags, and the environment. **Add nothing further without evidence.** The next contribution to this defect is data, not another theory.
+
+</details>
+
+**The instruction above was right and still insufficient.** "Add nothing without evidence" was correctly followed, and the session still went nowhere — because the missing thing was not more evidence about the endpoint, it was one fact about the **question**. No amount of data about `mat_aspects` would have helped while the query was being asked as the wrong tenant.
 >
 > **Once REQ-037 ships, the aspects endpoint gains its first real consumer** and can be verified through the interface rather than by direct call. **That is not a reason to wait.** The direct call closes REQ-012 sooner and remains outstanding.
 
@@ -750,12 +772,31 @@ Note the starting position: **`assurly-backend/test_phase2_auth.py` is the only 
 > ### Moved from M1 at v2.15 — M1 scope closure.
 > The five requirements below are **additions, not defects**. They were raised during M1 and kept their ids; only their milestone changed. See §4.1 for the reasoning.
 
+#### REQ-039 — Nothing shows which MAT the displayed data belongs to
+**Type:** Defect. **Frontend and backend.** Belongs with REQ-013.
+
+**Problem:** **Neither the application nor the API response indicates which MAT the displayed data belongs to.** Every authenticated endpoint scopes on `mat_id` from the JWT, so every screen and every payload is tenant-specific — and none of them says which tenant.
+
+**This is not theoretical. It directly caused a four-session misdiagnosis** (see REQ-012): `GET /api/aspects` returned six rows, that was read as an endpoint under-returning against a 17-row table, and five hypotheses were raised and disproved before anyone established the call was authenticated as OLT rather than HLT. **An answer that is right for a different tenant is indistinguishable from a wrong answer** (§2.2.9), and nothing on screen or in the payload closes that gap.
+
+**The risk grows in M2.** The **superadmin tier is explicitly cross-tenant** (§3 — "scoped across tenants for the platform team"), so moving between MATs stops being an accident and becomes routine. A platform-team member acting on the wrong trust's data is a materially worse outcome than a confused debugging session.
+
+**Scope — frontend:** a **persistent tenant indicator, visible on every screen.** Not a settings page, not a tooltip — always in view, because the failure mode is not knowing you needed to check.
+
+**Scope — backend:** **report** whether collection endpoints should carry the `mat_id` they are scoped to, rather than leaving it inferable only from individual rows. Note the asymmetry that made this possible: `GET /api/aspects` returns `mat_id` on each row, so the information *was* present and still went unread, whereas an empty collection carries no rows and therefore no tenant at all — which is precisely the case that misled. **Report before implementing;** a top-level `mat_id` on collection responses is a contract change across many endpoints.
+
+**Belongs with REQ-013's role model work**, since superadmin is what makes it acute — and since whoever builds cross-tenant access should build the thing that shows which tenant you are in at the same time.
+
+---
+
 #### REQ-032 — Assessments view silently truncates to 10 aspects
 **Type:** Defect. **Frontend.**
 
 **Problem:** The Assessments view displays at most **10 aspects**, with **no pagination, no scroll and no total**. Nothing indicates that anything has been withheld, so users reasonably believe they are seeing everything.
 
 **Silent truncation of a list is worse than an error.** An error is noticed and worked around; a short list that looks complete is acted on. A MAT with more than ten aspects is currently making decisions from a partial view without knowing it.
+
+> **Unaffected by the v2.16 retirement, and its M2 placement stands.** This requirement's premise was questioned at v2.15 on the assumption that `GET /api/aspects` was under-returning. **It was not** — it returned six aspects because the caller was an OLT user and OLT has six. The truncation described here is a display defect on complete data, exactly as originally scoped.
 
 **Scope:**
 - Page size selector offering **10, 25 and 50**.
@@ -1141,13 +1182,14 @@ Not scheduled. Not to be picked up opportunistically.
 | REQ-009 | M1 | Frontend **gate 1 PASSED**. Backend `MAX(due_date)` aggregate still outstanding | ☐ | ☑ | ☐ |
 | REQ-010 | M1 | **CLOSED at gate 2.** Migration **retired** — see the standing caveats. Original cause remains unexplained | ☑ | ☑ | ☑ |
 | REQ-011 | M1 | **Gate 1 PASSED**, both halves | ☑ | ☑ | ☑ |
-| REQ-012 | M1 | **OPEN and WIDENED.** `/standards/inactive` passed. The aspects family **under-returns generally** — `GET /api/aspects` returns 6 of 17 active rows. Cause unknown; four hypotheses disproved | ☑ | — | ☑ |
+| REQ-012 | M1 | **OPEN, one step left.** The `/aspects/inactive` defect was **RETIRED — never a defect**; the call was authenticated as OLT. Closes on one call as an HLT user | ☑ | — | ☑ |
 | REQ-027 | M1 | **Gate 1 PASSED** in production | — | ☑ | ☑ |
 | REQ-028 | M1 | Ready — **normal M1 priority** (v2.11 reduction reversed). Ships with the REQ-010 migration | ☐ | — | ☐ |
 | REQ-029 | M1 | Ready — backend only | ☐ | — | ☐ |
 | REQ-030 | M1 | Ready — backend builds the endpoint **above** the parameterised route; frontend verifies the success path | ☐ | ☐ | ☐ |
 | REQ-031 | M1 | Ready — **frontend agent** | — | ☐ | ☐ |
-| REQ-032 | **M2** | Ready — frontend | — | ☐ | ☐ |
+| REQ-039 | **M2** | Ready — build with REQ-013. Backend half **reports before implementing** | ☐ | ☐ | ☐ |
+| REQ-032 | **M2** | Ready — frontend. Premise re-confirmed at v2.16 | — | ☐ | ☐ |
 | REQ-033 | M1 | Ready — frontend. Investigate with REQ-007's modal | — | ☐ | ☐ |
 | REQ-034 | **M2** | Ready — frontend, small | — | ☐ | ☐ |
 | REQ-035 | **M2** | **Pending a decision**, not investigation — schema change confirmed necessary | ☐ | ☐ | ☐ |
@@ -1176,6 +1218,7 @@ Not scheduled. Not to be picked up opportunistically.
 
 | Version | Date | Change |
 |---|---|---|
+| 2.16 | 27 August 2026 | **The `/api/aspects/inactive` defect is RETIRED. Not fixed — it was never a defect.** `GET /api/aspects` returned six aspects, **all with `mat_id = 'OLT'`**; the call was authenticated as an OLT user, and OLT has six aspects. `/api/aspects/inactive` filters on `mat_id` from the same JWT, and OLT has no inactive default aspects — `Mock aspect` belongs to **HLT**. **The empty array was correct behaviour throughout**, and so was the 6-of-17 count: 17 is HLT's figure, asked as OLT. **What it cost: five hypotheses across four sessions** — route shadowing, MAT scoping, NULL flags, a swallowed exception, an environmental mismatch — three disproved by code reading and one by production query, **on an endpoint that was working.** **Nobody asked which tenant the token was scoped to**, despite the handler scoping on precisely that, and despite `get_current_mat` being read, quoted, and used to rule a hypothesis out. **§2.2 gains rule 9:** in a multi-tenant system, establish which tenant a result belongs to before reasoning about whether it is correct — an answer right for a different tenant is **indistinguishable** from a wrong answer, and the two produce identical evidence. Appended as 9 rather than inserted, so existing §2.2.7 and §2.2.8 citations stay valid. **REQ-012 closes once the same call is made as an HLT user and returns `Mock aspect`.** **REQ-032 is unaffected and its M2 placement stands** — its premise was questioned at v2.15 on the assumption that `GET /api/aspects` was under-returning; it was not, so the truncation is a display defect on complete data exactly as scoped. **REQ-039 added** to M2 (frontend and backend, belongs with REQ-013): **nothing in the application or the API response indicates which MAT the displayed data belongs to.** This caused the misdiagnosis above, and the risk grows in M2 because the superadmin tier is explicitly cross-tenant, so moving between MATs becomes routine — a platform-team member acting on the wrong trust's data is materially worse than a confused debugging session. Frontend: a persistent tenant indicator visible on **every** screen. Backend: **report** whether collection endpoints should carry the `mat_id` they are scoped to, noting that per-row `mat_id` was present and still went unread, while an **empty** collection carries no rows and therefore no tenant at all — the case that actually misled. |
 | 2.15 | 27 August 2026 | **§2.4 gains a standing constraint: agents have no database access and never will.** They produce SQL for the product owner to run and interpret the results; they do not execute queries, migrations or diagnostics against any database. **A diagnostic requiring database access is written as a statement to hand over, not scoped as a task** — scoping one as a task produces a session that discovers its own inability and reports it, which is the whole of what it can do. **M1 SCOPE CLOSURE.** M1 is a stabilisation milestone that had accumulated feature work. **Five additions move to M2** — REQ-032 (pagination), REQ-034 (Expand All), REQ-035 (updater name), REQ-036 (expose default aspect deletion), REQ-037 (inactive aspects view). **Nothing renumbered:** requirements keep their ids and change milestone, and the blocks were relocated into §6's M2 section so the document does not claim otherwise. **What stays in M1 is what is broken:** REQ-007, REQ-009's backend half, REQ-028, REQ-029, REQ-030, REQ-033, REQ-038, the `/api/aspects/inactive` defect, DATA-001 and DOC-002. **The reasoning, recorded in §4.1:** M1 exists to make the platform trustworthy for the early adopter's return, and feature work displaces that — a milestone shipping an Expand All control alongside an unfixed 500 has misread its own purpose. **The `/api/aspects/inactive` defect has WIDENED and is no longer about the inactive endpoint.** Run against production with `mat_id` bound to `'HLT'`, the handler's complete query **returns the qualifying row**: SQL correct, data correct, `is_modified` and `standards_count` computing correctly, the `LEFT JOIN` dropping nothing, the deployed build current (`updated_at` present in the live spec) and `DB_NAME`/`DB_USER` matching the connection queried — **so the environmental hypothesis is dead too.** The larger finding: **`GET /api/aspects` returns 6 aspects for HLT, which has 17 active rows** — the **active** endpoint is dropping eleven, so **the aspects family is under-returning generally** and the single inactive row is presumably dropped by the same mechanism. **Pending: which six ids are returned, and whether the UI shows 17 or 6** — the second decides whether this is a broken endpoint or a screen the customer has been using with most of its data missing. **Four hypotheses now disproved** (route shadowing, MAT scoping, NULL flags, environment). **Add nothing further without evidence.** |
 | 2.14 | 27 August 2026 | **Retracts two claims made in v2.13.** ① **The failed manual `UPDATE` was not an autocommit failure.** MySQL stores a backslash as an escaped pair, so `WHERE aspect_code = 'IT\DATA_ST'` matches **zero rows** — and a zero-row `UPDATE` **succeeds**. It was later applied by matching on `aspect_name`. The general rule now recorded: **any statement matching a value containing a backslash must account for escape doubling**, verification queries included, since a verification query with the same flaw confirms a change that never happened. The post-commit re-query requirement is **kept** — verifying effect rather than trusting a statement result is right regardless of cause, and this episode argues for it better than autocommit did, because the statement genuinely succeeded and no error handling would have caught it. Recording the real cause matters: autocommit would have sent the next person to check connection settings, which are fine. ② **The `%2F` decode diagnosis is DISPROVED and the §2.2.7 provisional label should not have been removed.** `HLT-IT/DATA_OP` retains a forward slash in its primary key and renames successfully, which the diagnosis said was impossible; what changed was `aspect_code`, not the id. **The original cause is not established.** The surviving hypothesis — that the frontend builds the path from `aspect_code` rather than `mat_aspect_id` — is recorded as provisional **with the evidence against it**: every link in the call site chain on this branch passes `mat_aspect_id` and none reads `aspect_code`, so gate 3 must resolve the contradiction rather than confirm the hypothesis, and the failing step may not be the `PUT` at all. **The REQ-010 migration is RETIRED, not deferred.** Both primary keys still contain the bad characters, but their `aspect_code` values were corrected manually and both aspects now rename normally, carry assessments and behave correctly. The migration would suspend foreign-key checks and rewrite primary keys across two tables under `ON UPDATE NO ACTION` — the highest-risk operation in this programme — to fix nothing observable. **Two standing caveats recorded, not acted on:** these ids will still break future code that interpolates them into a path unencoded, and neither aspect can be safely deleted, since `delete_aspect` archive-renames the primary key and would hit exactly the REQ-028 collision. The script is kept against either becoming real. **REQ-010 CLOSES with gate 2** and no longer spans two gates; gate 3 keeps its diagnostic task and REQ-028. **Gate 2 evidence recorded as complete:** validation rejects `IT/DATA`, `IT\DATA`, `IT & Data` and single-character codes, accepts `TEST_01`; `Governance` renames normally; the Standards and Users admin views are unaffected across all eleven call sites. |
 | 2.13 | 27 August 2026 | ⚠️ **Two claims in this row are RETRACTED by v2.14: the `%2F` decode mechanism is disproved, not confirmed, and the failed manual `UPDATE` was escape doubling in a `WHERE` clause, not autocommit. The row is left as written because it records what was acted on.** — **Gate 2 result: REQ-010's encoding and validation half passes in production**, and the evidence ~~converts the migration's justification from analysis to observation.~~ The aspect with `aspect_code = 'IT/DATA_OP'` could not be renamed through the interface; after its code was changed manually to `IT_DATA_OP`, the rename succeeded. **The forward slash is confirmed as the cause by direct test** — the `%2F` decode mechanism carried a §2.2.7 provisional label across three plan versions and the label now comes off. **Consequence: the gate-3 migration's scope reduces to `IT\DATA_ST` alone**, since `IT/DATA_OP` is already repaired by that manual change; **verify that row still needs it before running**, because a primary-key rewrite matching zero rows should not be run. **REQ-010 remains OPEN** — only its gate-2 half is complete. **A Gate 3 block added to §2.7**, recorded at gate level rather than under one requirement because it spans three (REQ-010's migration, REQ-012's remaining endpoint, REQ-028) and the ordering between them matters. **Task 1 is diagnostic and comes before any migration runs:** three hypotheses for `/api/aspects/inactive` returning `[]` have been disproved and **the branch handler cannot produce a `200` with an empty array** — it re-raises as `500`, performs no post-fetch filtering, and has no fourth shadowing — so the deployed behaviour is not explicable by the branch code. Run the **complete** handler query, including the join, the computed `is_modified` and the `standards_count` subquery, with `%s` bound to the JWT's `mat_id`, against the database the deployed service connects to; if it returns the row the fault is environmental. **Do not read more code before running it.** **Task 2 adds a migration precondition:** a manual `UPDATE` against `mat_aspects` in Cloud SQL Studio **reported success and did not persist**, consistent with autocommit being disabled, so the migration **must end with an explicit `COMMIT` and must verify by re-querying after commit rather than trusting the statement result** — a migration that reports success without applying is the worst available failure mode for this change. **REQ-038 added** (M1, frontend): renaming an aspect updates the aspects list but not the page header, and the same applies to the description — stale local state after a successful mutation; same family as REQ-027 but a different surface, so check whether they share a cause and report. **DATA-001 gains a fourth row:** `Mock aspect` carries `source_aspect_id` as an **empty string rather than NULL**, an anomalous foreign-key value which is **the concrete instance of the two-definitions problem** — the computed `is_custom` tests `source_aspect_id IS NULL`, and `''` is not NULL, so the detail and update endpoints classify this row as a default while the stored column happens to agree; fix both together or neither. |
