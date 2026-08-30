@@ -350,8 +350,18 @@ class MatStandardUpdate(BaseModel):
     standard_name: Optional[str] = None
     standard_description: Optional[str] = None
     standard_type: Optional[str] = None  # 'assurance' or 'risk'
-    sort_order: Optional[int] = None
     change_reason: Optional[str] = None  # For version history
+    # sort_order removed (REQ-030). A single-record PUT is the wrong shape for
+    # reordering, which is multi-record by nature; POST /api/standards/reorder
+    # owns it. The field was declared and silently ignored, and §16 of the
+    # contract never documented it, so nothing on the wire changes.
+
+class StandardReorderItem(BaseModel):
+    mat_standard_id: str
+    sort_order: int
+
+class StandardReorderRequest(BaseModel):
+    standards: List[StandardReorderItem]
 
 class MatStandardResponse(MatStandardBase):
     mat_id: str
@@ -1356,6 +1366,90 @@ async def get_inactive_standards(
 
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to fetch inactive standards: {str(e)}")
+
+# Registered ABOVE the parameterised GET below, which is the convention this file
+# now follows after two route-shadowing defects (REQ-012). Note for anyone moving
+# it: the ordering is not what makes this endpoint reachable — Starlette prefers a
+# full match anywhere in the table over an earlier method-mismatch partial, so a
+# POST cannot be shadowed by a GET. What ordering protects is the future case of a
+# literal GET on this path, which the parameterised route below would swallow.
+@app.post("/api/standards/reorder", tags=["Standards"])
+async def reorder_standards(
+    request: StandardReorderRequest,
+    current_mat_id: str = Depends(get_current_mat),
+    current_user: UserResponse = Depends(get_current_user)
+):
+    """
+    Apply a new sort_order to a set of standards, all or nothing.
+
+    Reorder is inherently multi-record: a partial application leaves the list in
+    an order nobody chose, so every id is validated before anything is written and
+    the writes run inside one explicit transaction.
+
+    Does NOT move updated_at. That column carries ON UPDATE CURRENT_TIMESTAMP, so
+    the statement has to set it to itself or reordering would register as a
+    material edit and undo REQ-011's "Updated" semantics.
+    """
+    items = request.standards
+
+    if not items:
+        raise HTTPException(status_code=400, detail="No standards supplied to reorder")
+
+    ids = [item.mat_standard_id for item in items]
+    if len(set(ids)) != len(ids):
+        raise HTTPException(
+            status_code=400,
+            detail="Duplicate mat_standard_id in reorder request"
+        )
+
+    connection = None
+    try:
+        connection = get_db_connection()
+        cursor = connection.cursor()
+
+        # Validate the whole set before writing anything. MAT isolation is enforced
+        # here and again in the UPDATE, so an id belonging to another tenant is
+        # indistinguishable from one that does not exist.
+        placeholders = ", ".join(["%s"] * len(ids))
+        cursor.execute(f"""
+            SELECT mat_standard_id
+            FROM mat_standards
+            WHERE mat_standard_id IN ({placeholders}) AND mat_id = %s
+        """, (*ids, current_mat_id))
+
+        found = {row['mat_standard_id'] for row in cursor.fetchall()}
+        missing = [sid for sid in ids if sid not in found]
+        if missing:
+            connection.close()
+            raise HTTPException(
+                status_code=404,
+                detail=f"Standards not found for this MAT: {', '.join(missing)}"
+            )
+
+        # DB_CONFIG sets autocommit=True, so each statement would otherwise commit
+        # on its own and a failure midway would leave a partial reorder applied.
+        # BEGIN opens an explicit transaction regardless of the autocommit setting.
+        connection.begin()
+        cursor.executemany("""
+            UPDATE mat_standards
+            SET sort_order = %s, updated_at = updated_at
+            WHERE mat_standard_id = %s AND mat_id = %s
+        """, [(item.sort_order, item.mat_standard_id, current_mat_id) for item in items])
+        connection.commit()
+        connection.close()
+
+        return JSONResponse(content={
+            "message": "Standards reordered successfully",
+            "updated_count": len(items)
+        }, status_code=200)
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        if connection:
+            connection.rollback()
+            connection.close()
+        raise HTTPException(status_code=500, detail=f"Failed to reorder standards: {str(e)}")
 
 @app.get("/api/standards/{mat_standard_id}", tags=["Standards"])
 async def get_standard(

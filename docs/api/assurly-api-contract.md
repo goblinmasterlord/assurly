@@ -1,7 +1,7 @@
 # Assurly API Contract
 
 **Status:** Authoritative. Both backend (Claude Code) and frontend (Cursor) reference this doc.
-**Version:** v2.10
+**Version:** v2.11
 **Last updated:** 30 August 2026
 **Backend base URL:** `http://localhost:8000` (local) / `https://assurly-frontend-400616570417.europe-west2.run.app` (Cloud Run production)
 
@@ -756,6 +756,60 @@ Updates a standard's definition by creating a **new version** (immutable history
 
 **Response 400:** `"Cannot update inactive standard"`.
 **Response 404:** `"Standard not found"`.
+
+> **`sort_order` is not accepted here and never was.** The backend model declared the field and the handler silently ignored it; the field has been removed (REQ-030). **Reordering is `POST /api/standards/reorder` (§16a)** — a single-record `PUT` is the wrong shape for an operation that is multi-record by nature.
+
+---
+
+#### 16a. Reorder standards
+
+> Numbered `16a` rather than `17` deliberately: inserting a new `17` would renumber every endpoint after it and invalidate existing references.
+
+```
+POST /api/standards/reorder
+Authorization: Bearer <token>
+```
+
+**Auth:** required. MAT-isolated — every id must belong to the caller's MAT.
+
+Applies a new `sort_order` to a set of standards. **All or nothing:** every id is validated before anything is written, and the writes run in a single transaction. A partial application would leave the list in an order nobody chose.
+
+**Request body:**
+
+```json
+{
+  "standards": [
+    { "mat_standard_id": "HLT-AC1", "sort_order": 0 },
+    { "mat_standard_id": "HLT-AC2", "sort_order": 1 },
+    { "mat_standard_id": "HLT-AC3", "sort_order": 2 }
+  ]
+}
+```
+
+| Field | Type | Required | Notes |
+|---|---|---|---|
+| `standards` | array | yes | At least one item. |
+| `standards[].mat_standard_id` | string | yes | Must exist and belong to the caller's MAT. |
+| `standards[].sort_order` | integer | yes | The new position. Send the full set for the aspect; the endpoint applies exactly what it is given and infers nothing about ids you leave out. |
+
+**Response 200:**
+
+```json
+{
+  "message": "Standards reordered successfully",
+  "updated_count": 3
+}
+```
+
+**Response 400:** `"No standards supplied to reorder"` — empty array.
+**Response 400:** `"Duplicate mat_standard_id in reorder request"` — the same id twice, where the result would depend on which won.
+**Response 404:** `"Standards not found for this MAT: <ids>"` — one or more ids missing or belonging to another MAT. **Nothing is written.**
+**Response 422:** a malformed body — a missing field or a non-integer `sort_order`.
+
+**Notes:**
+- **`updated_at` does not move.** Reordering is not a material edit (REQ-011), and the statement sets `updated_at` to itself so that MySQL's `ON UPDATE CURRENT_TIMESTAMP` does not fire. A reordered standard still shows the date it was last genuinely changed.
+- **Inactive standards are accepted.** Their position is invisible until they are reinstated, and rejecting a batch because one row was deactivated concurrently would fail an otherwise valid reorder.
+- Ordering in read endpoints is `ORDER BY ma.sort_order, ms.sort_order`, so `sort_order` is only meaningful **within** an aspect. The endpoint does not require all ids to share an aspect.
 
 ---
 
@@ -2098,6 +2152,7 @@ Admin/cron utility. Not called by the frontend.
 
 | Version | Date | Change |
 |---|---|---|
+| v2.11 | 2026-08-30 | **REQ-030 — `POST /api/standards/reorder` (§16a) now exists.** The frontend has called it since drag-and-drop shipped and **it had never been implemented**, so reordering has never persisted. Accepts `{ "standards": [{ "mat_standard_id", "sort_order" }] }` and applies the set **all or nothing** — every id is validated against the caller's MAT before anything is written, and the writes run in one explicit transaction, because a partial application leaves the list in an order nobody chose. **`updated_at` deliberately does not move:** the column carries `ON UPDATE CURRENT_TIMESTAMP`, so the statement sets it to itself — reordering is not a material edit, and letting the timestamp drift would silently undo REQ-011. Rejects an empty array and duplicate ids with `400`; unknown or other-MAT ids with `404` and no write. **`sort_order` removed from the `PUT` model (§16)**, where it was declared and silently ignored — a single-record `PUT` is the wrong shape for a multi-record operation. **No shape change to §16**: the field was never documented there, so the contract was already correct and the model was over-declaring against it. |
 | v2.10 | 2026-08-30 | **REQ-042 — sliding session expiry.** New endpoint **`POST /api/auth/refresh` (§3a)**: exchanges a valid, unexpired Bearer token for a new one with a fresh `JWT_ACCESS_TOKEN_EXPIRE_MINUTES` window. **It renews a live session and does not resurrect a dead one** — an expired token is refused, and the only way back from expiry is a new magic link. No request body; the token to renew is the one in the header. Response shape is identical to §2, and the `user` block is read **from the database rather than copied from the presented token**, so a changed school or MAT is picked up on renewal. **The JWT gains an `auth_time` claim** — the original magic-link login, carried unchanged across every renewal — and renewal is refused beyond an absolute ceiling measured from it (`JWT_ABSOLUTE_SESSION_HOURS`, **12 hours**), returning `401` with a distinct message. The ceiling exists because **nothing in the platform can revoke a JWT** (§4, stateless logout), so an uncapped sliding window would turn a stolen token into a permanent one. Tokens minted before this change carry no `auth_time` and fall back to their own `iat`, so they are capped from issue rather than rejected — **the deploy signs nobody out.** **`expires_in` is now derived** from `JWT_ACCESS_TOKEN_EXPIRE_MINUTES` on both §2 and §3a; it was hardcoded to `3600` and would have misstated the lifetime had the env var ever changed. Numbered `3a` rather than `4` so that no existing endpoint reference is renumbered. |
 | v2.9 | 2026-08-27 | `GET /api/standards/inactive` (§19) now returns a real `updated_at` rather than the `null` it advertised via the shared `MatStandardResponse`. Closes the gap left open in v2.8: §19 states it returns the "same shape as the list endpoint", and as of v2.8 that was true of the declared shape but not of the values. Same ISO 8601 UTC serialisation as §13. Additive; no other field touched. |
 | v2.8 | 2026-08-27 | **REQ-011.** `GET /api/standards` (§13) now returns `updated_at` — ISO 8601 UTC with a trailing `Z`, `null` on rows predating the column. Additive; no existing field changed. The value means a **material edit** (rename or content change); reordering is not a material edit and does not move it. Previously the field was neither selected nor declared on `MatStandardResponse`, so it never reached the client and the standards-admin card fell back to rendering today's date for every standard. Serialised by the handler rather than coerced by Pydantic, because MySQL `TIMESTAMP` arrives naive and would render without the `Z` the rest of the API emits. **Note:** `GET /api/standards/inactive` shares `MatStandardResponse` and will therefore report `updated_at: null` until its own query selects the column — out of REQ-011's scope, recorded rather than silently fixed. |
