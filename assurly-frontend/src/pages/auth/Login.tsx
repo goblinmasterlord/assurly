@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
+import { useState, useEffect } from 'react';
+import { Link, useSearchParams } from 'react-router-dom';
 import { Mail, ArrowRight, Shield, AlertCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -18,7 +18,20 @@ export default function LoginPage() {
   const [isSuccess, setIsSuccess] = useState(false);
   const { login } = useAuth();
   const { toast } = useToast();
-  const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
+
+  useEffect(() => {
+    if (searchParams.get('reason') !== 'session_expired') return;
+
+    toast({
+      title: 'Session expired',
+      description: 'Your session has expired. Please sign in again to continue.',
+      variant: 'destructive',
+    });
+
+    searchParams.delete('reason');
+    setSearchParams(searchParams, { replace: true });
+  }, [searchParams, setSearchParams, toast]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
