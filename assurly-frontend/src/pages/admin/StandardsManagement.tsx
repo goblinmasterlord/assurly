@@ -316,19 +316,6 @@ export default function StandardsManagement() {
         }
     };
 
-    const handleDeleteAspect = (id: string) => {
-        const aspectToDelete = aspects.find(a => a.mat_aspect_id === id);
-        if (aspectToDelete) {
-            setItemToDelete({ 
-                type: 'aspect', 
-                id, 
-                name: aspectToDelete.aspect_name,
-                isCustom: aspectToDelete.is_custom
-            });
-            setDeleteModalOpen(true);
-        }
-    };
-
     const handleCreateAspect = () => {
         setEditingAspect(undefined);
         setIsAspectModalOpen(true);
