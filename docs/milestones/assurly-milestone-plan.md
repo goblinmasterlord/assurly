@@ -1,7 +1,7 @@
 # Assurly — Milestone Plan
 
 **Suggested path:** `docs/milestones/assurly-milestone-plan.md`
-**Version:** 2.21
+**Version:** 2.22
 **Date:** 30 August 2026
 **Status:** Approved. M1 open.
 **Owner:** Product Owner
@@ -99,6 +99,21 @@ Entries are compiled into `docs/development-log.md` at each milestone close. Age
 
 **The `Deployed:` field is populated from this session forward** (plan v2.9, 27 August 2026).
 
+> ### ⚠️ Two sessions have now closed with no entry, and the second one cost something
+>
+> **The rule is not new and it is not ambiguous. The compliance is the problem.**
+>
+> | Session | What is missing |
+> |---|---|
+> | Dependency pins (`6e00b96`) | Written retrospectively, one plan version later |
+> | REQ-033 / REQ-041 / REQ-043 (`3451cb0`, `7d8079d`, four REQ-033 commits) | **Never written** |
+>
+> **The second has a direct cost, which is why it is recorded here rather than noted in passing.** The frontend agent was asked to report on the mutation surface while it was in that code. **REQ-044 was then scoped to build on that survey** — and the survey exists only in commit messages. So REQ-044 either starts from nothing or repeats work already done, and **nobody can tell which without redoing it.**
+>
+> That is the whole argument for the rule. A dev log is not a formality that runs after the work; **it is the only artefact that carries reasoning between sessions.** Commits carry what changed. Neither the diff nor the plan carries what was looked at and ruled out — which is precisely what the next session needs and cannot reconstruct.
+>
+> **This is not a new rule and no new rule would help.** Adding one would repeat the §2.2 preamble's mistake of answering a compliance gap with more text.
+
 ### 2.6 Versioning
 
 Current release 1.43. This programme is Sprint 2.0.
@@ -194,7 +209,7 @@ Internal is not further subdivided at this stage. Requirements below refer to th
 | ID | Milestone | Requirements | Gate |
 |---|---|---|---|
 | **M1** | Stabilise — live defects | **REQ-042 (first)**, AUD-001, DATA-001, DOC-001 → DOC-003, SEC-001, REQ-007 → REQ-012, REQ-027 → REQ-031, REQ-033, REQ-038, REQ-041, REQ-043 | None. Starts immediately. |
-| **M2** | Role model, plus the additions displaced from M1 | REQ-013, REQ-032, REQ-034 → REQ-037, REQ-039, REQ-040, REQ-044 | None |
+| **M2** | Role model, plus the additions displaced from M1 | REQ-013, REQ-032, REQ-034 → REQ-037, REQ-039, REQ-040, REQ-044, REQ-045 | None |
 | **M3** | Assessment lifecycle | REQ-014 → REQ-016 | M2 complete |
 | **M4** | Evidence model | REQ-017 | **M2 and M3 complete** |
 | **M5** | Applicability | REQ-018 | None |
@@ -270,6 +285,20 @@ Settled. Applicability is **per school, per term, carried forward**:
 **Scope — frontend:** **handle `401` explicitly.** **Never spin indefinitely on an authentication failure** — surface it and route to login. This half is independent of whatever the backend decides and should not wait on it: an expired session that redirects cleanly is a far smaller defect than one that hangs.
 
 **M2 interaction — coordinate, do not build auth twice.** REQ-013 introduces the **external tier**, and Trustees and Governors logging in **occasionally** are precisely the users most likely to arrive with an expired token. Whatever REQ-042 settles on becomes the session model REQ-013 inherits, so the two should be designed together even though REQ-042 ships first.
+
+> ### ✅ Decided — **option A: sliding expiry with an absolute cap.**
+>
+> **`POST /api/auth/refresh` exchanges a valid, unexpired token for a new one with a fresh 60-minute window.** An expired token is refused: **this renews a live session, it does not resurrect a dead one.** No schema change; contract v2.10 documents it as §3a.
+>
+> **The absolute cap is not optional and is the price of sliding.** **Nothing in the platform can revoke a JWT** — logout is stateless — so unbounded renewal would turn a 60-minute stolen-token window into a permanent one. The token carries an **`auth_time` claim, the original magic-link login, unchanged through every renewal**, and renewal is refused beyond **12 hours** measured from it (`JWT_ABSOLUTE_SESSION_HOURS`).
+>
+> **Why 12 and not 8.** The cap bounds a stolen token; between 8 and 12 hours that difference is marginal next to the fact that **there is no revocation at all**. What is not marginal is the user: at 8 hours, someone who signs in at 08:30 is thrown out at 16:30, **mid-afternoon and mid-task**, and re-entry costs an email round trip. **12 hours makes "sign in once a day" true for every working pattern in a school**, which is the property that matters given what magic-link re-authentication costs. It is one environment variable if the posture changes.
+>
+> **The frontend half ships first, and did.** It alone fixes the reported defect. **Sliding expiry does nothing for a user who returns after the token has already expired** — there is nothing left to slide — so for them the entire experience is what the client does with a `401`. That is also exactly the population REQ-013's external tier is made of.
+>
+> **A refresh token remains the better long-term answer and belongs with REQ-013**, where revocation stops being optional. Choosing A does not block it; the two compose.
+>
+> **`RefreshTokenRequest` (`auth_models.py:17`) and `TokenPayload.type == "refresh"` stay unused, deliberately.** They describe **option B**, not this one. `RefreshTokenRequest` expects a `refresh_token` in a request body; §3a takes **no body** and renews the token in the `Authorization` header, so adopting the model would misdescribe the flow in the OpenAPI spec. And option A mints **only** access tokens, so nothing should ever set `type` to `"refresh"`. **Left in place rather than deleted** — they are a correct placeholder for the work REQ-013 may pick up, and deleting them would only have to be undone.
 
 ---
 
@@ -886,6 +915,7 @@ Three defects in HLT's aspect data, found while investigating REQ-010 and REQ-02
 - External tier: read access to everything within the MAT, including commentary and evidence; **write blocked at endpoint level**. Hiding controls in the UI is not sufficient and will not be accepted as the implementation.
 - Superadmin tier scoped across tenants for the platform team. **`SUPER_ADMIN_EMAILS` is the existing super-admin mechanism** — an environment allow-list checked by `verify_super_admin` (`main.py:556`). **Extend it; do not introduce a parallel one.** Note `.env.example` states plainly that no DB-level super-admin role exists, so this allow-list is currently the whole of it, and REQ-013 is where that either becomes a real role or is deliberately kept as configuration. See SEC-001.
 - Audit the three user-CRUD endpoints currently missing `verify_mat_admin` as part of this work — the role model is the right moment to close that gap.
+- **Fix the deactivation hole. A deactivated user cannot currently be logged out.** `get_current_user` (`main.py:536`) wraps its whole body in a bare `except Exception`, which **catches the `401 "User not found or inactive"` it raises at `:529` and re-raises it as a `500`.** The frontend then **deliberately retains the token on a `500`** (`auth-service.ts:141-149`, "let the user stay logged in — the API might just be unavailable"), which is correct behaviour for the error it is actually being told about. **So deactivating a user produces a 500 loop and a working session that runs until natural expiry.** This is a permissions defect, not an error-handling one: the tier model is only as real as the ability to remove someone from it. Found during REQ-042's diagnosis.
 
 **Scope — frontend:**
 - Write affordances suppressed throughout for the external tier.
@@ -956,6 +986,23 @@ Note the starting position: **`assurly-backend/test_phase2_auth.py` is the only 
 - **Report the gaps, ranked by whether the path has a visible symptom** — the silent ones matter more, since nothing else will surface them.
 
 **Do not fix anything in the audit pass.** §2.2.1 applies: **report and stop.** Same shape as REQ-040 on `mat_aspects`, and for the same reason — fixing as you go is what turns one root problem into a series of defects.
+
+---
+
+#### REQ-045 — Harden the magic-link path
+**Type:** Defect. **Backend.** **M2.**
+
+Two faults on the login path, found during REQ-042's diagnosis. Neither is urgent today; **both get worse the moment re-authentication becomes routine**, and that endpoint sends email.
+
+**1. Magic-link tokens are stored in plaintext.** `users.magic_link_token` holds the raw token, and `verify_magic_link` (`main.py:723`) matches on it directly. **`generate_token_hash()` exists at `auth_utils.py:164` for exactly this purpose and is never called** — its own docstring says "even with database access, tokens can't be used directly", which is the property the platform does not have. Anyone with read access to `users` can sign in as any user inside the 15-minute window.
+
+**Scope:** store the SHA-256 hash, match on the hash, keep the raw token only in the emailed URL. **Note the migration consideration:** tokens in flight at deploy would stop verifying. They live 15 minutes, so a quiet-window deploy costs at most one re-request — **decide that deliberately rather than discovering it.**
+
+**2. No rate limiting on `POST /api/auth/request-magic-link`.** `MAGIC_LINK_RATE_LIMIT_PER_EMAIL` and `MAGIC_LINK_RATE_LIMIT_WINDOW_HOURS` are defined at `auth_config.py:45-46` under a comment reading "for future implementation" and **nothing reads them.** The endpoint sends an email per call with no throttle, which is a mail-reputation and nuisance exposure before it is a security one.
+
+**Scope:** enforce the constants that already exist. **Do not invent a new policy** — 3 per email per hour is the recorded intent.
+
+**Why M2 and not M1:** neither is a live defect anyone has hit, and M1 is closed to scope growth (v2.15). **But both sit on the path REQ-042 just made busier**, so they should not drift past M2.
 
 ---
 
@@ -1378,6 +1425,7 @@ Not scheduled. Not to be picked up opportunistically.
 | REQ-039 | **M2** | Ready — build with REQ-013. Backend half **reports before implementing** | ☐ | ☐ | ☐ |
 | REQ-040 | **M2** | Ready — audit only. **Report and stop**; produce SQL for the product owner | ☐ | — | ☐ |
 | REQ-044 | **M2** | Ready — audit only, frontend. **Report and stop.** Check the REQ-043 dev log first | — | ☐ | ☐ |
+| REQ-045 | **M2** | Ready — backend. Hash magic-link tokens; enforce the rate-limit constants that already exist | ☐ | — | ☐ |
 | REQ-032 | **M2** | Ready — frontend. Premise re-confirmed at v2.16 | — | ☐ | ☐ |
 | REQ-033 | M1 | **CLOSED — passes UAT.** Two Radix layers, second unmount clobbering the first's `pointer-events` cleanup | — | ☑ | ☑ |
 | REQ-034 | **M2** | Ready — frontend, small | — | ☐ | ☐ |
@@ -1386,7 +1434,7 @@ Not scheduled. Not to be picked up opportunistically.
 | REQ-037 | **M2** | Ready — frontend. Build the inactive aspects view | — | ☐ | ☐ |
 | REQ-038 | M1 | **Gate 4 PASSED** — header and description both update on rename | — | ☑ | ☑ |
 | REQ-041 | M1 | **CLOSED — passes UAT.** End-of-list behaviour decided: hold on the last standard with a toast | — | ☑ | ☑ |
-| REQ-042 | M1 | **🔴 HIGHEST PRIORITY.** Backend **reports options before implementing**; frontend `401` handling is independent | ☐ | ☐ | ☐ |
+| REQ-042 | M1 | **Option A chosen and built.** Frontend shipped; backend merged and contract at v2.10 — **pending the auth gate**, which it deploys alone (§2.7) | ☐ | ☐ | ☐ |
 | REQ-043 | M1 | **CLOSED — passes UAT.** Dashboard and aspect metric caches now invalidated on create. **Opens REQ-044** | — | ☑ | ☑ |
 | DATA-001 | M1 | Ready — **product owner runs manually**, no code | — | — | ☐ |
 | REQ-013 | M2 | Ready | ☐ | ☐ | ☐ |
@@ -1410,6 +1458,7 @@ Not scheduled. Not to be picked up opportunistically.
 
 | Version | Date | Change |
 |---|---|---|
+| 2.22 | 30 August 2026 | **REQ-042 — option A chosen and the backend half built.** **`POST /api/auth/refresh` exchanges a valid, unexpired token for a new one with a fresh 60-minute window.** An expired token is refused: **this renews a live session, it does not resurrect a dead one.** No schema change. **The absolute cap is the price of sliding, not an optional extra** — nothing in the platform can revoke a JWT, so unbounded renewal would turn a 60-minute stolen-token window into a permanent one. The token carries an **`auth_time` claim, the original magic-link login, unchanged through every renewal**, and renewal is refused beyond **12 hours** measured from it. **Why 12 and not 8:** the difference in exposure is marginal next to having no revocation at all, while at 8 hours someone signing in at 08:30 is thrown out at 16:30 **mid-task**, and re-entry costs an email round trip — **12 makes "sign in once a day" true for every working pattern in a school**, and it is one environment variable if the posture changes. **Tokens minted before the claim existed fall back to their own `iat`**, so they are capped from issue rather than rejected and **the deploy signs nobody out.** **`expires_in` now derives from `JWT_ACCESS_TOKEN_EXPIRE_MINUTES`**; it was hardcoded to 3600 and would have misstated any changed lifetime. **The frontend half shipped first and alone fixes the reported defect** — sliding expiry does nothing for a user who returns after expiry, since there is nothing left to slide, so for that population the whole experience is what the client does with a `401`; that is also exactly who REQ-013's external tier is. **`RefreshTokenRequest` and `TokenPayload.type == "refresh"` stay unused deliberately** — they describe **option B**: the model expects a `refresh_token` in a body, while §3a takes no body and renews the header token, and option A mints only access tokens. Left in place as a correct placeholder rather than deleted. **Contract to v2.10** (§3a, numbered `3a` so no existing endpoint reference is renumbered). **Deploys alone as an auth gate** per §2.7. **REQ-013 gains the deactivation hole:** `get_current_user` (`main.py:536`) wraps its body in a bare `except Exception` that **catches the `401 "User not found or inactive"` it raises at `:529` and re-raises it as a `500`**, and the frontend **deliberately retains the token on a `500`** — correct behaviour for the error it is being told about. **So a deactivated user cannot be logged out and holds a working session until natural expiry.** That is a permissions defect: the tier model is only as real as the ability to remove someone from it. **REQ-045 added** to M2 (backend): **magic-link tokens are stored in plaintext** — `generate_token_hash()` exists for exactly this and is never called, so anyone with read access to `users` can sign in as any user inside the 15-minute window; and **`POST /api/auth/request-magic-link` has no rate limiting** though `MAGIC_LINK_RATE_LIMIT_PER_EMAIL` and its window are defined and unread. Enforce the constants that exist rather than inventing a policy, and decide deliberately that hashing invalidates tokens in flight at deploy. **Neither is urgent, both sit on the path REQ-042 just made busier.** **§2.5 records a compliance gap, not a new rule:** **two sessions have now closed with no dev log entry** — the dependency pins (written late) and the REQ-033/REQ-041/REQ-043 session (never written) — and the second **cost something concrete**: REQ-044 was scoped to build on a mutation-surface survey that now exists only in commit messages, so it either starts from nothing or repeats work, and nobody can tell which. **A dev log is the only artefact that carries reasoning between sessions**; the diff carries what changed, not what was examined and ruled out. **No new rule is added** — that would repeat the §2.2 preamble's mistake of answering a compliance gap with more text. |
 | 2.21 | 30 August 2026 | **Three M1 defects pass UAT and CLOSE, each with its cause confirmed rather than assumed.** **REQ-033** — `DropdownMenu` and `Dialog` **both manage `body`'s `pointer-events`**, and with both mounted **the second layer's unmount cleanup clobbered the first's**, which is why **Cancel failed too**. The corrected v2.19 diagnosis was right, and the method it prescribed is what settled it: reading `document.body.style.pointerEvents` at each step distinguished two mechanisms that produced identical symptoms and equally plausible stories. **REQ-041** — **two faults, either sufficient alone:** a `useEffect` reset `activeStandard` to the first standard on every assessment change, and **Save & Continue called `goToNextStandard` without awaiting the save**, so the advance raced the refresh that reset it. **End-of-list behaviour decided and recorded:** hold on the last standard and raise a toast; do not close or navigate away. **REQ-043** — **creating into an existing term changes only the assessments list, so the dashboard overlay and aspect metric caches were never invalidated.** REQ-027's `terms` invalidation was firing; it was not the cache this flow needed. **REQ-044 added** to M2 (frontend, audit): a systematic pass over every mutation path confirming it invalidates every cache its result appears in, and **`await`s the invalidation before the refetch** — an un-awaited invalidation is indistinguishable from a missing one. **The v2.20 "scope it if the pattern holds a third time" condition is WITHDRAWN. Do not wait for a third instance.** REQ-027 and REQ-043 are **one defect that surfaced twice**, and both were found by a person performing an ordinary action and noticing — not by anything systematic. **A mutation path with no second cache to invalidate produces no visible symptom at all**, so it shows stale data that looks current; **the absence of further reports is not evidence the remaining paths are correct**, it is equally consistent with them being silently wrong. **Check the REQ-043 dev log first** — the frontend agent was asked to report on this surface while in the code and may have surveyed part of it; start from that rather than repeating it. **Report and stop; no fixes in the audit pass** — same shape and same reasoning as REQ-040 on `mat_aspects`. **M2, not M1**, since M1 stays closed to scope growth (v2.15). **§2.6 gains a precedent, recorded because it was handled correctly:** a re-sent instruction is **diffed against what is already recorded, not re-applied** — the v2.19 re-send had four of five items already applied, and re-applying them would have duplicated two requirement blocks; and a published version is **superseded, not overwritten** — v2.20 corrected REQ-027 as a new row rather than rewriting v2.19, because rewriting a pushed version to say something it never said falsifies the record. |
 | 2.20 | 30 August 2026 | **Corrects REQ-027's status in v2.19.** v2.19 recorded REQ-027 as **reopened pending diagnosis**; it should have stayed **CLOSED**, and does. **It has not regressed.** Gate 1 tested creation into a term with **no prior assessments**, which succeeded then and still succeeds. The newly reported failure is creation into a term that **already contains** assessments — **a flow that was never tested.** v2.19's question ("is the failing flow the one that passed?") was the right one; the answer is no, so nothing was reopened. **REQ-043 added** to M1 (frontend): creating assessments against a term that already contains assessments does not refresh the view, and the new rows appear only after a full browser refresh. REQ-027 fixed the adjacent case by invalidating the `assessments` and `terms` caches on create; **creating into an existing term changes the assessment list but not the term list**, so either that invalidation is not firing on this path or the refresh does not `await` it. **The pattern is recorded as worth more than either fix:** REQ-027 and REQ-043 are **the same defect — a mutation that does not refresh what it changed — separated only by which cache the flow happened to touch.** Fixing them one flow at a time will keep producing requirements, and the paths with no second cache to invalidate are exactly the ones that will not announce themselves. **Worth establishing whether every mutation path invalidates what it changes**, as a single pass rather than a defect per flow — the same shape as REQ-040 for `mat_aspects`, and to be scoped deliberately if the pattern holds a third time. **Note on versioning:** v2.19 already carried the other four items of this instruction (gate 4 results, REQ-033's reopening and corrected diagnosis, REQ-041, REQ-042) and they are unchanged here; only REQ-027 differed, so this is a new version rather than a rewrite of v2.19. |
 | 2.19 | 30 August 2026 | **Gate 4.** **REQ-029 PASSES** on all four endpoints, including creation against lowercase-coded aspects and analytics trends. **REQ-038 PASSES** — header and description both update on rename. **REQ-033 FAILS and REOPENS with a corrected diagnosis.** The merged fix addressed a race between a closing `DropdownMenu` and an opening `Dialog`; **cancelling the delete — which never opens the destructive path at all — also leaves the application click-dead**, so the fault is not in how the dialog opens. **`pointer-events: none` is not removed from `body` when the dialog closes, on either path**, because two overlapping Radix layers each manage that lock and the second unmount clobbers the first's cleanup. **The next attempt must verify against `body`'s inline style directly** rather than reasoning about component lifecycle — the previous diagnosis was a plausible lifecycle story that survived because nothing checked the one attribute that defines the symptom. **REQ-027 REOPENED pending diagnosis, explicitly not recorded as a regression:** it passed gate 1 on this exact test, and the first task is to establish whether the failing flow is the same one that passed — a single assessment against an existing term, versus several against a term with no prior rows. **Those are different fixes**; reproduce before diffing. **REQ-041 added** to M1 (frontend): Save & Continue persists correctly but returns to the **first** standard rather than the next, making sequential rating unusable on a ten-standard aspect; scope is to advance to the next **unrated** standard and to **define the end-of-list behaviour explicitly** rather than let it fall out of the implementation. **REQ-042 added** to M1 (backend and frontend) as **🔴 HIGHEST PRIORITY IN M1**: the bearer token expires after 60 minutes without renewing on activity, and on expiry the application **fails silently and spins indefinitely** — no message, no redirect. Backend **reports options and trade-offs before implementing**, since sliding expiry, a refresh token and a longer TTL are three different security postures and §2.7 puts authentication changes in their own gate; frontend handles `401` explicitly and **never spins on an auth failure**, independent of the backend decision. **M2 interaction recorded:** REQ-013's external tier means Trustees logging in occasionally are the users most likely to arrive with an expired token, so REQ-042 settles the session model REQ-013 inherits — **coordinate rather than build auth twice.** |
