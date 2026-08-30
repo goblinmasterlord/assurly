@@ -1,8 +1,8 @@
 # Assurly — Milestone Plan
 
 **Suggested path:** `docs/milestones/assurly-milestone-plan.md`
-**Version:** 2.18
-**Date:** 27 August 2026
+**Version:** 2.19
+**Date:** 30 August 2026
 **Status:** Approved. M1 open.
 **Owner:** Product Owner
 
@@ -184,7 +184,7 @@ Internal is not further subdivided at this stage. Requirements below refer to th
 
 | ID | Milestone | Requirements | Gate |
 |---|---|---|---|
-| **M1** | Stabilise — live defects | AUD-001, DATA-001, DOC-001 → DOC-003, SEC-001, REQ-007 → REQ-012, REQ-027 → REQ-031, REQ-033, REQ-038 | None. Starts immediately. |
+| **M1** | Stabilise — live defects | **REQ-042 (first)**, AUD-001, DATA-001, DOC-001 → DOC-003, SEC-001, REQ-007 → REQ-012, REQ-027 → REQ-031, REQ-033, REQ-038, REQ-041 | None. Starts immediately. |
 | **M2** | Role model, plus the additions displaced from M1 | REQ-013, REQ-032, REQ-034 → REQ-037, REQ-039, REQ-040 | None |
 | **M3** | Assessment lifecycle | REQ-014 → REQ-016 | M2 complete |
 | **M4** | Evidence model | REQ-017 | **M2 and M3 complete** |
@@ -196,6 +196,8 @@ Internal is not further subdivided at this stage. Requirements below refer to th
 ### 4.1 Sequencing rationale
 
 - **M1 first, and M1 is only things that are broken.** All of them visible to the early adopter during the exact period they are being asked to trust the platform.
+
+  **REQ-042 comes first within M1.** A session that expires silently mid-task, with no message and an indefinite spinner, ends the work the platform exists for — and does so at the one-hour mark, the length of a serious rating session. Every other M1 item degrades a screen; that one stops the user.
 
   **Scope closure, v2.15.** M1 is a **stabilisation** milestone and had accumulated feature work. Five additions — REQ-032, REQ-034, REQ-035, REQ-036, REQ-037 — **moved to M2**. They keep their ids; only the milestone changed, and nothing was renumbered.
 
@@ -242,6 +244,23 @@ Settled. Applicability is **per school, per term, carried forward**:
 **Definition of done:** REQ-007 → REQ-012 verified in production; AUD-001 reported; SEC-001 reported and its contract documentation landed; DOC-001, DOC-002 and DOC-003 complete; regression notes in the changelog; API contract updated wherever a response shape changed.
 
 **M1 closes without a working evidence feature.** REQ-006 has been retired into REQ-017 (M4) — see the retirement note below. This is accepted, not an oversight.
+
+---
+
+#### REQ-042 — Session expires silently mid-task
+**Type:** Defect. **Backend and frontend.** **🔴 HIGHEST PRIORITY IN M1.**
+
+**Problem:** The bearer token expires after **60 minutes and does not renew on activity**. On expiry the application **fails silently and spins indefinitely on load** — no message, no redirect to login, no indication that anything is wrong.
+
+**Why this outranks everything else in M1.** A user entering ratings loses their session mid-task and is given nothing to act on. They do not know they are logged out, they do not know their next action will fail, and the platform simply stops responding. **Every other M1 defect degrades a screen; this one silently ends the session of someone doing the exact work the platform exists for** — and it does so at the one-hour mark, which is precisely the length of a serious rating session.
+
+**Scope — backend:** token renewal on activity, or a refresh mechanism.
+
+> **Report the options and the trade-offs before implementing.** This is an **authentication change**: it touches session lifetime, and getting it wrong extends sessions further than intended or invalidates them harder. Sliding expiry, a refresh token, and simply lengthening the TTL are three different security postures. **It warrants a decision, not a default.** Note §2.7 puts authentication changes in a gate of their own.
+
+**Scope — frontend:** **handle `401` explicitly.** **Never spin indefinitely on an authentication failure** — surface it and route to login. This half is independent of whatever the backend decides and should not wait on it: an expired session that redirects cleanly is a far smaller defect than one that hangs.
+
+**M2 interaction — coordinate, do not build auth twice.** REQ-013 introduces the **external tier**, and Trustees and Governors logging in **occasionally** are precisely the users most likely to arrive with an expired token. Whatever REQ-042 settles on becomes the session model REQ-013 inherits, so the two should be designed together even though REQ-042 ships first.
 
 ---
 
@@ -602,6 +621,19 @@ The migration would suspend foreign-key checks and rewrite primary keys across t
 
 **Out of scope:** Any change to the creation endpoint. The backend write is confirmed sound.
 
+### ⚠️ Gate 4 — REOPENED **PENDING DIAGNOSIS**. Not recorded as a regression.
+
+**It passed at gate 1 on this exact test**, and it is failing now. That is suggestive, not conclusive, and calling it a regression would commit the next session to hunting a change that may not exist.
+
+**First task: establish whether the failing flow is the same flow that passed.** Two candidates, and they are **different fixes**:
+
+| Flow | |
+|---|---|
+| Creating **a single** assessment against an **existing** term | The term is already in the list; only the assessment cache is stale |
+| Creating **several** against a term with **no prior rows** | The term itself is new to the view, so the term list is stale too |
+
+The merged fix invalidated **both** the `assessments` and `terms` caches, so a failure in the second flow means the invalidation is not reaching the term list; a failure in the first means it is not reaching the assessment list. **Do not assume regression, and do not start by diffing the fix.** Reproduce first, and establish which flow.
+
 ---
 
 #### REQ-028 — `delete_aspect` fails with a 500 when inactive standards remain
@@ -736,6 +768,33 @@ The user drags a standard, the list reorders on screen, and the change is gone o
 > **REQ-007's frontend scope does not shrink.** Its date picker still needs fixing on its own terms; nothing here removes work from it. **REQ-038 is likewise unrelated** to both — a stale `currentAspect` snapshot read instead of the live `aspects` array, not a pointer-events or stacking problem.
 >
 > **Both merged 30 August 2026** (`3c587b6`, `49ac78b`), pending gate. Per the frontend dev log, REQ-033's fix defers the `Dialog` open until the `DropdownMenu` has fully closed, and REQ-038's derives `currentAspect` from the live array rather than a snapshot.
+
+### ⚠️ Gate 4 — REQ-033 FAILS and REOPENS. The diagnosis was wrong.
+
+**REQ-038 passes** — header and description both update on rename.
+
+**REQ-033 does not.** The merged fix addressed a **race between a closing `DropdownMenu` and an opening `Dialog`**. That cannot be the fault, and one observation rules it out:
+
+> **Cancelling the delete also leaves the application click-dead** — and cancelling never opens the destructive path at all.
+
+So the problem is **not in how the dialog opens.** It is that **`pointer-events: none` is not removed from `body` when the dialog closes**, on **either** path — confirm or cancel. **Two overlapping Radix layers each manage that lock, and the second unmount is clobbering the first's cleanup.**
+
+**Method for the next attempt — this is the part that matters.** **Verify against `body`'s inline style directly**, not by reasoning about component lifecycle. Open the dialog, close it both ways, and read `document.body.style.pointerEvents` at each step. The previous diagnosis was a plausible lifecycle story that survived because nothing checked the one attribute that defines the symptom.
+
+**REQ-007 remains unrelated** (`Popover`-in-`Sheet` stacking), and this correction does not change that — if anything it sharpens it, since REQ-033 is now a teardown fault rather than an open-ordering one.
+
+---
+
+#### REQ-041 — Save & Continue returns to the first standard instead of the next
+**Type:** Defect. **Frontend.**
+
+**Problem:** On the assessment rating page, **Save & Continue persists the rating correctly** but returns the user to the **first** standard in the list rather than advancing to the next one.
+
+**On an aspect with ten standards this makes sequential rating unusable.** The control's entire purpose is to move forward; instead the user is returned to the top after every save and has to find their place again. The data is never wrong, so nothing signals a fault — it reads as clumsy design rather than a defect, which is why it may have been tolerated rather than reported.
+
+**Scope:**
+- **Advance to the next unrated standard**, not simply the next in order — a user re-entering a partly-rated aspect should be taken to work that remains, not to a rating they have already given.
+- **Define the behaviour at the end of the list.** When no unrated standard remains, the requirement is to decide and state what happens — return to the aspect summary, close, or hold on the last standard with the control disabled. **Do not leave this to fall out of the implementation**; it is the case a user hits every time they finish an aspect.
 
 ---
 
@@ -1245,20 +1304,22 @@ Not scheduled. Not to be picked up opportunistically.
 | REQ-010 | M1 | **CLOSED at gate 2.** Migration **retired** — see the standing caveats. Original cause remains unexplained | ☑ | ☑ | ☑ |
 | REQ-011 | M1 | **Gate 1 PASSED**, both halves | ☑ | ☑ | ☑ |
 | REQ-012 | M1 | **CLOSED.** Verified in production as an HLT user — one row, `Mock aspect` | ☑ | — | ☑ |
-| REQ-027 | M1 | **Gate 1 PASSED** in production | — | ☑ | ☑ |
+| REQ-027 | M1 | **REOPENED pending diagnosis.** Passed gate 1 on this test; establish which flow fails before assuming regression | — | ☐ | ☑ |
 | REQ-028 | M1 | Ready — **normal M1 priority** (v2.11 reduction reversed). Ships with the REQ-010 migration | ☐ | — | ☐ |
-| REQ-029 | M1 | Backend merged — **all four endpoints, six sites** — pending gate | ☑ | — | ☑ |
+| REQ-029 | M1 | **Gate 4 PASSED** — all four endpoints, including creation against lowercase-coded aspects and analytics trends | ☑ | — | ☑ |
 | REQ-030 | M1 | Ready — backend builds the endpoint **above** the parameterised route; frontend verifies the success path | ☐ | ☐ | ☐ |
 | REQ-031 | M1 | Ready — **frontend agent** | — | ☐ | ☐ |
 | REQ-039 | **M2** | Ready — build with REQ-013. Backend half **reports before implementing** | ☐ | ☐ | ☐ |
 | REQ-040 | **M2** | Ready — audit only. **Report and stop**; produce SQL for the product owner | ☐ | — | ☐ |
 | REQ-032 | **M2** | Ready — frontend. Premise re-confirmed at v2.16 | — | ☐ | ☐ |
-| REQ-033 | M1 | Frontend merged (`3c587b6`) — **pending gate**. Unrelated to REQ-007, confirmed | — | ☑ | ☐ |
+| REQ-033 | M1 | **REOPENED — gate 4 FAILED.** Diagnosis corrected: teardown, not open-ordering | — | ☐ | ☐ |
 | REQ-034 | **M2** | Ready — frontend, small | — | ☐ | ☐ |
 | REQ-035 | **M2** | **Pending a decision**, not investigation — schema change confirmed necessary | ☐ | ☐ | ☐ |
 | REQ-036 | **M2** | **Lowest priority, last in M2.** Product decision first — do not implement. Depends on REQ-037 | — | ☐ | ☐ |
 | REQ-037 | **M2** | Ready — frontend. Build the inactive aspects view | — | ☐ | ☐ |
-| REQ-038 | M1 | Frontend merged (`49ac78b`) — **pending gate**. Stale `currentAspect` snapshot, not a cache issue | — | ☑ | ☐ |
+| REQ-038 | M1 | **Gate 4 PASSED** — header and description both update on rename | — | ☑ | ☑ |
+| REQ-041 | M1 | Ready — frontend. Define end-of-list behaviour explicitly | — | ☐ | ☐ |
+| REQ-042 | M1 | **🔴 HIGHEST PRIORITY.** Backend **reports options before implementing**; frontend `401` handling is independent | ☐ | ☐ | ☐ |
 | DATA-001 | M1 | Ready — **product owner runs manually**, no code | — | — | ☐ |
 | REQ-013 | M2 | Ready | ☐ | ☐ | ☐ |
 | REQ-014 | M3 | Gated on M2 | ☐ | ☐ | ☐ |
@@ -1281,6 +1342,7 @@ Not scheduled. Not to be picked up opportunistically.
 
 | Version | Date | Change |
 |---|---|---|
+| 2.19 | 30 August 2026 | **Gate 4.** **REQ-029 PASSES** on all four endpoints, including creation against lowercase-coded aspects and analytics trends. **REQ-038 PASSES** — header and description both update on rename. **REQ-033 FAILS and REOPENS with a corrected diagnosis.** The merged fix addressed a race between a closing `DropdownMenu` and an opening `Dialog`; **cancelling the delete — which never opens the destructive path at all — also leaves the application click-dead**, so the fault is not in how the dialog opens. **`pointer-events: none` is not removed from `body` when the dialog closes, on either path**, because two overlapping Radix layers each manage that lock and the second unmount clobbers the first's cleanup. **The next attempt must verify against `body`'s inline style directly** rather than reasoning about component lifecycle — the previous diagnosis was a plausible lifecycle story that survived because nothing checked the one attribute that defines the symptom. **REQ-027 REOPENED pending diagnosis, explicitly not recorded as a regression:** it passed gate 1 on this exact test, and the first task is to establish whether the failing flow is the same one that passed — a single assessment against an existing term, versus several against a term with no prior rows. **Those are different fixes**; reproduce before diffing. **REQ-041 added** to M1 (frontend): Save & Continue persists correctly but returns to the **first** standard rather than the next, making sequential rating unusable on a ten-standard aspect; scope is to advance to the next **unrated** standard and to **define the end-of-list behaviour explicitly** rather than let it fall out of the implementation. **REQ-042 added** to M1 (backend and frontend) as **🔴 HIGHEST PRIORITY IN M1**: the bearer token expires after 60 minutes without renewing on activity, and on expiry the application **fails silently and spins indefinitely** — no message, no redirect. Backend **reports options and trade-offs before implementing**, since sliding expiry, a refresh token and a longer TTL are three different security postures and §2.7 puts authentication changes in their own gate; frontend handles `401` explicitly and **never spins on an auth failure**, independent of the backend decision. **M2 interaction recorded:** REQ-013's external tier means Trustees logging in occasionally are the users most likely to arrive with an expired token, so REQ-042 settles the session model REQ-013 inherits — **coordinate rather than build auth twice.** |
 | 2.18 | 27 August 2026 | **REQ-029 complete — and there were four endpoints and six sites, not two.** `GET /api/standards`, `GET /api/assessments/by-aspect` (**two sites in one handler**), `GET /api/analytics/trends` and `POST /api/assessments`; `GET /api/assessments` and `POST /api/aspects` were already correct. **`POST /api/assessments` did not fail silently, and that made it worse:** zero matched standards raised `404 "No standards found for aspect: X"` for an aspect that *has* standards, blocking assessment creation outright for every lowercase-coded aspect — `ab`, `ey`, `mck` in HLT — with a message sending the reader to the wrong table. **A silent empty list invites a second look; a confident error about missing standards does not.** The requirement was framed around silent failure and the loud instance was the more damaging one. **Root cause: `aspect_code` has no canonical casing.** `POST /api/aspects` uppercases on write, so the lowercase codes are **seeded data that predates or bypassed that path** — the same two-era seeding behind the UUID versus `{MAT}-{CODE}` split in primary keys. **REQ-040 added** to M2 (backend, audit): a single pass over `mat_aspects` and its endpoints to establish and enforce the table's invariants. Five defects have originated there and at least three share one shape — **an endpoint assuming an invariant the data never had.** Known instances: `aspect_code` casing, `is_custom` stored in four handlers and computed in two, primary keys in two formats, `source_aspect_id` holding an empty string. Scope is enumerate, test against production, report the gaps, produce SQL for the product owner — **and fix nothing in the audit pass**, since fixing as you go is what turned one root problem into five defects. **M2 not M1**, because it is investigation and M1 was closed to scope growth at v2.15. **REQ-033 and REQ-038 are confirmed unrelated to REQ-007.** REQ-033 is a Radix `Dialog` opened from a closing `DropdownMenu` leaving `pointer-events: none` on `body`; REQ-007 is `Popover`-in-`Sheet` stacking. Same symptom, different mechanisms — **one fix will not close both, and REQ-007's frontend scope does not shrink.** |
 | 2.17 | 27 August 2026 | **REQ-012 CLOSES.** Verified in production: `/api/aspects/inactive` called as an **HLT** user returns one row, `Mock aspect`. Route ordering fixed, endpoint working, prior empty results explained by tenant scoping. Ticked in §8. **§2.2 gains a preamble and no tenth rule.** Rules 7, 8 and 9 were each added after a misdiagnosis and are **three instances of one thing: check the premise of the question before investigating the answer** — a claim asserted without checking what it rested on, an identifier reasoned about without being read, a result judged correct without establishing whose it was. The preamble states that general form once and marks 7–9 as **worked examples rather than independent rules**. Nothing renumbered; all existing §2.2.7, §2.2.8 and §2.2.9 citations survive. **The concern that prompted it, recorded rather than left implicit:** rules have been accruing faster than the defects they catch, and **a list long enough to skim is a list that stops being read**. A fourth instance belongs in a dev log as evidence the preamble is not landing, not here as rule 10. |
 | 2.16 | 27 August 2026 | **The `/api/aspects/inactive` defect is RETIRED. Not fixed — it was never a defect.** `GET /api/aspects` returned six aspects, **all with `mat_id = 'OLT'`**; the call was authenticated as an OLT user, and OLT has six aspects. `/api/aspects/inactive` filters on `mat_id` from the same JWT, and OLT has no inactive default aspects — `Mock aspect` belongs to **HLT**. **The empty array was correct behaviour throughout**, and so was the 6-of-17 count: 17 is HLT's figure, asked as OLT. **What it cost: five hypotheses across four sessions** — route shadowing, MAT scoping, NULL flags, a swallowed exception, an environmental mismatch — three disproved by code reading and one by production query, **on an endpoint that was working.** **Nobody asked which tenant the token was scoped to**, despite the handler scoping on precisely that, and despite `get_current_mat` being read, quoted, and used to rule a hypothesis out. **§2.2 gains rule 9:** in a multi-tenant system, establish which tenant a result belongs to before reasoning about whether it is correct — an answer right for a different tenant is **indistinguishable** from a wrong answer, and the two produce identical evidence. Appended as 9 rather than inserted, so existing §2.2.7 and §2.2.8 citations stay valid. **REQ-012 closes once the same call is made as an HLT user and returns `Mock aspect`.** **REQ-032 is unaffected and its M2 placement stands** — its premise was questioned at v2.15 on the assumption that `GET /api/aspects` was under-returning; it was not, so the truncation is a display defect on complete data exactly as scoped. **REQ-039 added** to M2 (frontend and backend, belongs with REQ-013): **nothing in the application or the API response indicates which MAT the displayed data belongs to.** This caused the misdiagnosis above, and the risk grows in M2 because the superadmin tier is explicitly cross-tenant, so moving between MATs becomes routine — a platform-team member acting on the wrong trust's data is materially worse than a confused debugging session. Frontend: a persistent tenant indicator visible on **every** screen. Backend: **report** whether collection endpoints should carry the `mat_id` they are scoped to, noting that per-row `mat_id` was present and still went unread, while an **empty** collection carries no rows and therefore no tenant at all — the case that actually misled. |
