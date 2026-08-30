@@ -1191,7 +1191,7 @@ Not scheduled. Not to be picked up opportunistically.
 | REQ-012 | M1 | **CLOSED.** Verified in production as an HLT user — one row, `Mock aspect` | ☑ | — | ☑ |
 | REQ-027 | M1 | **Gate 1 PASSED** in production | — | ☑ | ☑ |
 | REQ-028 | M1 | Ready — **normal M1 priority** (v2.11 reduction reversed). Ships with the REQ-010 migration | ☐ | — | ☐ |
-| REQ-029 | M1 | Ready — backend only | ☐ | — | ☐ |
+| REQ-029 | M1 | Backend merged for the two named endpoints — **pending gate**. **Two further sites reported, not fixed** — one blocks assessment creation | ☑ | — | ☐ |
 | REQ-030 | M1 | Ready — backend builds the endpoint **above** the parameterised route; frontend verifies the success path | ☐ | ☐ | ☐ |
 | REQ-031 | M1 | Ready — **frontend agent** | — | ☐ | ☐ |
 | REQ-039 | **M2** | Ready — build with REQ-013. Backend half **reports before implementing** | ☐ | ☐ | ☐ |

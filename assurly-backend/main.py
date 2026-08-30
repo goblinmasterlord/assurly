@@ -1163,9 +1163,13 @@ async def get_standards(
         """
         params = [current_mat_id]
 
-        # Optional filtering by aspect_code
+        # Optional filtering by aspect_code. Compared case-insensitively:
+        # aspect_code is stored mixed-case in production ('ab', 'ey', 'mck'
+        # alongside 'EDU', 'IT', 'FIN'), so an exact match silently returns
+        # nothing for the lowercase ones (REQ-029). Matches the convention
+        # already used by GET /api/assessments.
         if aspect_code:
-            query += " AND ma.aspect_code = %s"
+            query += " AND UPPER(ma.aspect_code) = UPPER(%s)"
             params.append(aspect_code)
 
         # Optional filtering by standard_type
@@ -3150,7 +3154,7 @@ async def get_assessments_by_aspect(
             CROSS JOIN mat_aspects ma
             WHERE s.school_id = %s
               AND s.mat_id = %s
-              AND ma.aspect_code = %s
+              AND UPPER(ma.aspect_code) = UPPER(%s)
               AND ma.mat_id = %s
               AND s.is_active = TRUE
               AND ma.is_active = TRUE
@@ -3193,7 +3197,7 @@ async def get_assessments_by_aspect(
                 AND a.unique_term_id = %s
             LEFT JOIN standard_versions sv ON a.version_id = sv.version_id
             LEFT JOIN users u ON a.assigned_to = u.user_id
-            WHERE ma.aspect_code = %s
+            WHERE UPPER(ma.aspect_code) = UPPER(%s)
               AND ms.mat_id = %s
               AND ms.is_active = TRUE
             ORDER BY ms.sort_order
