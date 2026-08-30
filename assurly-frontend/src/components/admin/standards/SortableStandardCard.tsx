@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { useSortable } from '@dnd-kit/sortable';
 import { format } from 'date-fns';
 import { CSS } from '@dnd-kit/utilities';
@@ -32,14 +32,28 @@ interface SortableStandardCardProps {
 
 export function SortableStandardCard({ standard, onEdit, onHistory, onDelete }: SortableStandardCardProps) {
     const [menuOpen, setMenuOpen] = useState(false);
-    const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null);
+    const pendingMenuActionRef = useRef<
+        { type: 'delete'; id: string } | { type: 'history'; standard: Standard } | null
+    >(null);
 
     const handleMenuOpenChange = (open: boolean) => {
         setMenuOpen(open);
-        if (!open && pendingDeleteId) {
-            onDelete(pendingDeleteId);
-            setPendingDeleteId(null);
+        if (!open && pendingMenuActionRef.current) {
+            const action = pendingMenuActionRef.current;
+            pendingMenuActionRef.current = null;
+            if (action.type === 'delete') {
+                onDelete(action.id);
+            } else {
+                onHistory(action.standard);
+            }
         }
+    };
+
+    const queueMenuActionAndClose = (
+        action: NonNullable<typeof pendingMenuActionRef.current>
+    ) => {
+        pendingMenuActionRef.current = action;
+        setMenuOpen(false);
     };
 
     const {
@@ -168,7 +182,12 @@ export function SortableStandardCard({ standard, onEdit, onHistory, onDelete }: 
                                 </Button>
                             </DropdownMenuTrigger>
                             <DropdownMenuContent align="end">
-                                <DropdownMenuItem onClick={() => onHistory(standard)}>
+                                <DropdownMenuItem
+                                    onSelect={(e) => {
+                                        e.preventDefault();
+                                        queueMenuActionAndClose({ type: 'history', standard });
+                                    }}
+                                >
                                     <History className="mr-2 h-4 w-4" />
                                     View History
                                 </DropdownMenuItem>
@@ -180,8 +199,10 @@ export function SortableStandardCard({ standard, onEdit, onHistory, onDelete }: 
                                 <DropdownMenuItem
                                     onSelect={(e) => {
                                         e.preventDefault();
-                                        setPendingDeleteId(standard.mat_standard_id);
-                                        setMenuOpen(false);
+                                        queueMenuActionAndClose({
+                                            type: 'delete',
+                                            id: standard.mat_standard_id,
+                                        });
                                     }}
                                     className="text-destructive focus:text-destructive"
                                 >

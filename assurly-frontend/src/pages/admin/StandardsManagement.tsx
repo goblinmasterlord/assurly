@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import {
     Plus,
     Search,
@@ -82,7 +82,7 @@ export default function StandardsManagement() {
     const [isHistoryModalOpen, setIsHistoryModalOpen] = useState(false);
     const [isInactiveStandardsModalOpen, setIsInactiveStandardsModalOpen] = useState(false);
     const [isEditAspectDropdownOpen, setIsEditAspectDropdownOpen] = useState(false);
-    const [pendingAspectDeleteId, setPendingAspectDeleteId] = useState<string | null>(null);
+    const pendingAspectDeleteIdRef = useRef<string | null>(null);
     const [editingStandard, setEditingStandard] = useState<Standard | undefined>(undefined);
     const [editingAspect, setEditingAspect] = useState<Aspect | undefined>(undefined);
     const [historyStandard, setHistoryStandard] = useState<Standard | null>(null);
@@ -286,9 +286,10 @@ export default function StandardsManagement() {
 
     const handleEditAspectDropdownOpenChange = (open: boolean) => {
         setIsEditAspectDropdownOpen(open);
-        if (!open && pendingAspectDeleteId) {
-            handleDeleteAspect(pendingAspectDeleteId);
-            setPendingAspectDeleteId(null);
+        if (!open && pendingAspectDeleteIdRef.current) {
+            const id = pendingAspectDeleteIdRef.current;
+            pendingAspectDeleteIdRef.current = null;
+            handleDeleteAspect(id);
         }
     };
 
@@ -411,7 +412,7 @@ export default function StandardsManagement() {
                                 <DropdownMenuItem
                                     onSelect={(e) => {
                                         e.preventDefault();
-                                        setPendingAspectDeleteId(currentAspect.mat_aspect_id);
+                                        pendingAspectDeleteIdRef.current = currentAspect.mat_aspect_id;
                                         setIsEditAspectDropdownOpen(false);
                                     }}
                                     className="text-destructive focus:text-destructive"
