@@ -1,7 +1,7 @@
 # Assurly — Milestone Plan
 
 **Suggested path:** `docs/milestones/assurly-milestone-plan.md`
-**Version:** 2.23
+**Version:** 2.24
 **Date:** 30 August 2026
 **Status:** Approved. M1 open.
 **Owner:** Product Owner
@@ -236,7 +236,7 @@ Internal is not further subdivided at this stage. Requirements below refer to th
 | ID | Milestone | Requirements | Gate |
 |---|---|---|---|
 | **M1** | Stabilise — live defects | **REQ-042 (first)**, AUD-001, DATA-001, DOC-001 → DOC-003, SEC-001, REQ-007 → REQ-012, REQ-027 → REQ-031, REQ-033, REQ-038, REQ-041, REQ-043 | None. Starts immediately. |
-| **M2** | Role model, plus the additions displaced from M1 | REQ-013, REQ-032, REQ-034 → REQ-037, REQ-039, REQ-040, REQ-044, REQ-045 | None |
+| **M2** | Role model, plus the additions displaced from M1 | REQ-013, REQ-032, REQ-034 → REQ-037, REQ-039, REQ-040, REQ-044 → REQ-046 | None |
 | **M3** | Assessment lifecycle | REQ-014 → REQ-016 | M2 complete |
 | **M4** | Evidence model | REQ-017 | **M2 and M3 complete** |
 | **M5** | Applicability | REQ-018 | None |
@@ -329,9 +329,24 @@ Settled. Applicability is **per school, per term, carried forward**:
 >
 > **Consequence: the session still ends at 60 minutes.** It now ends *cleanly* — queue settled, token cleared, redirect with a message — which is the reported defect fixed. **But nothing slides.** The endpoint exists and has no caller.
 >
-> **Remaining frontend work, small:** point `refreshSession()` at `POST /api/auth/refresh`, and call it **while the token is still valid** — on a timer or when remaining life falls below a threshold — since calling it after expiry always fails by design. **A `401` from that endpoint is terminal: clear and redirect, never retry it through the refresh path**, or the client loops.
+> **Remaining frontend work, small:** point `refreshSession()` at `POST /api/auth/refresh`, and call it **while the token is still valid** — since calling it after expiry always fails by design. **A `401` from that endpoint is terminal: clear and redirect, never retry it through the refresh path**, or the client loops.
 >
 > **This changes what the gate can test.** Until it lands, the gate can exercise the endpoint directly but **cannot observe a session surviving past 60 minutes through the application.**
+
+> ### ✅ Settled — the renewal trigger.
+>
+> **Renewal is attempted before each API request when the token has 15 minutes or less remaining, deduped by a shared in-flight promise** so that a burst of parallel requests produces one renewal, not one each.
+>
+> **Rejected, and why — recorded so they are not revisited:**
+>
+> | Alternative | Why not |
+> |---|---|
+> | **A timer** | **Renews idle tabs.** A tab left open overnight would keep renewing itself and **exhaust the 12-hour ceiling while nobody is working** — so the user who comes back in the morning is signed out *because* the client kept their session alive. |
+> | **Activity listeners alone** | **Miss a user reading.** Someone working through a long page of standards without triggering a request looks idle and is not. |
+>
+> **Request-driven is the only signal that means what it claims to mean:** a request is the app doing work on the user's behalf, which is exactly the thing the session should be kept alive for. The 15-minute threshold gives four chances to renew inside the last quarter-hour, so a single failed attempt is not the end of the session.
+>
+> **A `401` from the refresh endpoint is treated as end-of-session** and falls through to the redirect rather than being retried — the two cases it can mean (expired, or past the ceiling) both resolve to "sign in again".
 >
 > **A refresh token remains the better long-term answer and belongs with REQ-013**, where revocation stops being optional. Choosing A does not block it; the two compose.
 >
@@ -780,15 +795,39 @@ The user drags a standard, the list reorders on screen, and the change is gone o
 >
 > **1. The failure is a `405`, not a `404`.** `POST /api/standards/reorder` is being matched by `GET /api/standards/{mat_standard_id}` with `mat_standard_id = "reorder"`; the path matches, the method does not, so Starlette answers `405 Method Not Allowed`. **The new endpoint must therefore be registered ABOVE the parameterised route.** Registering it below would leave the `405` in place and look like the endpoint had not been built.
 >
-> **This is the THIRD literal-after-parameterised shadowing found in `main.py`**, after the two REQ-012 fixed. Three instances of one mistake in one file is **a property of the file, not three separate errors** — the file is long, routes are appended at the end, and nothing makes registration order visible to whoever is adding one. **The REQ-030 fix must avoid re-committing it**, which means placing the new route deliberately rather than at the end of the Standards block. See REQ-013's test scope for the check that would catch the fourth.
+> ~~**This is the THIRD literal-after-parameterised shadowing found in `main.py`**, after the two REQ-012 fixed. Three instances of one mistake in one file is **a property of the file, not three separate errors**.~~ **Wrong — corrected at v2.24 below. There are two confirmed instances, not three, and this was not one of them.**
 >
 > **2. Frontend scope reduces.** The frontend **already surfaces the failure** with an error toast, so it is not swallowing anything. **Frontend scope is now: verify the success path** once the endpoint exists.
+
+> ### ✅ Correction — **this was never a shadowing. The count is two, not three.**
+>
+> The claim has been carried since v2.10 and is wrong. **Starlette prefers a full match anywhere in the routing table over an earlier partial match**, and a path-match with a **method**-mismatch yields only a partial. Verified by test, not by reading:
+>
+> | Setup | Result |
+> |---|---|
+> | `POST /x/reorder` registered **after** `GET /x/{id}` | **`200` — the POST wins** |
+> | No `POST` route at all, `GET /x/{id}` present | **`405`** |
+> | `GET /x/reorder` under `GET /x/{id}` | **genuinely shadowed** — matched the parameterised route with `id="reorder"` |
+>
+> **The `405` was simply what a missing endpoint looks like when a parameterised sibling absorbs the path.** REQ-012's two cases were real shadowing because they were **GET-on-GET**. Registration order was never the fault here, and registering below would not have left the `405` in place — a point v2.10's amendment asserted and never tested.
+>
+> **The route is registered above its sibling regardless**, with a comment at the site saying why: a future `GET /api/standards/reorder` would make ordering matter, and having the literal already in place is free. **Do not "correct" the placement back on the strength of this note.**
+>
+> **The count is two confirmed instances**, both REQ-012's. **The consequence that matters is in REQ-013's test scope**, which was written around the wrong count and the wrong assertion.
 
 **Scope — backend: build the endpoint.**
 
 - Accepts a **set** of standards with their new `sort_order` values.
 - **Applies them in a single transaction.** Reorder is inherently multi-record, and a partial application leaves the list in an order **nobody chose** — worse than the current failure, which at least leaves the old order intact.
 - **Must not bump `updated_at`.** Reordering is not a material edit, per REQ-011's settled definition. Note the column carries `ON UPDATE CURRENT_TIMESTAMP`, so this is not automatic: an `UPDATE` touching only `sort_order` will still move the timestamp unless the statement sets `updated_at = updated_at` explicitly. **This is the one part of the endpoint that is easy to get wrong.**
+
+> ### ⚠️ The gate must confirm one claim, and only production can confirm it.
+>
+> **That `updated_at = updated_at` suppresses `ON UPDATE CURRENT_TIMESTAMP`.** It is MySQL-documented behaviour — an explicitly assigned value wins over the auto-update — and it is implemented that way, but **no test outside a live database can demonstrate it.** Agents have no database access (§2.4).
+>
+> **It is the half of this change nothing else would notice.** Reordering works either way; the list holds its order on reload whether or not the timestamp moved. **If it fails, every reordered standard silently starts reporting today's date as its last update — which is REQ-011's defect, undone, by the endpoint that was supposed to respect it.**
+>
+> **Gate step: reorder a standard, then check its "Updated" date is unchanged.** Not "check the order held" — that is the part that will look right regardless.
 
 **Scope — frontend: verify the success path.** The error toast already fires on failure (see the amendment above), so nothing needs adding for the failure case — only confirmation that a successful reorder persists and survives a reload.
 
@@ -962,11 +1001,17 @@ Three defects in HLT's aspect data, found while investigating REQ-010 and REQ-02
 **Scope — tests. Minimal `pytest` coverage is in scope for this requirement**, limited to two assertions:
 
 1. **Permission enforcement** — that the external tier is **blocked at endpoint level on every write route**. This is the claim the requirement stands or falls on, and the one a UI demo cannot prove.
-2. **Route ordering** — that **every literal path precedes its parameterised sibling**. A short test over the registered route table, and it catches a defect class this codebase **demonstrably produces**: three instances in `main.py` so far (the two `/inactive` routes REQ-012 fixed, and `POST /api/standards/reorder` under REQ-030).
+2. **Route ordering** — that **every literal path precedes a parameterised sibling _sharing its HTTP method_**. A short test over the registered route table, and it catches a defect class this codebase **demonstrably produces**: **two** instances in `main.py`, both `GET`-on-`GET` — the `/inactive` routes REQ-012 fixed.
+
+> **The method qualifier is the whole assertion, and it is a correction.** Amended at v2.24, after REQ-030 established that Starlette prefers a full match anywhere in the table over an earlier method-mismatch partial.
+>
+> **The unqualified version would have been wrong in both directions.** It would **not** have caught REQ-030 — there was no route to be out of order, only a missing one — and it would **fail a correctly-working `POST` registered below a parameterised `GET`**, which is a false positive on code that works. A test that flags working code and misses the defect that shipped is worse than no test, because it trains people to ignore it.
+>
+> **Same-method collisions only.** That is the case REQ-012 fixed and the case that can actually be silent.
 
 This is not a general test suite and must not grow into one.
 
-**These are now two independent arguments for building the test infrastructure in M2**, which matters because the infrastructure is the expensive part. The first is that the external tier's write-blocking is otherwise unprovable. The second is that route shadowing is silent — it produces a `404` or `405` that looks like a missing endpoint — and has already cost this programme three defects and two sessions of diagnosis.
+**These are now two independent arguments for building the test infrastructure in M2**, which matters because the infrastructure is the expensive part. The first is that the external tier's write-blocking is otherwise unprovable. The second is that same-method route shadowing is silent — it produces a `404` that looks like a missing endpoint — and has already cost this programme two defects and a session of diagnosis.
 
 Note the starting position: **`assurly-backend/test_phase2_auth.py` is the only test file in the repository** (four tests, all auth primitives — JWT creation, MAT-wide access, response formatting, magic-link generation). Nothing covers authorisation. **There is no infrastructure to extend**, so REQ-013 carries the cost of establishing it as well as the cost of the tests themselves. Budget accordingly.
 
@@ -1023,6 +1068,28 @@ Note the starting position: **`assurly-backend/test_phase2_auth.py` is the only 
 - **Report the gaps, ranked by whether the path has a visible symptom** — the silent ones matter more, since nothing else will surface them.
 
 **Do not fix anything in the audit pass.** §2.2.1 applies: **report and stop.** Same shape as REQ-040 on `mat_aspects`, and for the same reason — fixing as you go is what turns one root problem into a series of defects.
+
+---
+
+#### REQ-046 — No multi-statement write in `main.py` is transactional
+**Type:** Defect. **Backend.** **M2.**
+
+**`DB_CONFIG` sets `autocommit: True` (`main.py:231`).** Under autocommit every statement commits as it executes, so **`connection.commit()` is redundant and `connection.rollback()` rolls back nothing.** `main.py` contains **18 `commit()` calls, 9 `rollback()` calls, and no `begin()`** outside the reorder endpoint REQ-030 added.
+
+**So every `except` block that calls `rollback()` is doing nothing, and every multi-statement handler is a sequence of independent commits.**
+
+**The dangerous case, and the one that shows what this costs:** `update_standard` writes **`standard_versions`**, then **`mat_standards`**, then **`standard_edit_log`**, in that order. A failure on the third leaves the first two committed — **a new version, live and pointed at, whose edit was never logged.** The version history and the edit log disagree, and nothing detects it.
+
+**Scope:**
+- **Enumerate every multi-statement write path** in `main.py` — not every handler that calls `commit()`, but every one where two or more statements must succeed or fail together.
+- **Make each transactional via an explicit `connection.begin()`.** pymysql issues a literal `BEGIN`, which opens a transaction regardless of the autocommit setting. `POST /api/standards/reorder` is the worked example.
+- **Report the full list before changing anything.** §2.2.1: report and stop. This touches the write path of most of the API, and the list is the deliverable of the first pass.
+
+**Do not simply set `autocommit: False`.** That would make every handler transactional at once, including single-statement ones that currently rely on the implicit commit — and any path that returns without committing would silently start discarding its write. **The failure mode of getting this wrong is data loss, not an error.**
+
+> **M3 dependency — REQ-046 should land before or with REQ-014.** REQ-014 introduces an **audit trail for assessment amendments**, and an audit trail is worthless if the writes producing it are not atomic: the record of a change and the change itself can diverge exactly as `standard_versions` and `standard_edit_log` can today. **Building the trail first would mean building it on the defect.**
+
+**Found during REQ-030**, which needed a real transaction and could not get one from the file's existing pattern.
 
 ---
 
@@ -1155,6 +1222,8 @@ Two faults on the login path, found during REQ-042's diagnosis. Neither is urgen
 - Remove the post-submission lock; gate editability on term state rather than submission state.
 - Retain submission as a meaningful state for reporting and completion tracking — an assessment can be submitted and still amendable.
 - Audit trail: who changed what, from what to what, when. This is the prerequisite for trusting the historical series M6 will visualise.
+
+> **Depends on REQ-046 (M2), which should land before or with this.** **No multi-statement write in `main.py` is currently transactional** — `autocommit` is on and every `rollback()` is a no-op — so an amendment and its audit record can be committed independently and diverge. **An audit trail built on that records what was attempted, not what happened**, and `standard_versions` versus `standard_edit_log` already shows the shape of the failure. Building the trail first would mean building it on the defect.
 
 **Scope — frontend:**
 - Distinguish draft / submitted / amended clearly, without implying that submitted means locked.
@@ -1457,12 +1526,13 @@ Not scheduled. Not to be picked up opportunistically.
 | REQ-027 | M1 | **CLOSED — gate 4 confirms no regression.** The newly reported failure is a different, untested flow — see REQ-043 | — | ☑ | ☑ |
 | REQ-028 | M1 | Ready — **normal M1 priority** (v2.11 reduction reversed). Ships with the REQ-010 migration | ☐ | — | ☐ |
 | REQ-029 | M1 | **Gate 4 PASSED** — all four endpoints, including creation against lowercase-coded aspects and analytics trends | ☑ | — | ☑ |
-| REQ-030 | M1 | Ready — backend builds the endpoint **above** the parameterised route; frontend verifies the success path | ☐ | ☐ | ☐ |
+| REQ-030 | M1 | **Backend merged**, contract v2.11 — pending gate, which must confirm **`updated_at` did not move**. Frontend verifies the success path | ☐ | ☐ | ☐ |
 | REQ-031 | M1 | Ready — **frontend agent** | — | ☐ | ☐ |
 | REQ-039 | **M2** | Ready — build with REQ-013. Backend half **reports before implementing** | ☐ | ☐ | ☐ |
 | REQ-040 | **M2** | Ready — audit only. **Report and stop**; produce SQL for the product owner | ☐ | — | ☐ |
 | REQ-044 | **M2** | Ready — audit only, frontend. **Report and stop.** Check the REQ-043 dev log first | — | ☐ | ☐ |
 | REQ-045 | **M2** | Ready — backend. Hash magic-link tokens; enforce the rate-limit constants that already exist | ☐ | — | ☐ |
+| REQ-046 | **M2** | Ready — backend. **Report the full list before changing anything.** Should land **before or with REQ-014** | ☐ | — | ☐ |
 | REQ-032 | **M2** | Ready — frontend. Premise re-confirmed at v2.16 | — | ☐ | ☐ |
 | REQ-033 | M1 | **CLOSED — passes UAT.** Two Radix layers, second unmount clobbering the first's `pointer-events` cleanup | — | ☑ | ☑ |
 | REQ-034 | **M2** | Ready — frontend, small | — | ☐ | ☐ |
@@ -1475,7 +1545,7 @@ Not scheduled. Not to be picked up opportunistically.
 | REQ-043 | M1 | **CLOSED — passes UAT.** Dashboard and aspect metric caches now invalidated on create. **Opens REQ-044** | — | ☑ | ☑ |
 | DATA-001 | M1 | Ready — **product owner runs manually**, no code | — | — | ☐ |
 | REQ-013 | M2 | Ready | ☐ | ☐ | ☐ |
-| REQ-014 | M3 | Gated on M2 | ☐ | ☐ | ☐ |
+| REQ-014 | M3 | Gated on M2. **Also depends on REQ-046** — an audit trail on non-atomic writes records attempts, not outcomes | ☐ | ☐ | ☐ |
 | REQ-015 | M3 | Gated on M2 | ☐ | ☐ | ☐ |
 | REQ-016 | M3 | Gated on M2 | ☐ | ☐ | ☐ |
 | REQ-017 | M4 | Ready — absorbs REQ-006 | ☐ | ☐ | ☐ |
@@ -1495,6 +1565,7 @@ Not scheduled. Not to be picked up opportunistically.
 
 | Version | Date | Change |
 |---|---|---|
+| 2.24 | 30 August 2026 | **REQ-030's shadowing claim is CORRECTED. There are two confirmed instances, not three, and REQ-030 was not one of them.** The claim has been carried since v2.10. **Starlette prefers a full match anywhere in the routing table over an earlier partial match**, and a path-match with a **method**-mismatch yields only a partial. Verified by test: `POST /x/reorder` registered **after** `GET /x/{id}` returns **`200`**; with no `POST` route at all it returns **`405`**; `GET /x/reorder` under `GET /x/{id}` **is** genuinely shadowed. **REQ-012's two cases were real shadowing because they were `GET`-on-`GET`.** The `405` here was simply what a missing endpoint looks like when a parameterised sibling absorbs the path — **registration order was never the fault**, and v2.10's assertion that registering below "would leave the `405` in place" was never tested. **The route is registered above its sibling regardless**, because a future `GET /api/standards/reorder` would make ordering matter; a comment at the site says so, to stop the placement being "corrected" back. **REQ-013's route-ordering test is amended, and this is the consequence that matters:** the assertion must be on **same-method collisions only**. The unqualified version was wrong in both directions — it would **not** have caught REQ-030, since there was no route to be out of order, and it would **fail a correctly-working `POST` registered below a parameterised `GET`**. A test that flags working code and misses the defect that shipped trains people to ignore it. **REQ-046 added** to M2 (backend): **no multi-statement write in `main.py` is transactional.** `DB_CONFIG` sets `autocommit: True` (`main.py:231`), so `commit()` is redundant and **`rollback()` rolls back nothing** — 18 `commit()` calls, 9 `rollback()` calls, and **no `begin()`** outside the reorder endpoint. **The dangerous case is `update_standard`**, which writes `standard_versions`, `mat_standards` and `standard_edit_log` in sequence: a failure on the third leaves the first two committed, producing **a live version row whose edit was never logged**, with nothing to detect the divergence. Scope is to enumerate every multi-statement write path, make each transactional via an explicit `begin()`, and **report the full list before changing anything**. **Not by setting `autocommit: False`** — that would make every handler transactional at once, and any path returning without committing would silently start discarding its write; the failure mode of getting it wrong is data loss, not an error. **M3 dependency recorded in both directions:** REQ-014's audit trail for assessment amendments is worthless if the writes producing it are not atomic, so **REQ-046 lands before or with it** — building the trail first builds it on the defect. **REQ-030 records the one claim only production can confirm:** that **`updated_at = updated_at` suppresses `ON UPDATE CURRENT_TIMESTAMP`**. MySQL-documented and implemented, but unprovable without database access (§2.4), and **it is the half of this change nothing else would notice** — reordering works either way. If it fails, every reordered standard silently reports today's date as its last update, **which is REQ-011's defect undone by the endpoint meant to respect it.** The gate step is to check the "Updated" date, not the order. **REQ-042's renewal trigger is settled:** renewal is attempted **before each API request when the token has 15 minutes or less remaining**, deduped by a shared in-flight promise so a burst of parallel requests produces one renewal. **Rejected: a timer**, which renews idle tabs and can exhaust the 12-hour ceiling while nobody is working — signing out the user who returns in the morning *because* the client kept the session alive; **and activity listeners alone**, which miss a user reading a long page without making requests. **A request is the app doing work on the user's behalf**, which is the only signal that means what it claims to. A `401` from the refresh endpoint is **end-of-session** and falls through to the redirect rather than being retried. **Note on versioning:** the brief said "bump to v2.23", which had already been used by the §2.6 correction pushed earlier today. Per the precedent in §2.6, a published version is **superseded, not overwritten**, so this is v2.24; **none of its five items overlaps v2.23, so nothing was re-applied.** |
 | 2.23 | 30 August 2026 | **§2.6 corrected: the version number is set by hand, and nothing computes or checks it.** The section previously read as a specification of something the system tracks. It is not. **No artefact asserts a version** — not the repository, not a tag, not the application, not a config file, not a package manifest — so the number exists **only where a person writes it**, in this plan and in dev log prose written after the fact. Nothing derives a version from the commits, nothing validates that a recorded bump matches what shipped, and no build fails if a bump is skipped, duplicated or wrong. **An agent recording a bump is making a note, not performing a release**, and a version in a dev log is a claim by its author rather than a fact about a build. Wording implying otherwise is removed, and the ⚠️ footnote that said as much has been promoted to the head of the section, since it describes what versioning here *is* rather than qualifying it. **The target ladder is now recorded explicitly:** one minor bump per milestone close — M1 → 1.44, M2 → 1.45, M3 → 1.46, M4 → 1.47, M5 → 1.48, M6 → 1.49, M7 → 1.50, **M8 → 2.0**, because M8's close is the sprint close and takes a major bump rather than the 1.51 the arithmetic gives. **That last rung is an interpretation and is flagged as one** — if 1.51 followed by a separately declared 2.0 was the intent, the table is what needs correcting, not the practice. **Patch numbers accumulate under the current minor and are superseded at milestone close**; no attempt is made to make the patch count mean anything, since not every requirement merges as one commit and not every merge is a requirement. **The "single source of truth needed before 2.0" line is restated as a want, not a requirement:** the in-app version history is the one consumer that needs the version as data rather than prose, nothing is blocked on it today, and it stays out of M1. |
 | 2.22 | 30 August 2026 | **REQ-042 — option A chosen and the backend half built.** **`POST /api/auth/refresh` exchanges a valid, unexpired token for a new one with a fresh 60-minute window.** An expired token is refused: **this renews a live session, it does not resurrect a dead one.** No schema change. **The absolute cap is the price of sliding, not an optional extra** — nothing in the platform can revoke a JWT, so unbounded renewal would turn a 60-minute stolen-token window into a permanent one. The token carries an **`auth_time` claim, the original magic-link login, unchanged through every renewal**, and renewal is refused beyond **12 hours** measured from it. **Why 12 and not 8:** the difference in exposure is marginal next to having no revocation at all, while at 8 hours someone signing in at 08:30 is thrown out at 16:30 **mid-task**, and re-entry costs an email round trip — **12 makes "sign in once a day" true for every working pattern in a school**, and it is one environment variable if the posture changes. **Tokens minted before the claim existed fall back to their own `iat`**, so they are capped from issue rather than rejected and **the deploy signs nobody out.** **`expires_in` now derives from `JWT_ACCESS_TOKEN_EXPIRE_MINUTES`**; it was hardcoded to 3600 and would have misstated any changed lifetime. **The frontend half shipped first and alone fixes the reported defect** — sliding expiry does nothing for a user who returns after expiry, since there is nothing left to slide, so for that population the whole experience is what the client does with a `401`; that is also exactly who REQ-013's external tier is. **`RefreshTokenRequest` and `TokenPayload.type == "refresh"` stay unused deliberately** — they describe **option B**: the model expects a `refresh_token` in a body, while §3a takes no body and renews the header token, and option A mints only access tokens. Left in place as a correct placeholder rather than deleted. **Contract to v2.10** (§3a, numbered `3a` so no existing endpoint reference is renumbered). **Deploys alone as an auth gate** per §2.7. **REQ-013 gains the deactivation hole:** `get_current_user` (`main.py:536`) wraps its body in a bare `except Exception` that **catches the `401 "User not found or inactive"` it raises at `:529` and re-raises it as a `500`**, and the frontend **deliberately retains the token on a `500`** — correct behaviour for the error it is being told about. **So a deactivated user cannot be logged out and holds a working session until natural expiry.** That is a permissions defect: the tier model is only as real as the ability to remove someone from it. **REQ-045 added** to M2 (backend): **magic-link tokens are stored in plaintext** — `generate_token_hash()` exists for exactly this and is never called, so anyone with read access to `users` can sign in as any user inside the 15-minute window; and **`POST /api/auth/request-magic-link` has no rate limiting** though `MAGIC_LINK_RATE_LIMIT_PER_EMAIL` and its window are defined and unread. Enforce the constants that exist rather than inventing a policy, and decide deliberately that hashing invalidates tokens in flight at deploy. **Neither is urgent, both sit on the path REQ-042 just made busier.** **§2.5 records a compliance gap, not a new rule:** **two sessions have now closed with no dev log entry** — the dependency pins (written late) and the REQ-033/REQ-041/REQ-043 session (never written) — and the second **cost something concrete**: REQ-044 was scoped to build on a mutation-surface survey that now exists only in commit messages, so it either starts from nothing or repeats work, and nobody can tell which. **A dev log is the only artefact that carries reasoning between sessions**; the diff carries what changed, not what was examined and ruled out. **No new rule is added** — that would repeat the §2.2 preamble's mistake of answering a compliance gap with more text. |
 | 2.21 | 30 August 2026 | **Three M1 defects pass UAT and CLOSE, each with its cause confirmed rather than assumed.** **REQ-033** — `DropdownMenu` and `Dialog` **both manage `body`'s `pointer-events`**, and with both mounted **the second layer's unmount cleanup clobbered the first's**, which is why **Cancel failed too**. The corrected v2.19 diagnosis was right, and the method it prescribed is what settled it: reading `document.body.style.pointerEvents` at each step distinguished two mechanisms that produced identical symptoms and equally plausible stories. **REQ-041** — **two faults, either sufficient alone:** a `useEffect` reset `activeStandard` to the first standard on every assessment change, and **Save & Continue called `goToNextStandard` without awaiting the save**, so the advance raced the refresh that reset it. **End-of-list behaviour decided and recorded:** hold on the last standard and raise a toast; do not close or navigate away. **REQ-043** — **creating into an existing term changes only the assessments list, so the dashboard overlay and aspect metric caches were never invalidated.** REQ-027's `terms` invalidation was firing; it was not the cache this flow needed. **REQ-044 added** to M2 (frontend, audit): a systematic pass over every mutation path confirming it invalidates every cache its result appears in, and **`await`s the invalidation before the refetch** — an un-awaited invalidation is indistinguishable from a missing one. **The v2.20 "scope it if the pattern holds a third time" condition is WITHDRAWN. Do not wait for a third instance.** REQ-027 and REQ-043 are **one defect that surfaced twice**, and both were found by a person performing an ordinary action and noticing — not by anything systematic. **A mutation path with no second cache to invalidate produces no visible symptom at all**, so it shows stale data that looks current; **the absence of further reports is not evidence the remaining paths are correct**, it is equally consistent with them being silently wrong. **Check the REQ-043 dev log first** — the frontend agent was asked to report on this surface while in the code and may have surveyed part of it; start from that rather than repeating it. **Report and stop; no fixes in the audit pass** — same shape and same reasoning as REQ-040 on `mat_aspects`. **M2, not M1**, since M1 stays closed to scope growth (v2.15). **§2.6 gains a precedent, recorded because it was handled correctly:** a re-sent instruction is **diffed against what is already recorded, not re-applied** — the v2.19 re-send had four of five items already applied, and re-applying them would have duplicated two requirement blocks; and a published version is **superseded, not overwritten** — v2.20 corrected REQ-027 as a new row rather than rewriting v2.19, because rewriting a pushed version to say something it never said falsifies the record. |
