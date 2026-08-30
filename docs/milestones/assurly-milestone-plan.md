@@ -296,6 +296,16 @@ Settled. Applicability is **per school, per term, carried forward**:
 >
 > **The frontend half ships first, and did.** It alone fixes the reported defect. **Sliding expiry does nothing for a user who returns after the token has already expired** — there is nothing left to slide — so for them the entire experience is what the client does with a `401`. That is also exactly the population REQ-013's external tier is made of.
 >
+> ### ⚠️ The two halves do not compose yet — **one frontend change is still outstanding.**
+>
+> **`authService.refreshSession()` still calls `getCurrentSession()`**, which re-presents the same token to `/api/auth/me`. It does **not** call `POST /api/auth/refresh`. The frontend fix (`3935287`) was written before the endpoint existed and says so in its own comment.
+>
+> **Consequence: the session still ends at 60 minutes.** It now ends *cleanly* — queue settled, token cleared, redirect with a message — which is the reported defect fixed. **But nothing slides.** The endpoint exists and has no caller.
+>
+> **Remaining frontend work, small:** point `refreshSession()` at `POST /api/auth/refresh`, and call it **while the token is still valid** — on a timer or when remaining life falls below a threshold — since calling it after expiry always fails by design. **A `401` from that endpoint is terminal: clear and redirect, never retry it through the refresh path**, or the client loops.
+>
+> **This changes what the gate can test.** Until it lands, the gate can exercise the endpoint directly but **cannot observe a session surviving past 60 minutes through the application.**
+>
 > **A refresh token remains the better long-term answer and belongs with REQ-013**, where revocation stops being optional. Choosing A does not block it; the two compose.
 >
 > **`RefreshTokenRequest` (`auth_models.py:17`) and `TokenPayload.type == "refresh"` stay unused, deliberately.** They describe **option B**, not this one. `RefreshTokenRequest` expects a `refresh_token` in a request body; §3a takes **no body** and renews the token in the `Authorization` header, so adopting the model would misdescribe the flow in the OpenAPI spec. And option A mints **only** access tokens, so nothing should ever set `type` to `"refresh"`. **Left in place rather than deleted** — they are a correct placeholder for the work REQ-013 may pick up, and deleting them would only have to be undone.
@@ -1434,7 +1444,7 @@ Not scheduled. Not to be picked up opportunistically.
 | REQ-037 | **M2** | Ready — frontend. Build the inactive aspects view | — | ☐ | ☐ |
 | REQ-038 | M1 | **Gate 4 PASSED** — header and description both update on rename | — | ☑ | ☑ |
 | REQ-041 | M1 | **CLOSED — passes UAT.** End-of-list behaviour decided: hold on the last standard with a toast | — | ☑ | ☑ |
-| REQ-042 | M1 | **Option A chosen and built.** Frontend shipped; backend merged and contract at v2.10 — **pending the auth gate**, which it deploys alone (§2.7) | ☐ | ☐ | ☐ |
+| REQ-042 | M1 | **Option A built, not yet wired.** Backend merged, contract v2.10, frontend `401` path fixed — but **`refreshSession()` does not call the new endpoint yet**, so nothing slides. Pending that change and the auth gate (§2.7) | ☐ | ☐ | ☐ |
 | REQ-043 | M1 | **CLOSED — passes UAT.** Dashboard and aspect metric caches now invalidated on create. **Opens REQ-044** | — | ☑ | ☑ |
 | DATA-001 | M1 | Ready — **product owner runs manually**, no code | — | — | ☐ |
 | REQ-013 | M2 | Ready | ☐ | ☐ | ☐ |
