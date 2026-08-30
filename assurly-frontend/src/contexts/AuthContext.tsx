@@ -149,6 +149,18 @@ export function AuthProvider({ children }: AuthProviderProps) {
     initializeAuth();
   }, []);
 
+  useEffect(() => {
+    const onSessionRefreshed = (event: Event) => {
+      const user = (event as CustomEvent<{ user: User }>).detail?.user;
+      if (user) {
+        setUser(user);
+      }
+    };
+
+    window.addEventListener('assurly:session-refreshed', onSessionRefreshed);
+    return () => window.removeEventListener('assurly:session-refreshed', onSessionRefreshed);
+  }, [setUser]);
+
   const contextValue: AuthContextType = {
     ...authState,
     login,

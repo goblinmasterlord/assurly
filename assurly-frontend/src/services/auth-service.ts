@@ -14,6 +14,21 @@ class AuthService {
     return tokenStorage.getToken();
   }
 
+  private mapBackendUser(backendUser: any): User {
+    return {
+      user_id: backendUser.user_id,
+      email: backendUser.email,
+      full_name: backendUser.full_name,
+      mat_id: backendUser.mat_id,
+      mat_name: backendUser.mat_name,
+      school_id: backendUser.school_id,
+      school_name: backendUser.school_name,
+      role_title: backendUser.role_title,
+      is_active: backendUser.is_active !== false,
+      last_login: backendUser.last_login,
+    };
+  }
+
   private setStoredToken(token: string | null): void {
     if (token) {
       tokenStorage.setToken(token);
@@ -61,19 +76,7 @@ class AuthService {
       // Map backend user to our User type (v4.0)
       let mappedUser: User | null = null;
       if (response.data.user) {
-        const backendUser = response.data.user;
-        mappedUser = {
-          user_id: backendUser.user_id,
-          email: backendUser.email,
-          full_name: backendUser.full_name,
-          mat_id: backendUser.mat_id,
-          mat_name: backendUser.mat_name,
-          school_id: backendUser.school_id,
-          school_name: backendUser.school_name,
-          role_title: backendUser.role_title,
-          is_active: backendUser.is_active !== false,
-          last_login: backendUser.last_login
-        };
+        mappedUser = this.mapBackendUser(response.data.user);
       }
       
       return {
@@ -109,19 +112,7 @@ class AuthService {
       
       // Map backend user to our User type (v4.0)
       if (response.data) {
-        const backendUser = response.data;
-        const user: User = {
-          user_id: backendUser.user_id,
-          email: backendUser.email,
-          full_name: backendUser.full_name,
-          mat_id: backendUser.mat_id,
-          mat_name: backendUser.mat_name,
-          school_id: backendUser.school_id,
-          school_name: backendUser.school_name,
-          role_title: backendUser.role_title,
-          is_active: backendUser.is_active !== false,
-          last_login: backendUser.last_login
-        };
+        const user = this.mapBackendUser(response.data);
         logger.debug('Session validated successfully', { 
           userId: user.user_id, 
           role: user.role_title, 
@@ -151,17 +142,49 @@ class AuthService {
   }
 
   async refreshSession(): Promise<AuthResponse | null> {
-    // Note: The backend doesn't have a refresh endpoint yet
-    // For now, we'll try to get the current session
-    const session = await this.getCurrentSession();
-    if (session?.user) {
-      return {
-        access_token: this.getToken() || '',
-        token_type: 'bearer',
-        user: session.user
-      };
+    const token = this.getToken();
+    if (!token) {
+      return null;
     }
-    return null;
+
+    try {
+      logger.debug('Renewing session via POST /api/auth/refresh');
+      const response = await apiClient.post<{
+        access_token: string;
+        token_type: string;
+        expires_in?: number;
+        user: any;
+      }>('/api/auth/refresh');
+
+      const accessToken = response.data.access_token;
+      if (!accessToken || !response.data.user) {
+        return null;
+      }
+
+      this.setStoredToken(accessToken);
+      const user = this.mapBackendUser(response.data.user);
+
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(
+          new CustomEvent('assurly:session-refreshed', { detail: { user } })
+        );
+      }
+
+      return {
+        access_token: accessToken,
+        token_type: 'bearer',
+        user,
+      };
+    } catch (error: any) {
+      const status = error.statusCode ?? error.response?.status;
+      if (status === 401) {
+        // Expired token or 12-hour absolute cap — terminal; do not retry via interceptor.
+        logger.warn('Session refresh refused (401)');
+        this.setStoredToken(null);
+        return null;
+      }
+      throw error;
+    }
   }
 
   async logout(): Promise<void> {

@@ -1,6 +1,8 @@
 import axios, { AxiosError } from 'axios';
 import type { AxiosResponse, InternalAxiosRequestConfig } from 'axios';
 import { logger } from '@/lib/logger';
+import { shouldProactivelyRefreshToken } from '@/lib/jwt-utils';
+import type { AuthResponse } from '@/types/auth';
 
 // Request metadata storage
 const requestMetadata = new Map<string, { startTime: number }>();
@@ -10,6 +12,7 @@ const DEBUG_API = import.meta.env.VITE_DEBUG_API === 'true';
 
 // Track refresh attempt to prevent infinite loops
 let isRefreshing = false;
+let refreshInFlight: Promise<AuthResponse | null> | null = null;
 let failedQueue: Array<{
   resolve: (value?: unknown) => void;
   reject: (reason?: any) => void;
@@ -58,6 +61,46 @@ async function handleSessionExpired(refreshError?: unknown): Promise<never> {
   return Promise.reject(authError);
 };
 
+function isAuthHandshakeUrl(url: string | undefined): boolean {
+  if (!url) return false;
+  return (
+    url.includes('/auth/request-magic-link') ||
+    url.includes('/auth/verify/') ||
+    url.includes('/auth/refresh')
+  );
+}
+
+async function runTokenRefresh(): Promise<AuthResponse | null> {
+  if (refreshInFlight) {
+    return refreshInFlight;
+  }
+
+  refreshInFlight = (async () => {
+    const { authService } = await import('@/services/auth-service');
+    return authService.refreshSession();
+  })().finally(() => {
+    refreshInFlight = null;
+  });
+
+  return refreshInFlight;
+}
+
+async function maybeProactivelyRefreshToken(): Promise<void> {
+  if (isRefreshing || typeof window === 'undefined') {
+    return;
+  }
+
+  const token = localStorage.getItem('assurly_auth_token');
+  if (!token || !shouldProactivelyRefreshToken(token)) {
+    return;
+  }
+
+  const refreshed = await runTokenRefresh();
+  if (!refreshed) {
+    await handleSessionExpired();
+  }
+}
+
 // Enhanced API client with industry-standard optimizations
 const apiClient = axios.create({
   // In development with empty base URL, use relative paths (proxied by Vite)
@@ -74,7 +117,7 @@ const apiClient = axios.create({
 
 // Request interceptor for debugging and auth
 apiClient.interceptors.request.use(
-  (config: InternalAxiosRequestConfig) => {
+  async (config: InternalAxiosRequestConfig) => {
     // Store timestamp for performance monitoring
     const requestId = `${config.method}-${config.url}-${Date.now()}`;
     requestMetadata.set(requestId, { startTime: Date.now() });
@@ -85,8 +128,12 @@ apiClient.interceptors.request.use(
       logger.debug(`API Request: ${config.method?.toUpperCase()} ${config.url}`);
     }
     
+    // Sliding expiry: renew while the token is still valid, before this request goes out.
+    if (typeof window !== 'undefined' && !isAuthHandshakeUrl(config.url)) {
+      await maybeProactivelyRefreshToken();
+    }
+
     // Add auth token if available
-    // Direct access to localStorage where tokens are now stored
     if (typeof window !== 'undefined') {
       try {
         const token = localStorage.getItem('assurly_auth_token');
@@ -149,11 +196,7 @@ apiClient.interceptors.response.use(
       isRefreshing = true;
 
       try {
-        // refreshSession is a stub until the backend ships /api/auth/refresh (REQ-042
-        // backend half). Treat a null return the same as a throw — never leave the
-        // latch set or the queue unsettled.
-        const { authService } = await import('@/services/auth-service');
-        const response = await authService.refreshSession();
+        const response = await runTokenRefresh();
         if (response) {
           processQueue();
           isRefreshing = false;
