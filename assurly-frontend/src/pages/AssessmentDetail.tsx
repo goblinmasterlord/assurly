@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useMemo } from "react";
+import React, { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { useParams, useNavigate, Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import {
@@ -276,12 +276,15 @@ export function AssessmentDetailPage() {
     return meta?.aspect_category;
   }, [assessment, aspects]);
 
-  // Update activeStandard when assessment loads
+  const activeStandardInitializedFor = useRef<string | null>(null);
+
+  // Set the initial standard once per assessment — not on every refresh after save.
   useEffect(() => {
-    if (assessment?.standards && assessment.standards.length > 0) {
-      setActiveStandard(getNavigationStandards(assessment.standards)[0]);
-    }
-  }, [assessment]);
+    if (!id || !assessment?.standards?.length) return;
+    if (activeStandardInitializedFor.current === id) return;
+    activeStandardInitializedFor.current = id;
+    setActiveStandard(getNavigationStandards(assessment.standards)[0]);
+  }, [assessment, id]);
   
   const [ratings, setRatings] = useState<Record<string, Rating>>({});
   const [evidence, setEvidence] = useState<Record<string, string>>({});
@@ -436,6 +439,29 @@ export function AssessmentDetailPage() {
     }
   };
 
+  const findNextUnratedStandard = useCallback(
+    (fromStandardId: string | undefined): Standard | null => {
+      if (!fromStandardId) return null;
+      const startIndex = navigationStandards.findIndex((s) => s.id === fromStandardId);
+      if (startIndex === -1) return null;
+
+      const isRated = (standard: Standard) => {
+        const standardId = standard.id;
+        if (!standardId) return true;
+        if (ratings[standardId] != null) return true;
+        return standard.rating != null;
+      };
+
+      for (let i = startIndex + 1; i < navigationStandards.length; i++) {
+        if (!isRated(navigationStandards[i])) {
+          return navigationStandards[i];
+        }
+      }
+      return null;
+    },
+    [navigationStandards, ratings]
+  );
+
   // Edit mode functions
   const handleEnterEditMode = () => {
     // Store original values for cancellation
@@ -524,6 +550,21 @@ export function AssessmentDetailPage() {
       setSaving(false);
     }
   }, [assessment, id, ratings, evidence, submitAssessment, refreshAssessment, toast]);
+
+  const handleSaveAndContinue = useCallback(async () => {
+    const currentStandardId = activeStandard?.id;
+    await handleSave();
+    const nextStandard = findNextUnratedStandard(currentStandardId);
+    if (nextStandard) {
+      setActiveStandard(nextStandard);
+      return;
+    }
+    toast({
+      title: "All standards rated",
+      description:
+        "No further unrated standards remain. You can submit the assessment when ready.",
+    });
+  }, [activeStandard?.id, findNextUnratedStandard, handleSave, toast]);
 
   const handleSaveEdit = async () => {
     await handleSave();
@@ -1562,10 +1603,7 @@ export function AssessmentDetailPage() {
                   </>
                 ) : activeStandardIndex < totalCount - 1 ? (
                   <Button 
-                    onClick={() => {
-                      handleSave();
-                      goToNextStandard();
-                    }}
+                    onClick={() => void handleSaveAndContinue()}
                     disabled={saving}
                     className="gap-2"
                   >
