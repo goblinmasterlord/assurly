@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import {
     Dialog,
@@ -34,6 +34,35 @@ export function DeleteConfirmationModal({
     const [isConfirming, setIsConfirming] = useState(false);
     const itemLabel = itemType === 'standard' ? 'standard' : 'aspect';
 
+    const releaseBodyPointerLock = () => {
+        requestAnimationFrame(() => {
+            const openOverlay = document.querySelector(
+                '[data-radix-dialog-overlay][data-state="open"], [data-radix-menu-content][data-state="open"]'
+            );
+            if (!openOverlay) {
+                document.body.style.removeProperty('pointer-events');
+            }
+        });
+    };
+
+    useEffect(() => {
+        if (!open) {
+            releaseBodyPointerLock();
+            return;
+        }
+        return () => {
+            releaseBodyPointerLock();
+        };
+    }, [open]);
+
+    const handleOpenChange = (nextOpen: boolean) => {
+        if (isConfirming) return;
+        onOpenChange(nextOpen);
+        if (!nextOpen) {
+            releaseBodyPointerLock();
+        }
+    };
+
     const handleConfirm = async () => {
         setIsConfirming(true);
         try {
@@ -45,11 +74,7 @@ export function DeleteConfirmationModal({
     };
 
     return (
-        <Dialog open={open} onOpenChange={(nextOpen) => {
-            if (!isConfirming) {
-                onOpenChange(nextOpen);
-            }
-        }}>
+        <Dialog open={open} onOpenChange={handleOpenChange}>
             <DialogContent className="sm:max-w-[500px]">
                 <DialogHeader>
                     <DialogTitle className="text-destructive flex items-center gap-2">

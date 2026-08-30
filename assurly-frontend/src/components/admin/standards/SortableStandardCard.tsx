@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { useSortable } from '@dnd-kit/sortable';
 import { format } from 'date-fns';
 import { CSS } from '@dnd-kit/utilities';
@@ -30,6 +31,17 @@ interface SortableStandardCardProps {
 }
 
 export function SortableStandardCard({ standard, onEdit, onHistory, onDelete }: SortableStandardCardProps) {
+    const [menuOpen, setMenuOpen] = useState(false);
+    const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null);
+
+    const handleMenuOpenChange = (open: boolean) => {
+        setMenuOpen(open);
+        if (!open && pendingDeleteId) {
+            onDelete(pendingDeleteId);
+            setPendingDeleteId(null);
+        }
+    };
+
     const {
         attributes,
         listeners,
@@ -149,7 +161,7 @@ export function SortableStandardCard({ standard, onEdit, onHistory, onDelete }: 
                         >
                             <Edit2 className="h-4 w-4" />
                         </Button>
-                        <DropdownMenu>
+                        <DropdownMenu open={menuOpen} onOpenChange={handleMenuOpenChange}>
                             <DropdownMenuTrigger asChild>
                                 <Button variant="ghost" size="icon" className="h-8 w-8">
                                     <MoreVertical className="h-4 w-4" />
@@ -168,9 +180,8 @@ export function SortableStandardCard({ standard, onEdit, onHistory, onDelete }: 
                                 <DropdownMenuItem
                                     onSelect={(e) => {
                                         e.preventDefault();
-                                        // Defer until the dropdown fully closes — opening a Dialog
-                                        // from onClick leaves Radix body pointer-events stuck.
-                                        setTimeout(() => onDelete(standard.mat_standard_id), 0);
+                                        setPendingDeleteId(standard.mat_standard_id);
+                                        setMenuOpen(false);
                                     }}
                                     className="text-destructive focus:text-destructive"
                                 >

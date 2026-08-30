@@ -82,6 +82,7 @@ export default function StandardsManagement() {
     const [isHistoryModalOpen, setIsHistoryModalOpen] = useState(false);
     const [isInactiveStandardsModalOpen, setIsInactiveStandardsModalOpen] = useState(false);
     const [isEditAspectDropdownOpen, setIsEditAspectDropdownOpen] = useState(false);
+    const [pendingAspectDeleteId, setPendingAspectDeleteId] = useState<string | null>(null);
     const [editingStandard, setEditingStandard] = useState<Standard | undefined>(undefined);
     const [editingAspect, setEditingAspect] = useState<Aspect | undefined>(undefined);
     const [historyStandard, setHistoryStandard] = useState<Standard | null>(null);
@@ -283,6 +284,14 @@ export default function StandardsManagement() {
         }
     };
 
+    const handleEditAspectDropdownOpenChange = (open: boolean) => {
+        setIsEditAspectDropdownOpen(open);
+        if (!open && pendingAspectDeleteId) {
+            handleDeleteAspect(pendingAspectDeleteId);
+            setPendingAspectDeleteId(null);
+        }
+    };
+
     const handleEditAspect = (aspect: Aspect) => {
         setEditingAspect(aspect);
         setIsAspectModalOpen(true);
@@ -381,7 +390,7 @@ export default function StandardsManagement() {
                     </p>
                 </div>
                 <div className="flex gap-3">
-                    <DropdownMenu open={isEditAspectDropdownOpen} onOpenChange={setIsEditAspectDropdownOpen}>
+                    <DropdownMenu open={isEditAspectDropdownOpen} onOpenChange={handleEditAspectDropdownOpenChange}>
                         <DropdownMenuTrigger asChild>
                             <Button variant="outline" size="icon" title="Options">
                                 <Settings className="h-4 w-4" />
@@ -402,10 +411,8 @@ export default function StandardsManagement() {
                                 <DropdownMenuItem
                                     onSelect={(e) => {
                                         e.preventDefault();
+                                        setPendingAspectDeleteId(currentAspect.mat_aspect_id);
                                         setIsEditAspectDropdownOpen(false);
-                                        setTimeout(() => {
-                                            handleDeleteAspect(currentAspect.mat_aspect_id);
-                                        }, 0);
                                     }}
                                     className="text-destructive focus:text-destructive"
                                 >
