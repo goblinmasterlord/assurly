@@ -997,7 +997,7 @@ async def create_assessments(
             JOIN mat_aspects ma ON ms.mat_aspect_id = ma.mat_aspect_id
             JOIN standard_versions sv ON ms.current_version_id = sv.version_id
             WHERE ms.mat_id = %s
-              AND ma.aspect_code = %s
+              AND UPPER(ma.aspect_code) = UPPER(%s)
               AND ms.is_active = TRUE
         """
         cursor.execute(standards_query, (current_mat_id, aspect_code))
@@ -4020,7 +4020,7 @@ async def get_trends(
             params.append(school_id)
 
         if aspect_code:
-            query += " AND ma.aspect_code = %s"
+            query += " AND UPPER(ma.aspect_code) = UPPER(%s)"
             params.append(aspect_code)
 
         if aspect_category:
