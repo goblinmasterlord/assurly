@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect } from 'react';
 import {
     Plus,
     Search,
@@ -82,7 +82,7 @@ export default function StandardsManagement() {
     const [isHistoryModalOpen, setIsHistoryModalOpen] = useState(false);
     const [isInactiveStandardsModalOpen, setIsInactiveStandardsModalOpen] = useState(false);
     const [isEditAspectDropdownOpen, setIsEditAspectDropdownOpen] = useState(false);
-    const pendingAspectDeleteIdRef = useRef<string | null>(null);
+    const [pendingAspectDeleteId, setPendingAspectDeleteId] = useState<string | null>(null);
     const [editingStandard, setEditingStandard] = useState<Standard | undefined>(undefined);
     const [editingAspect, setEditingAspect] = useState<Aspect | undefined>(undefined);
     const [historyStandard, setHistoryStandard] = useState<Standard | null>(null);
@@ -286,11 +286,6 @@ export default function StandardsManagement() {
 
     const handleEditAspectDropdownOpenChange = (open: boolean) => {
         setIsEditAspectDropdownOpen(open);
-        if (!open && pendingAspectDeleteIdRef.current) {
-            const id = pendingAspectDeleteIdRef.current;
-            pendingAspectDeleteIdRef.current = null;
-            handleDeleteAspect(id);
-        }
     };
 
     const handleEditAspect = (aspect: Aspect) => {
@@ -317,6 +312,13 @@ export default function StandardsManagement() {
             setDeleteModalOpen(true);
         }
     };
+
+    useEffect(() => {
+        if (isEditAspectDropdownOpen || !pendingAspectDeleteId) return;
+        const id = pendingAspectDeleteId;
+        setPendingAspectDeleteId(null);
+        handleDeleteAspect(id);
+    }, [isEditAspectDropdownOpen, pendingAspectDeleteId, aspects]);
 
     const handleCreateAspect = () => {
         setEditingAspect(undefined);
@@ -410,10 +412,8 @@ export default function StandardsManagement() {
                             </DropdownMenuItem>
                             {currentAspect.is_custom && (
                                 <DropdownMenuItem
-                                    onSelect={(e) => {
-                                        e.preventDefault();
-                                        pendingAspectDeleteIdRef.current = currentAspect.mat_aspect_id;
-                                        setIsEditAspectDropdownOpen(false);
+                                    onSelect={() => {
+                                        setPendingAspectDeleteId(currentAspect.mat_aspect_id);
                                     }}
                                     className="text-destructive focus:text-destructive"
                                 >
