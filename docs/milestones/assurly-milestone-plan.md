@@ -1,7 +1,7 @@
 # Assurly — Milestone Plan
 
 **Suggested path:** `docs/milestones/assurly-milestone-plan.md`
-**Version:** 2.20
+**Version:** 2.21
 **Date:** 30 August 2026
 **Status:** Approved. M1 open.
 **Owner:** Product Owner
@@ -115,6 +115,15 @@ Record every bump in the dev log entry that caused it.
 
 > ⚠️ **No artefact currently asserts a version.** Not the repository, not the application, not any config file — the version exists **only in dev log entries**, which is to say only in prose written after the fact. **A single source of truth is needed before 2.0**, because the in-app version history depends on it and cannot be generated from prose. Flagged, no action in M1.
 
+#### Precedent — a re-sent instruction is diffed, not re-applied
+
+**Recorded because it was handled correctly and the handling should repeat, not because anything went wrong.**
+
+The v2.19 brief was re-sent with **one of its five items changed**. Two things followed from that, and both are now the convention:
+
+1. **The four unchanged items were diffed against the already-applied version before anything was touched**, and were not re-applied. Re-applying them would have duplicated two requirement blocks. **A re-sent instruction is a diff against what is recorded, not a fresh instruction.**
+2. **The plan bumped to v2.20 rather than rewriting v2.19 in place.** v2.19 was pushed and its changelog row stated the superseded position. **Rewriting a published version to say something it never said would falsify the record** — the same principle already applied to the retracted contract v1.8 entry and the struck-through `%2F` note. **Supersede; do not overwrite.** The superseding row says explicitly what differed, so nobody reading both concludes the work was done twice.
+
 ### 2.7 Test gates
 
 **Work merges continuously to `sprint-2.0`. Deployment happens at defined test gates, not per commit.**
@@ -185,7 +194,7 @@ Internal is not further subdivided at this stage. Requirements below refer to th
 | ID | Milestone | Requirements | Gate |
 |---|---|---|---|
 | **M1** | Stabilise — live defects | **REQ-042 (first)**, AUD-001, DATA-001, DOC-001 → DOC-003, SEC-001, REQ-007 → REQ-012, REQ-027 → REQ-031, REQ-033, REQ-038, REQ-041, REQ-043 | None. Starts immediately. |
-| **M2** | Role model, plus the additions displaced from M1 | REQ-013, REQ-032, REQ-034 → REQ-037, REQ-039, REQ-040 | None |
+| **M2** | Role model, plus the additions displaced from M1 | REQ-013, REQ-032, REQ-034 → REQ-037, REQ-039, REQ-040, REQ-044 | None |
 | **M3** | Assessment lifecycle | REQ-014 → REQ-016 | M2 complete |
 | **M4** | Evidence model | REQ-017 | **M2 and M3 complete** |
 | **M5** | Applicability | REQ-018 | None |
@@ -778,6 +787,14 @@ So the problem is **not in how the dialog opens.** It is that **`pointer-events:
 
 **REQ-007 remains unrelated** (`Popover`-in-`Sheet` stacking), and this correction does not change that — if anything it sharpens it, since REQ-033 is now a teardown fault rather than an open-ordering one.
 
+> ### ✅ CLOSED — **passes UAT, 30 August 2026. The corrected diagnosis was right.**
+>
+> **Confirmed cause: `DropdownMenu` and `Dialog` both manage `body`'s `pointer-events`, and with both mounted the second layer's unmount cleanup clobbered the first's** — which is why **Cancel failed too**. The teardown reading was correct and the original open-ordering reading was not.
+>
+> **The method is what settled it.** Reading `document.body.style.pointerEvents` at each step, rather than reasoning from the component tree, distinguished two mechanisms that produced identical symptoms and identical plausible stories. **The first attempt failed because nothing checked the one attribute that defines the symptom** — see the v2.19 dev log.
+>
+> Merged as four commits on `sprint-2.0` (`d40bb72`, `f341367`, `fcd280c`, `9e0b2be`, plus `6d39d8d` removing the helper the fix orphaned).
+
 ---
 
 #### REQ-043 — Creating into a term that already has assessments does not refresh the view
@@ -795,7 +812,13 @@ So the problem is **not in how the dialog opens.** It is that **`pointer-events:
 >
 > **Fixing them one flow at a time will keep producing requirements.** Every mutation path has this exposure, and the ones with no second cache to invalidate are precisely the ones that will not announce themselves.
 >
-> **Worth establishing whether every mutation path invalidates what it changes** — as a single pass over the mutation surface, rather than another defect per flow. That is an audit, not a fix, and it is the same shape as **REQ-040** for `mat_aspects`. **Scope it deliberately if the pattern holds for a third time.**
+> **Worth establishing whether every mutation path invalidates what it changes** — as a single pass over the mutation surface, rather than another defect per flow. That is an audit, not a fix, and it is the same shape as **REQ-040** for `mat_aspects`. ~~**Scope it deliberately if the pattern holds for a third time.**~~ **Scoped now as REQ-044 — see below; there is no waiting for a third instance.**
+
+> ### ✅ CLOSED — **passes UAT, 30 August 2026.**
+>
+> **Confirmed cause: creating into an existing term changes only the assessments list, so the dashboard overlay and aspect metric caches were never invalidated.** The `terms` invalidation REQ-027 added was firing; it simply was not the cache this flow needed. Merged as `3451cb0` on `sprint-2.0` — invalidate the dashboard and aspect caches on create, force the assessments refetch on refresh, and `await` both the assessments reload and the dashboard reload on invitation success.
+>
+> **This closes the requirement and opens REQ-044.** The audit is not a consequence of this fix failing; it is a consequence of this fix being correct and narrow. **Two flows, two caches, two requirements** — and nothing has established how many more flows there are.
 
 ---
 
@@ -809,6 +832,14 @@ So the problem is **not in how the dialog opens.** It is that **`pointer-events:
 **Scope:**
 - **Advance to the next unrated standard**, not simply the next in order — a user re-entering a partly-rated aspect should be taken to work that remains, not to a rating they have already given.
 - **Define the behaviour at the end of the list.** When no unrated standard remains, the requirement is to decide and state what happens — return to the aspect summary, close, or hold on the last standard with the control disabled. **Do not leave this to fall out of the implementation**; it is the case a user hits every time they finish an aspect.
+
+> ### ✅ CLOSED — **passes UAT, 30 August 2026.**
+>
+> **Confirmed cause: two faults, either of which alone produced the symptom.** A `useEffect` **reset `activeStandard` to the first standard on every assessment change**, and **Save & Continue called `goToNextStandard` without awaiting the save** — so the advance raced the refresh that then reset it. Fixing only one would have left the defect intact and looking fixed intermittently.
+>
+> **End-of-list behaviour, as decided and shipped:** the view **holds on the last standard** and raises a toast — *"All standards rated. No further unrated standards remain. You can submit the assessment when ready."* It does not close or navigate away. Recorded here because the requirement asked for the decision to be stated rather than inferred from the code.
+>
+> Merged as `7d8079d` on `sprint-2.0`.
 
 ---
 
@@ -904,6 +935,27 @@ Note the starting position: **`assurly-backend/test_phase2_auth.py` is the only 
 **Do not fix anything in the audit pass.** §2.2.1 applies: report and stop. Remedies are scoped afterwards, once the full list is known — fixing as you go is what produced five separate defects out of one root problem.
 
 **Out of scope:** `mat_standards`, which may have the same disease but is a separate table and a separate pass. Note the finding either way if it becomes obvious.
+
+---
+
+#### REQ-044 — Audit every mutation path against the caches it invalidates
+**Type:** Audit. **Frontend.** **M2, not M1** — investigation, and M1 stays closed to scope growth (v2.15).
+
+**Why:** **REQ-027 and REQ-043 are one defect that surfaced twice**, separated only by which cache each flow happened to touch. Both were found the same way: **a person performing an ordinary action and noticing the screen disagreed with what they had just done.**
+
+**Do not wait for a third instance.** The v2.20 note said to scope this if the pattern held a third time; that condition is withdrawn, and the reason is in the shape of the defect rather than in impatience:
+
+> **A mutation path with no second cache to invalidate produces no visible symptom at all.** REQ-027 and REQ-043 were reported because each had a *second* surface that visibly disagreed with the first. A path whose single cache is stale simply shows old data that looks like current data. **The absence of further reports is therefore not evidence that the remaining paths are correct** — it is consistent with them being silently wrong, and a third report would come from the same accident as the first two, not from anything systematic.
+
+**Check the REQ-043 dev log first.** The frontend agent was asked to report on this surface while in the code and may already have surveyed part of it. **Do not repeat work that was done** — start from what that entry establishes and extend it. If the entry does not exist or does not cover the surface, say so and proceed.
+
+**Scope:**
+- **Enumerate every mutation path** — create, update, delete, reorder, submit, deactivate, reinstate, across assessments, standards, aspects, terms and users.
+- **For each, list the caches and derived views its result appears in**, and whether the path invalidates every one of them. The gap between "what the mutation changes" and "what the mutation invalidates" is where both known defects lived.
+- **Include `await` correctness**, not only invalidation: REQ-043's fix needed both, and REQ-041 failed partly on an un-awaited save. **An invalidation that is not awaited before the refetch is indistinguishable from a missing one.**
+- **Report the gaps, ranked by whether the path has a visible symptom** — the silent ones matter more, since nothing else will surface them.
+
+**Do not fix anything in the audit pass.** §2.2.1 applies: **report and stop.** Same shape as REQ-040 on `mat_aspects`, and for the same reason — fixing as you go is what turns one root problem into a series of defects.
 
 ---
 
@@ -1325,16 +1377,17 @@ Not scheduled. Not to be picked up opportunistically.
 | REQ-031 | M1 | Ready — **frontend agent** | — | ☐ | ☐ |
 | REQ-039 | **M2** | Ready — build with REQ-013. Backend half **reports before implementing** | ☐ | ☐ | ☐ |
 | REQ-040 | **M2** | Ready — audit only. **Report and stop**; produce SQL for the product owner | ☐ | — | ☐ |
+| REQ-044 | **M2** | Ready — audit only, frontend. **Report and stop.** Check the REQ-043 dev log first | — | ☐ | ☐ |
 | REQ-032 | **M2** | Ready — frontend. Premise re-confirmed at v2.16 | — | ☐ | ☐ |
-| REQ-033 | M1 | **REOPENED — gate 4 FAILED.** Diagnosis corrected: teardown, not open-ordering | — | ☐ | ☐ |
+| REQ-033 | M1 | **CLOSED — passes UAT.** Two Radix layers, second unmount clobbering the first's `pointer-events` cleanup | — | ☑ | ☑ |
 | REQ-034 | **M2** | Ready — frontend, small | — | ☐ | ☐ |
 | REQ-035 | **M2** | **Pending a decision**, not investigation — schema change confirmed necessary | ☐ | ☐ | ☐ |
 | REQ-036 | **M2** | **Lowest priority, last in M2.** Product decision first — do not implement. Depends on REQ-037 | — | ☐ | ☐ |
 | REQ-037 | **M2** | Ready — frontend. Build the inactive aspects view | — | ☐ | ☐ |
 | REQ-038 | M1 | **Gate 4 PASSED** — header and description both update on rename | — | ☑ | ☑ |
-| REQ-041 | M1 | Ready — frontend. Define end-of-list behaviour explicitly | — | ☐ | ☐ |
+| REQ-041 | M1 | **CLOSED — passes UAT.** End-of-list behaviour decided: hold on the last standard with a toast | — | ☑ | ☑ |
 | REQ-042 | M1 | **🔴 HIGHEST PRIORITY.** Backend **reports options before implementing**; frontend `401` handling is independent | ☐ | ☐ | ☐ |
-| REQ-043 | M1 | Ready — frontend. The existing-term creation path; shares a root cause with REQ-027 | — | ☐ | ☐ |
+| REQ-043 | M1 | **CLOSED — passes UAT.** Dashboard and aspect metric caches now invalidated on create. **Opens REQ-044** | — | ☑ | ☑ |
 | DATA-001 | M1 | Ready — **product owner runs manually**, no code | — | — | ☐ |
 | REQ-013 | M2 | Ready | ☐ | ☐ | ☐ |
 | REQ-014 | M3 | Gated on M2 | ☐ | ☐ | ☐ |
@@ -1357,6 +1410,7 @@ Not scheduled. Not to be picked up opportunistically.
 
 | Version | Date | Change |
 |---|---|---|
+| 2.21 | 30 August 2026 | **Three M1 defects pass UAT and CLOSE, each with its cause confirmed rather than assumed.** **REQ-033** — `DropdownMenu` and `Dialog` **both manage `body`'s `pointer-events`**, and with both mounted **the second layer's unmount cleanup clobbered the first's**, which is why **Cancel failed too**. The corrected v2.19 diagnosis was right, and the method it prescribed is what settled it: reading `document.body.style.pointerEvents` at each step distinguished two mechanisms that produced identical symptoms and equally plausible stories. **REQ-041** — **two faults, either sufficient alone:** a `useEffect` reset `activeStandard` to the first standard on every assessment change, and **Save & Continue called `goToNextStandard` without awaiting the save**, so the advance raced the refresh that reset it. **End-of-list behaviour decided and recorded:** hold on the last standard and raise a toast; do not close or navigate away. **REQ-043** — **creating into an existing term changes only the assessments list, so the dashboard overlay and aspect metric caches were never invalidated.** REQ-027's `terms` invalidation was firing; it was not the cache this flow needed. **REQ-044 added** to M2 (frontend, audit): a systematic pass over every mutation path confirming it invalidates every cache its result appears in, and **`await`s the invalidation before the refetch** — an un-awaited invalidation is indistinguishable from a missing one. **The v2.20 "scope it if the pattern holds a third time" condition is WITHDRAWN. Do not wait for a third instance.** REQ-027 and REQ-043 are **one defect that surfaced twice**, and both were found by a person performing an ordinary action and noticing — not by anything systematic. **A mutation path with no second cache to invalidate produces no visible symptom at all**, so it shows stale data that looks current; **the absence of further reports is not evidence the remaining paths are correct**, it is equally consistent with them being silently wrong. **Check the REQ-043 dev log first** — the frontend agent was asked to report on this surface while in the code and may have surveyed part of it; start from that rather than repeating it. **Report and stop; no fixes in the audit pass** — same shape and same reasoning as REQ-040 on `mat_aspects`. **M2, not M1**, since M1 stays closed to scope growth (v2.15). **§2.6 gains a precedent, recorded because it was handled correctly:** a re-sent instruction is **diffed against what is already recorded, not re-applied** — the v2.19 re-send had four of five items already applied, and re-applying them would have duplicated two requirement blocks; and a published version is **superseded, not overwritten** — v2.20 corrected REQ-027 as a new row rather than rewriting v2.19, because rewriting a pushed version to say something it never said falsifies the record. |
 | 2.20 | 30 August 2026 | **Corrects REQ-027's status in v2.19.** v2.19 recorded REQ-027 as **reopened pending diagnosis**; it should have stayed **CLOSED**, and does. **It has not regressed.** Gate 1 tested creation into a term with **no prior assessments**, which succeeded then and still succeeds. The newly reported failure is creation into a term that **already contains** assessments — **a flow that was never tested.** v2.19's question ("is the failing flow the one that passed?") was the right one; the answer is no, so nothing was reopened. **REQ-043 added** to M1 (frontend): creating assessments against a term that already contains assessments does not refresh the view, and the new rows appear only after a full browser refresh. REQ-027 fixed the adjacent case by invalidating the `assessments` and `terms` caches on create; **creating into an existing term changes the assessment list but not the term list**, so either that invalidation is not firing on this path or the refresh does not `await` it. **The pattern is recorded as worth more than either fix:** REQ-027 and REQ-043 are **the same defect — a mutation that does not refresh what it changed — separated only by which cache the flow happened to touch.** Fixing them one flow at a time will keep producing requirements, and the paths with no second cache to invalidate are exactly the ones that will not announce themselves. **Worth establishing whether every mutation path invalidates what it changes**, as a single pass rather than a defect per flow — the same shape as REQ-040 for `mat_aspects`, and to be scoped deliberately if the pattern holds a third time. **Note on versioning:** v2.19 already carried the other four items of this instruction (gate 4 results, REQ-033's reopening and corrected diagnosis, REQ-041, REQ-042) and they are unchanged here; only REQ-027 differed, so this is a new version rather than a rewrite of v2.19. |
 | 2.19 | 30 August 2026 | **Gate 4.** **REQ-029 PASSES** on all four endpoints, including creation against lowercase-coded aspects and analytics trends. **REQ-038 PASSES** — header and description both update on rename. **REQ-033 FAILS and REOPENS with a corrected diagnosis.** The merged fix addressed a race between a closing `DropdownMenu` and an opening `Dialog`; **cancelling the delete — which never opens the destructive path at all — also leaves the application click-dead**, so the fault is not in how the dialog opens. **`pointer-events: none` is not removed from `body` when the dialog closes, on either path**, because two overlapping Radix layers each manage that lock and the second unmount clobbers the first's cleanup. **The next attempt must verify against `body`'s inline style directly** rather than reasoning about component lifecycle — the previous diagnosis was a plausible lifecycle story that survived because nothing checked the one attribute that defines the symptom. **REQ-027 REOPENED pending diagnosis, explicitly not recorded as a regression:** it passed gate 1 on this exact test, and the first task is to establish whether the failing flow is the same one that passed — a single assessment against an existing term, versus several against a term with no prior rows. **Those are different fixes**; reproduce before diffing. **REQ-041 added** to M1 (frontend): Save & Continue persists correctly but returns to the **first** standard rather than the next, making sequential rating unusable on a ten-standard aspect; scope is to advance to the next **unrated** standard and to **define the end-of-list behaviour explicitly** rather than let it fall out of the implementation. **REQ-042 added** to M1 (backend and frontend) as **🔴 HIGHEST PRIORITY IN M1**: the bearer token expires after 60 minutes without renewing on activity, and on expiry the application **fails silently and spins indefinitely** — no message, no redirect. Backend **reports options and trade-offs before implementing**, since sliding expiry, a refresh token and a longer TTL are three different security postures and §2.7 puts authentication changes in their own gate; frontend handles `401` explicitly and **never spins on an auth failure**, independent of the backend decision. **M2 interaction recorded:** REQ-013's external tier means Trustees logging in occasionally are the users most likely to arrive with an expired token, so REQ-042 settles the session model REQ-013 inherits — **coordinate rather than build auth twice.** |
 | 2.18 | 27 August 2026 | **REQ-029 complete — and there were four endpoints and six sites, not two.** `GET /api/standards`, `GET /api/assessments/by-aspect` (**two sites in one handler**), `GET /api/analytics/trends` and `POST /api/assessments`; `GET /api/assessments` and `POST /api/aspects` were already correct. **`POST /api/assessments` did not fail silently, and that made it worse:** zero matched standards raised `404 "No standards found for aspect: X"` for an aspect that *has* standards, blocking assessment creation outright for every lowercase-coded aspect — `ab`, `ey`, `mck` in HLT — with a message sending the reader to the wrong table. **A silent empty list invites a second look; a confident error about missing standards does not.** The requirement was framed around silent failure and the loud instance was the more damaging one. **Root cause: `aspect_code` has no canonical casing.** `POST /api/aspects` uppercases on write, so the lowercase codes are **seeded data that predates or bypassed that path** — the same two-era seeding behind the UUID versus `{MAT}-{CODE}` split in primary keys. **REQ-040 added** to M2 (backend, audit): a single pass over `mat_aspects` and its endpoints to establish and enforce the table's invariants. Five defects have originated there and at least three share one shape — **an endpoint assuming an invariant the data never had.** Known instances: `aspect_code` casing, `is_custom` stored in four handlers and computed in two, primary keys in two formats, `source_aspect_id` holding an empty string. Scope is enumerate, test against production, report the gaps, produce SQL for the product owner — **and fix nothing in the audit pass**, since fixing as you go is what turned one root problem into five defects. **M2 not M1**, because it is investigation and M1 was closed to scope growth at v2.15. **REQ-033 and REQ-038 are confirmed unrelated to REQ-007.** REQ-033 is a Radix `Dialog` opened from a closing `DropdownMenu` leaving `pointer-events: none` on `body`; REQ-007 is `Popover`-in-`Sheet` stacking. Same symptom, different mechanisms — **one fix will not close both, and REQ-007's frontend scope does not shrink.** |
