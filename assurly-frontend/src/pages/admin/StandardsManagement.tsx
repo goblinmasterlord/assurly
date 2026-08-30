@@ -122,6 +122,22 @@ export default function StandardsManagement() {
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [aspects]); // Only depend on aspects to avoid loops, selectedAspect is checked inside
 
+    useEffect(() => {
+        if (isEditAspectDropdownOpen || !pendingAspectDeleteId) return;
+        const id = pendingAspectDeleteId;
+        setPendingAspectDeleteId(null);
+        const aspectToDelete = aspects.find((a) => a.mat_aspect_id === id);
+        if (aspectToDelete) {
+            setItemToDelete({
+                type: 'aspect',
+                id,
+                name: aspectToDelete.aspect_name,
+                isCustom: aspectToDelete.is_custom,
+            });
+            setDeleteModalOpen(true);
+        }
+    }, [isEditAspectDropdownOpen, pendingAspectDeleteId, aspects]);
+
     if (isLoading) {
         return <div className="flex items-center justify-center h-screen">Loading...</div>;
     }
@@ -312,13 +328,6 @@ export default function StandardsManagement() {
             setDeleteModalOpen(true);
         }
     };
-
-    useEffect(() => {
-        if (isEditAspectDropdownOpen || !pendingAspectDeleteId) return;
-        const id = pendingAspectDeleteId;
-        setPendingAspectDeleteId(null);
-        handleDeleteAspect(id);
-    }, [isEditAspectDropdownOpen, pendingAspectDeleteId, aspects]);
 
     const handleCreateAspect = () => {
         setEditingAspect(undefined);
