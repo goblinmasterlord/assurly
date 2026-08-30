@@ -407,10 +407,12 @@ export default function StandardsManagement() {
                             </DropdownMenuItem>
                             {currentAspect.is_custom && (
                                 <DropdownMenuItem
-                                    onClick={(e) => {
-                                        e.stopPropagation();
-                                        handleDeleteAspect(currentAspect.mat_aspect_id);
+                                    onSelect={(e) => {
+                                        e.preventDefault();
                                         setIsEditAspectDropdownOpen(false);
+                                        setTimeout(() => {
+                                            handleDeleteAspect(currentAspect.mat_aspect_id);
+                                        }, 0);
                                     }}
                                     className="text-destructive focus:text-destructive"
                                 >

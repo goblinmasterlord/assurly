@@ -165,8 +165,13 @@ export function SortableStandardCard({ standard, onEdit, onHistory, onDelete }: 
                                     Duplicate
                                 </DropdownMenuItem>
                                 <Separator className="my-1" />
-                                <DropdownMenuItem 
-                                    onClick={() => onDelete(standard.mat_standard_id)}
+                                <DropdownMenuItem
+                                    onSelect={(e) => {
+                                        e.preventDefault();
+                                        // Defer until the dropdown fully closes — opening a Dialog
+                                        // from onClick leaves Radix body pointer-events stuck.
+                                        setTimeout(() => onDelete(standard.mat_standard_id), 0);
+                                    }}
                                     className="text-destructive focus:text-destructive"
                                 >
                                     <Trash2 className="mr-2 h-4 w-4" />

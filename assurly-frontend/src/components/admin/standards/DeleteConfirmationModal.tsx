@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import {
     Dialog,
@@ -7,12 +8,12 @@ import {
     DialogHeader,
     DialogTitle,
 } from "@/components/ui/dialog";
-import { AlertTriangle, Info } from "lucide-react";
+import { AlertTriangle, Info, Loader2 } from "lucide-react";
 
 interface DeleteConfirmationModalProps {
     open: boolean;
     onOpenChange: (open: boolean) => void;
-    onConfirm: () => void;
+    onConfirm: () => void | Promise<void>;
     title: string;
     description: string;
     itemName?: string;
@@ -30,10 +31,25 @@ export function DeleteConfirmationModal({
     isCustom = false,
     itemType = 'standard'
 }: DeleteConfirmationModalProps) {
+    const [isConfirming, setIsConfirming] = useState(false);
     const itemLabel = itemType === 'standard' ? 'standard' : 'aspect';
-    
+
+    const handleConfirm = async () => {
+        setIsConfirming(true);
+        try {
+            await onConfirm();
+            onOpenChange(false);
+        } finally {
+            setIsConfirming(false);
+        }
+    };
+
     return (
-        <Dialog open={open} onOpenChange={onOpenChange}>
+        <Dialog open={open} onOpenChange={(nextOpen) => {
+            if (!isConfirming) {
+                onOpenChange(nextOpen);
+            }
+        }}>
             <DialogContent className="sm:max-w-[500px]">
                 <DialogHeader>
                     <DialogTitle className="text-destructive flex items-center gap-2">
@@ -89,17 +105,22 @@ export function DeleteConfirmationModal({
                     <Button
                         variant="outline"
                         onClick={() => onOpenChange(false)}
+                        disabled={isConfirming}
                     >
                         Cancel
                     </Button>
                     <Button
                         variant="destructive"
-                        onClick={() => {
-                            onConfirm();
-                            onOpenChange(false);
-                        }}
+                        onClick={handleConfirm}
+                        disabled={isConfirming}
                     >
-                        {isCustom ? `Archive ${itemLabel.charAt(0).toUpperCase() + itemLabel.slice(1)}` : `Deactivate ${itemLabel.charAt(0).toUpperCase() + itemLabel.slice(1)}`}
+                        {isConfirming ? (
+                            <Loader2 className="h-4 w-4 animate-spin" />
+                        ) : (
+                            isCustom
+                                ? `Archive ${itemLabel.charAt(0).toUpperCase() + itemLabel.slice(1)}`
+                                : `Deactivate ${itemLabel.charAt(0).toUpperCase() + itemLabel.slice(1)}`
+                        )}
                     </Button>
                 </DialogFooter>
             </DialogContent>
