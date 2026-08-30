@@ -16,7 +16,12 @@ import uuid
 logger = logging.getLogger(__name__)
 
 # Import authentication modules
-from auth_config import SUPER_ADMIN_EMAILS, validate_config
+from auth_config import (
+    SUPER_ADMIN_EMAILS,
+    JWT_ACCESS_TOKEN_EXPIRE_MINUTES,
+    JWT_ABSOLUTE_SESSION_HOURS,
+    validate_config
+)
 from auth_models import (
     MagicLinkRequest, 
     MagicLinkResponse, 
@@ -30,6 +35,7 @@ from auth_utils import (
     generate_magic_link_url,
     create_access_token,
     verify_token,
+    renewal_allowed,
     is_token_expired,
     format_user_response,
     clean_expired_tokens_query,
@@ -777,10 +783,13 @@ async def verify_magic_link(token: str):
         return AuthTokenResponse(
             access_token=access_token,
             token_type="bearer",
-            expires_in=60 * 60,  # 1 hour in seconds
+            # Derived, not hardcoded: this figure previously read 3600 while the
+            # lifetime came from JWT_ACCESS_TOKEN_EXPIRE_MINUTES, so changing the
+            # env var would have made the response misstate the token's life.
+            expires_in=JWT_ACCESS_TOKEN_EXPIRE_MINUTES * 60,
             user=user_response
         )
-        
+
     except HTTPException:
         raise
     except Exception as e:
@@ -788,6 +797,63 @@ async def verify_magic_link(token: str):
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to verify magic link: {str(e)}"
         )
+
+# Literal path with no parameterised sibling under /api/auth/ — nothing can shadow
+# it. Checked rather than assumed: literal-after-parameterised registration has
+# produced three defects in this file already (REQ-012, REQ-030).
+@app.post("/api/auth/refresh", response_model=AuthTokenResponse, tags=["Authentication"])
+async def refresh_access_token(
+    credentials: HTTPAuthorizationCredentials = Depends(security),
+    current_user: UserResponse = Depends(get_current_user)
+):
+    """
+    Issue a fresh access token to a caller holding a valid, unexpired one.
+
+    This **renews a live session; it does not resurrect a dead one.** An expired
+    token is rejected by get_current_user with a 401 before this body runs, so a
+    user who returns after expiry must sign in again via a magic link.
+
+    Renewal is refused once the session passes its absolute ceiling
+    (JWT_ABSOLUTE_SESSION_HOURS from the original magic-link login), because no
+    mechanism in the platform can revoke a JWT.
+    """
+    token_data = verify_token(credentials.credentials)
+    if not token_data:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid or expired token",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
+    if not renewal_allowed(token_data.auth_time):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail=(
+                f"Session has reached its maximum length of "
+                f"{JWT_ABSOLUTE_SESSION_HOURS} hours. Please sign in again."
+            ),
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
+    # Rebuilt from the database-backed current_user rather than copied from the
+    # presented token, so a user whose school or MAT has changed since login
+    # renews into their current context rather than carrying a stale one.
+    access_token = create_access_token(
+        {
+            "user_id": current_user.user_id,
+            "email": current_user.email,
+            "mat_id": current_user.mat_id,
+            "school_id": current_user.school_id,
+        },
+        auth_time=token_data.auth_time
+    )
+
+    return AuthTokenResponse(
+        access_token=access_token,
+        token_type="bearer",
+        expires_in=JWT_ACCESS_TOKEN_EXPIRE_MINUTES * 60,
+        user=current_user
+    )
 
 @app.get("/api/auth/me", response_model=UserResponse, tags=["Authentication"])
 async def get_current_user_info(current_user: UserResponse = Depends(get_current_user)):

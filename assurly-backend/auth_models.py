@@ -64,6 +64,7 @@ class TokenPayload(BaseModel):
     school_id: Optional[str]  # NULL for MAT-wide access
     exp: datetime
     iat: datetime
+    auth_time: Optional[datetime] = None  # original magic-link login, carried across renewals
     type: str = "access"  # access or refresh
 
 class MagicLinkToken(BaseModel):

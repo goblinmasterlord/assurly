@@ -5,9 +5,10 @@ from typing import Optional, Dict, Any
 from jose import JWTError, jwt
 from passlib.context import CryptContext
 from auth_config import (
-    JWT_SECRET_KEY, 
-    JWT_ALGORITHM, 
+    JWT_SECRET_KEY,
+    JWT_ALGORITHM,
     JWT_ACCESS_TOKEN_EXPIRE_MINUTES,
+    JWT_ABSOLUTE_SESSION_HOURS,
     MAGIC_LINK_EXPIRE_MINUTES,
     FRONTEND_URL
 )
@@ -70,34 +71,84 @@ def generate_magic_link_url(token: str, redirect_url: Optional[str] = None) -> s
     
     return magic_link
 
-def create_access_token(user_data: Dict[str, Any], expires_delta: Optional[timedelta] = None) -> str:
+def _to_epoch_seconds(value: datetime) -> int:
+    """
+    Convert a naive UTC datetime to epoch seconds.
+
+    python-jose encodes the registered `exp` and `iat` claims by treating a naive
+    datetime as UTC. `datetime.timestamp()` treats one as local time, so using it
+    here would shift `auth_time` by the host's offset and make the absolute cap
+    wrong by that amount on any machine not running in UTC.
+    """
+    return int((value - datetime(1970, 1, 1)).total_seconds())
+
+
+def create_access_token(
+    user_data: Dict[str, Any],
+    expires_delta: Optional[timedelta] = None,
+    auth_time: Optional[datetime] = None
+) -> str:
     """
     Create a JWT access token for the user.
-    
+
     Args:
         user_data: User information dictionary
         expires_delta: Optional custom expiration time
-        
+        auth_time: When the user last proved their identity via a magic link.
+                   Omitted on login (this call is that proof); passed through
+                   unchanged by POST /api/auth/refresh so that renewing a token
+                   cannot extend the absolute session ceiling.
+
     Returns:
         str: JWT access token
     """
+    issued_at = datetime.utcnow()
+
     if expires_delta:
-        expire = datetime.utcnow() + expires_delta
+        expire = issued_at + expires_delta
     else:
-        expire = datetime.utcnow() + timedelta(minutes=JWT_ACCESS_TOKEN_EXPIRE_MINUTES)
-    
+        expire = issued_at + timedelta(minutes=JWT_ACCESS_TOKEN_EXPIRE_MINUTES)
+
     to_encode = {
         "sub": user_data["user_id"],  # subject - user ID
         "email": user_data["email"],
         "mat_id": user_data["mat_id"],  # MAT context for tenant isolation
         "school_id": user_data.get("school_id"),  # NULL for MAT-wide access
         "exp": expire,
-        "iat": datetime.utcnow(),
+        "iat": issued_at,
+        # Original authentication time, carried across renewals. Named after the
+        # OIDC claim with the same meaning. This is what the absolute cap measures
+        # from — `iat` moves on every renewal and would cap nothing.
+        "auth_time": _to_epoch_seconds(auth_time or issued_at),
         "type": "access"
     }
-    
+
     encoded_jwt = jwt.encode(to_encode, JWT_SECRET_KEY, algorithm=JWT_ALGORITHM)
     return encoded_jwt
+
+
+def renewal_allowed(auth_time: Optional[datetime]) -> bool:
+    """
+    Whether a token authenticated at `auth_time` may still be renewed.
+
+    The sliding window keeps active users signed in; this ceiling bounds how long
+    a single magic-link login can be extended for. It matters because **nothing in
+    the platform can revoke a JWT** — logout is stateless — so without a ceiling a
+    stolen token renews indefinitely.
+
+    Args:
+        auth_time: Original authentication time (naive UTC), from the token
+
+    Returns:
+        bool: True if still inside the absolute session window
+    """
+    if auth_time is None:
+        # No known authentication time: refuse rather than grant an uncapped
+        # session. Tokens minted before this claim existed fall back to `iat`
+        # in verify_token, so they are capped from issue rather than rejected.
+        return False
+
+    return datetime.utcnow() < auth_time + timedelta(hours=JWT_ABSOLUTE_SESSION_HOURS)
 
 def verify_token(token: str) -> Optional[TokenPayload]:
     """
@@ -121,6 +172,15 @@ def verify_token(token: str) -> Optional[TokenPayload]:
         iat: datetime = datetime.fromtimestamp(payload.get("iat"))
         token_type: str = payload.get("type", "access")
 
+        # Tokens minted before the sliding-expiry change carry no auth_time. Fall
+        # back to their own iat so they are capped from issue — at most one token
+        # lifetime old — rather than refused, which would sign everyone out at
+        # deploy. Read as UTC to match how it was written; see _to_epoch_seconds.
+        auth_time_claim = payload.get("auth_time", payload.get("iat"))
+        auth_time: Optional[datetime] = (
+            datetime.utcfromtimestamp(auth_time_claim) if auth_time_claim else None
+        )
+
         if user_id is None or email is None or mat_id is None:
             return None
 
@@ -131,6 +191,7 @@ def verify_token(token: str) -> Optional[TokenPayload]:
             school_id=school_id,
             exp=exp,
             iat=iat,
+            auth_time=auth_time,
             type=token_type
         )
     except JWTError:

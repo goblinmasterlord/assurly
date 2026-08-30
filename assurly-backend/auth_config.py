@@ -13,6 +13,12 @@ if not JWT_SECRET_KEY:
 JWT_ALGORITHM = os.getenv('JWT_ALGORITHM', 'HS256')
 JWT_ACCESS_TOKEN_EXPIRE_MINUTES = int(os.getenv('JWT_ACCESS_TOKEN_EXPIRE_MINUTES', '60'))  # 1 hour
 
+# Absolute session ceiling. Tokens slide on activity via POST /api/auth/refresh, so
+# without this a token could be renewed forever — and nothing in the platform can
+# revoke a JWT, so a stolen one would be permanent. Measured from the magic-link
+# login (the auth_time claim), which renewal carries forward unchanged.
+JWT_ABSOLUTE_SESSION_HOURS = int(os.getenv('JWT_ABSOLUTE_SESSION_HOURS', '12'))  # 12 hours
+
 # Magic Link Configuration
 MAGIC_LINK_EXPIRE_MINUTES = int(os.getenv('MAGIC_LINK_EXPIRE_MINUTES', '15'))  # 15 minutes
 
@@ -77,6 +83,7 @@ Required environment variables:
 
 Optional overrides (have defaults):
 - JWT_ACCESS_TOKEN_EXPIRE_MINUTES=60
+- JWT_ABSOLUTE_SESSION_HOURS=12
 - MAGIC_LINK_EXPIRE_MINUTES=15
 - EMAIL_FROM_NAME=Assurly Platform
 - GMAIL_SMTP_HOST=smtp.gmail.com

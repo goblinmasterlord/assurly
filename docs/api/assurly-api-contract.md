@@ -1,8 +1,8 @@
 # Assurly API Contract
 
 **Status:** Authoritative. Both backend (Claude Code) and frontend (Cursor) reference this doc.
-**Version:** v2.9
-**Last updated:** 27 August 2026
+**Version:** v2.10
+**Last updated:** 30 August 2026
 **Backend base URL:** `http://localhost:8000` (local) / `https://assurly-frontend-400616570417.europe-west2.run.app` (Cloud Run production)
 
 This document defines every HTTP endpoint the frontend calls. If the frontend needs a shape that isn't here, the fix is to **update this doc first**, then code follows. If the backend diverges from what's here, it's a backend bug.
@@ -21,7 +21,11 @@ Assurly uses passwordless magic-link authentication. The full flow:
 4. Backend validates the token, clears it from the DB, creates a JWT, and returns it alongside the `UserResponse`.
 5. Frontend stores the JWT and sends it on every subsequent request as `Authorization: Bearer <token>`.
 
-**JWT payload** includes `sub` (user_id), `email`, `mat_id`, `school_id`, `exp`, `iat`. Tokens expire after 1 hour.
+**JWT payload** includes `sub` (user_id), `email`, `mat_id`, `school_id`, `exp`, `iat` and `auth_time`. Tokens expire after 1 hour.
+
+**Sessions slide on activity.** `POST /api/auth/refresh` (§3a) exchanges a valid, unexpired token for a new one with a fresh 1-hour window, so an active user is not signed out mid-task. It **renews a live session and does not resurrect a dead one** — once a token has expired, the only way back in is a new magic link.
+
+**`auth_time` is the original magic-link login**, carried unchanged through every renewal. Renewal is refused once the session passes an absolute ceiling measured from it (`JWT_ABSOLUTE_SESSION_HOURS`, **12 hours** today), because nothing in the platform can revoke a JWT — see §4's note on stateless logout. **A renewal chain therefore cannot outlive that ceiling**, no matter how continuously it is used.
 
 **All endpoints except `/api/auth/request-magic-link`, `/api/auth/verify/{token}`, `/api/terms` and `/api/auth/cleanup-expired-tokens` require a valid Bearer token.** Unauthenticated requests receive `401`.
 
@@ -184,7 +188,7 @@ GET /api/auth/verify/{token}
 |---|---|---|---|
 | `access_token` | string | no | JWT. Store this; send as `Authorization: Bearer <token>` on all subsequent requests. |
 | `token_type` | string | no | Always `"bearer"`. |
-| `expires_in` | integer | no | Seconds until expiry. Currently 3600 (1 hour). |
+| `expires_in` | integer | no | Seconds until expiry. **Derived from `JWT_ACCESS_TOKEN_EXPIRE_MINUTES`**, currently 3600 (1 hour). Read it rather than assuming 3600 — until v2.10 it was hardcoded and would have misstated a changed lifetime. |
 | `user` | UserResponse | no | See UserResponse shape below. |
 
 **Response 401:** `"Invalid or expired magic link"` — token not found in DB.
@@ -238,6 +242,42 @@ Authorization: Bearer <token>
 
 **Frontend notes:**
 - This is the endpoint `auth-service.ts` calls to validate the session on page load. Use it, not `/api/users/me`.
+
+---
+
+#### 3a. Refresh the session
+
+> Numbered `3a` rather than `4` deliberately: inserting a new `4` would renumber every endpoint after it and invalidate existing references.
+
+```
+POST /api/auth/refresh
+Authorization: Bearer <token>
+```
+
+**Auth:** required — and the token must be **valid and unexpired**. This renews a live session; it does not resurrect a dead one.
+
+**Request body:** none. The token to renew is the one in the `Authorization` header.
+
+**Response 200:** identical shape to §2 (`AuthTokenResponse`).
+
+```json
+{
+  "access_token": "eyJhbGciOiJIUzI1NiIs...",
+  "token_type": "bearer",
+  "expires_in": 3600,
+  "user": { "...": "UserResponse — see §3" }
+}
+```
+
+The returned `user` is read **from the database, not copied from the presented token**, so a user whose school or MAT changed since login renews into their current context.
+
+**Response 401:** `"Authentication required"` or `"Invalid or expired token"` — no token, or one that has expired. Request a new magic link.
+**Response 401:** `"Session has reached its maximum length of 12 hours. Please sign in again."` — the token is still valid, but its `auth_time` is beyond the absolute ceiling. **Renewal is refused; the presented token remains usable until its own `exp`.**
+
+**Frontend notes:**
+- Call this **while the token is still valid** — on a timer, or when the remaining life falls below a threshold. Calling it after expiry always fails, by design.
+- **Both 401s mean the same thing to the user: sign in again.** They are worded differently for the log, not to be branched on.
+- **A 401 from this endpoint must not itself be retried through the refresh path**, or the client loops. Treat it as terminal: clear the token and redirect to login.
 
 ---
 
@@ -2058,6 +2098,7 @@ Admin/cron utility. Not called by the frontend.
 
 | Version | Date | Change |
 |---|---|---|
+| v2.10 | 2026-08-30 | **REQ-042 — sliding session expiry.** New endpoint **`POST /api/auth/refresh` (§3a)**: exchanges a valid, unexpired Bearer token for a new one with a fresh `JWT_ACCESS_TOKEN_EXPIRE_MINUTES` window. **It renews a live session and does not resurrect a dead one** — an expired token is refused, and the only way back from expiry is a new magic link. No request body; the token to renew is the one in the header. Response shape is identical to §2, and the `user` block is read **from the database rather than copied from the presented token**, so a changed school or MAT is picked up on renewal. **The JWT gains an `auth_time` claim** — the original magic-link login, carried unchanged across every renewal — and renewal is refused beyond an absolute ceiling measured from it (`JWT_ABSOLUTE_SESSION_HOURS`, **12 hours**), returning `401` with a distinct message. The ceiling exists because **nothing in the platform can revoke a JWT** (§4, stateless logout), so an uncapped sliding window would turn a stolen token into a permanent one. Tokens minted before this change carry no `auth_time` and fall back to their own `iat`, so they are capped from issue rather than rejected — **the deploy signs nobody out.** **`expires_in` is now derived** from `JWT_ACCESS_TOKEN_EXPIRE_MINUTES` on both §2 and §3a; it was hardcoded to `3600` and would have misstated the lifetime had the env var ever changed. Numbered `3a` rather than `4` so that no existing endpoint reference is renumbered. |
 | v2.9 | 2026-08-27 | `GET /api/standards/inactive` (§19) now returns a real `updated_at` rather than the `null` it advertised via the shared `MatStandardResponse`. Closes the gap left open in v2.8: §19 states it returns the "same shape as the list endpoint", and as of v2.8 that was true of the declared shape but not of the values. Same ISO 8601 UTC serialisation as §13. Additive; no other field touched. |
 | v2.8 | 2026-08-27 | **REQ-011.** `GET /api/standards` (§13) now returns `updated_at` — ISO 8601 UTC with a trailing `Z`, `null` on rows predating the column. Additive; no existing field changed. The value means a **material edit** (rename or content change); reordering is not a material edit and does not move it. Previously the field was neither selected nor declared on `MatStandardResponse`, so it never reached the client and the standards-admin card fell back to rendering today's date for every standard. Serialised by the handler rather than coerced by Pydantic, because MySQL `TIMESTAMP` arrives naive and would render without the `Z` the rest of the API emits. **Note:** `GET /api/standards/inactive` shares `MatStandardResponse` and will therefore report `updated_at: null` until its own query selects the column — out of REQ-011's scope, recorded rather than silently fixed. |
 | v2.7 | 2026-08-26 | **DOC-003.** Documentation only. **Retracted the v1.8 entry and the "The four evidence endpoints are live" claim at the head of the Evidence section — both were false.** REQ-003 never shipped: `main.py` defines 42 routes and none is an evidence route, there is no GCS client and no Google SDK dependency, and the live OpenAPI spec does not list the endpoints. The §28–31 specification is **retained as the authoritative target** for REQ-017 (M4) rather than deleted, under a banner stating it is not implemented. The backing `standard_evidence` table does exist and is correctly shaped; what is missing is the API. Also re-verified every `🚧 In-flight` tag removed across the v1.5–v1.8 reconciliation passes — **v1.8 is the only false one**; v1.5's and v1.6's claims all hold against the code, with one caveat: `evidence_count` on `GET /api/dashboard/schools` does ship as a field but reads a table no code path can write to, so it is structurally always `0`. That is a consequence of the same v1.8 error, not a separate defect. |
