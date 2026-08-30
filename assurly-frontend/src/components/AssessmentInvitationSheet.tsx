@@ -38,7 +38,7 @@ import type { AssessmentCategory, School, Aspect, Term } from "@/types/assessmen
 type AssessmentInvitationSheetProps = {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  onSuccess?: () => void; // Callback to refresh assessments list
+  onSuccess?: () => void | Promise<void>; // Callback to refresh assessments list
 };
 
 // Simple calendar component without relying on external dependencies

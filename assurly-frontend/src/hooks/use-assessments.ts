@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { assessmentService } from '@/services/enhanced-assessment-service';
+import { requestCache } from '@/lib/request-cache';
 import { parseGroupId } from '@/lib/data-transformers';
 import type { Assessment, AssessmentCategory, AcademicTerm, AcademicYear, School, Standard, Rating, AssessmentByAspect } from '@/types/assessment';
 
@@ -36,6 +37,7 @@ export function useAssessments() {
   // Refresh assessments (manual refresh)
   const refreshAssessments = useCallback(async () => {
     setIsRefreshing(true);
+    requestCache.invalidate('assessments');
     await loadAssessments(false);
   }, [loadAssessments]);
 

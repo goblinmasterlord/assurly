@@ -269,6 +269,13 @@ export function SchoolPerformanceView({ assessments, refreshAssessments, isLoadi
     }
   }, [selectedUniqueTermId, dashboardView]);
 
+  const handleInvitationSuccess = useCallback(async () => {
+    if (refreshAssessments) {
+      await refreshAssessments();
+    }
+    await loadDashboard();
+  }, [refreshAssessments, loadDashboard]);
+
   useEffect(() => {
     void loadDashboard();
   }, [loadDashboard]);
@@ -1682,7 +1689,7 @@ export function SchoolPerformanceView({ assessments, refreshAssessments, isLoadi
       <AssessmentInvitationSheet 
         open={invitationSheetOpen} 
         onOpenChange={setInvitationSheetOpen} 
-        onSuccess={refreshAssessments}
+        onSuccess={handleInvitationSuccess}
       />
 
         {/* Performance Zones Legend */}

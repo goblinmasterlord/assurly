@@ -181,11 +181,11 @@ export class EnhancedAssessmentService {
     try {
       await apiCreateAssessments(request);
 
-      // Creation must drop both list caches: the Ratings page derives its term
-      // selector from assessments, and anything using the terms cache (preload /
-      // invitation sheet via the enhanced path) must not keep a pre-create snapshot.
+      // Creation must drop list caches and any derived dashboard/aspect snapshots.
       requestCache.invalidate('assessments');
       requestCache.invalidate('terms');
+      requestCache.invalidateByPrefix('aspect_');
+      requestCache.invalidateByPrefix('dashboard_schools');
 
       console.log('✅ Assessments created successfully');
     } catch (error) {
