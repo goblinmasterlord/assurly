@@ -733,7 +733,9 @@ The user drags a standard, the list reorders on screen, and the change is gone o
 >
 > Same symptom — a control unreachable by mouse but responsive to keyboard tabbing — **different mechanisms**, which is exactly why the shared-cause question was worth asking before fixing either.
 >
-> **REQ-007's frontend scope does not shrink.** Its date picker still needs fixing on its own terms; nothing here removes work from it. **REQ-038 is likewise unrelated** to both — it is stale local state after a successful mutation, not a pointer-events or stacking problem.
+> **REQ-007's frontend scope does not shrink.** Its date picker still needs fixing on its own terms; nothing here removes work from it. **REQ-038 is likewise unrelated** to both — a stale `currentAspect` snapshot read instead of the live `aspects` array, not a pointer-events or stacking problem.
+>
+> **Both merged 30 August 2026** (`3c587b6`, `49ac78b`), pending gate. Per the frontend dev log, REQ-033's fix defers the `Dialog` open until the `DropdownMenu` has fully closed, and REQ-038's derives `currentAspect` from the live array rather than a snapshot.
 
 ---
 
@@ -1251,12 +1253,12 @@ Not scheduled. Not to be picked up opportunistically.
 | REQ-039 | **M2** | Ready — build with REQ-013. Backend half **reports before implementing** | ☐ | ☐ | ☐ |
 | REQ-040 | **M2** | Ready — audit only. **Report and stop**; produce SQL for the product owner | ☐ | — | ☐ |
 | REQ-032 | **M2** | Ready — frontend. Premise re-confirmed at v2.16 | — | ☐ | ☐ |
-| REQ-033 | M1 | Ready — frontend. **Unrelated to REQ-007** (reported); cause identified | — | ☐ | ☐ |
+| REQ-033 | M1 | Frontend merged (`3c587b6`) — **pending gate**. Unrelated to REQ-007, confirmed | — | ☑ | ☐ |
 | REQ-034 | **M2** | Ready — frontend, small | — | ☐ | ☐ |
 | REQ-035 | **M2** | **Pending a decision**, not investigation — schema change confirmed necessary | ☐ | ☐ | ☐ |
 | REQ-036 | **M2** | **Lowest priority, last in M2.** Product decision first — do not implement. Depends on REQ-037 | — | ☐ | ☐ |
 | REQ-037 | **M2** | Ready — frontend. Build the inactive aspects view | — | ☐ | ☐ |
-| REQ-038 | M1 | Ready — frontend. Check shared cause with REQ-027 | — | ☐ | ☐ |
+| REQ-038 | M1 | Frontend merged (`49ac78b`) — **pending gate**. Stale `currentAspect` snapshot, not a cache issue | — | ☑ | ☐ |
 | DATA-001 | M1 | Ready — **product owner runs manually**, no code | — | — | ☐ |
 | REQ-013 | M2 | Ready | ☐ | ☐ | ☐ |
 | REQ-014 | M3 | Gated on M2 | ☐ | ☐ | ☐ |
