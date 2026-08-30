@@ -1,7 +1,7 @@
 # Assurly — Milestone Plan
 
 **Suggested path:** `docs/milestones/assurly-milestone-plan.md`
-**Version:** 2.17
+**Version:** 2.18
 **Date:** 27 August 2026
 **Status:** Approved. M1 open.
 **Owner:** Product Owner
@@ -185,7 +185,7 @@ Internal is not further subdivided at this stage. Requirements below refer to th
 | ID | Milestone | Requirements | Gate |
 |---|---|---|---|
 | **M1** | Stabilise — live defects | AUD-001, DATA-001, DOC-001 → DOC-003, SEC-001, REQ-007 → REQ-012, REQ-027 → REQ-031, REQ-033, REQ-038 | None. Starts immediately. |
-| **M2** | Role model, plus the additions displaced from M1 | REQ-013, REQ-032, REQ-034 → REQ-037, REQ-039 | None |
+| **M2** | Role model, plus the additions displaced from M1 | REQ-013, REQ-032, REQ-034 → REQ-037, REQ-039, REQ-040 | None |
 | **M3** | Assessment lifecycle | REQ-014 → REQ-016 | M2 complete |
 | **M4** | Evidence model | REQ-017 | **M2 and M3 complete** |
 | **M5** | Applicability | REQ-018 | None |
@@ -646,6 +646,23 @@ The user sees an unexplained server error on an operation the interface offered 
 
 **Scope:** Make the comparison case-insensitive on both endpoints, matching `GET /api/assessments`. **Report whether anything else compares that column** — the audit found three call sites, but a fourth in a `JOIN` or a subquery would fail the same way.
 
+> ### ✅ Complete — and there were **four** endpoints, **six** sites, not two.
+>
+> | Site | Endpoint | Behaviour before |
+> |---|---|---|
+> | `main.py:1172` | `GET /api/standards` | silent empty |
+> | `main.py:3157` | `GET /api/assessments/by-aspect/{code}` | silent empty |
+> | `main.py:3200` | `GET /api/assessments/by-aspect/{code}` | silent empty |
+> | `main.py:4023` | `GET /api/analytics/trends` | silent empty |
+> | `main.py:1000` | **`POST /api/assessments`** | **404, loudly and misleadingly** |
+> | `main.py:888`, `:2292` | `GET /api/assessments`, `POST /api/aspects` | already correct |
+>
+> **`GET /api/assessments/by-aspect` carries two comparison sites in one handler**, not one — a detail that would have left the endpoint half-fixed had only the first been found.
+>
+> **`POST /api/assessments` did not fail silently, and that made it worse.** Zero matched standards raised `404 "No standards found for aspect: X"` **for an aspect that has standards**, blocking assessment creation outright for every lowercase-coded aspect — `ab`, `ey` and `mck` in HLT. **A silent empty list invites a second look; a confident error message about missing standards sends the reader to the wrong table.** The requirement was framed around silent failure, and the loud instance was the more damaging one.
+>
+> **Root cause: `aspect_code` has no canonical casing.** `POST /api/aspects` uppercases on write (`main.py:2178`), so anything created through the API is uppercase — **the lowercase codes are seeded data that predates or bypassed that path.** This is the same two-era seeding that produced the UUID versus `{MAT}-{CODE}` split in primary keys (see REQ-010). The endpoints assumed an invariant the data never had. **See REQ-040.**
+
 **Out of scope:** Normalising the stored data. That is a tenant-data question (see DATA-001), and the endpoints should be case-insensitive regardless of how tidy the column becomes.
 
 ---
@@ -705,7 +722,18 @@ The user drags a standard, the list reorders on screen, and the change is gone o
 
 **Likely cause:** a dialog overlay that fails to unmount and keeps capturing pointer events, leaving an invisible layer over the page.
 
-**Investigate alongside REQ-007's unclickable date-picker modal**, which presents the same symptom — a control that cannot be reached by mouse but responds to keyboard tabbing. **One fix may close both.** **Report whether they share a cause** before fixing either in isolation; if they do, fixing one and not the other wastes the diagnosis.
+~~**Investigate alongside REQ-007's unclickable date-picker modal**, which presents the same symptom — a control that cannot be reached by mouse but responds to keyboard tabbing. **One fix may close both.**~~
+
+> ### ✅ Reported — **they are unrelated. One fix will not close both.**
+>
+> | | Cause |
+> |---|---|
+> | **REQ-033** | A Radix `Dialog` opened from a **closing `DropdownMenu`**, leaving `pointer-events: none` on `body` |
+> | **REQ-007** | **`Popover`-in-`Sheet` stacking** |
+>
+> Same symptom — a control unreachable by mouse but responsive to keyboard tabbing — **different mechanisms**, which is exactly why the shared-cause question was worth asking before fixing either.
+>
+> **REQ-007's frontend scope does not shrink.** Its date picker still needs fixing on its own terms; nothing here removes work from it. **REQ-038 is likewise unrelated** to both — it is stale local state after a successful mutation, not a pointer-events or stacking problem.
 
 ---
 
@@ -777,6 +805,32 @@ Note the starting position: **`assurly-backend/test_phase2_auth.py` is the only 
 
 > ### Moved from M1 at v2.15 — M1 scope closure.
 > The five requirements below are **additions, not defects**. They were raised during M1 and kept their ids; only their milestone changed. See §4.1 for the reasoning.
+
+#### REQ-040 — Audit `mat_aspects` and its endpoints against the table's actual invariants
+**Type:** Audit. **Backend.** **M2, not M1** — this is investigation, and M1 was closed to scope growth deliberately at v2.15.
+
+**Why:** **Five defects have now originated in the aspects family, and at least three share one shape: an endpoint assuming an invariant the data never had.** Fixing them one at a time has cost more than the fixes were worth, and the next one is already implied by the ones found.
+
+**Known instances — the starting list, not the scope:**
+
+| Invariant assumed | What the data actually holds |
+|---|---|
+| `aspect_code` is uppercase | Mixed case — `ab`, `ey`, `mck` alongside `EDU`, `IT`, `FIN` (REQ-029) |
+| `is_custom` has one definition | **Stored column** in four handlers, **computed from `source_aspect_id`** in two (DATA-001) |
+| `mat_aspect_id` has one format | Two, across seeding eras — UUID and `{MAT}-{CODE}` (REQ-010) |
+| `source_aspect_id` is NULL or a valid FK | **Empty string** on at least one row (DATA-001) |
+
+**Scope:**
+- **Enumerate the invariants each endpoint assumes** — not the invariants the schema declares. The gap between those two is where every one of these defects has lived.
+- **Test each against production data.**
+- **Report the gaps.**
+- **Produce SQL for the product owner to run** (§2.4 — agents have no database access).
+
+**Do not fix anything in the audit pass.** §2.2.1 applies: report and stop. Remedies are scoped afterwards, once the full list is known — fixing as you go is what produced five separate defects out of one root problem.
+
+**Out of scope:** `mat_standards`, which may have the same disease but is a separate table and a separate pass. Note the finding either way if it becomes obvious.
+
+---
 
 #### REQ-039 — Nothing shows which MAT the displayed data belongs to
 **Type:** Defect. **Frontend and backend.** Belongs with REQ-013.
@@ -1195,8 +1249,9 @@ Not scheduled. Not to be picked up opportunistically.
 | REQ-030 | M1 | Ready — backend builds the endpoint **above** the parameterised route; frontend verifies the success path | ☐ | ☐ | ☐ |
 | REQ-031 | M1 | Ready — **frontend agent** | — | ☐ | ☐ |
 | REQ-039 | **M2** | Ready — build with REQ-013. Backend half **reports before implementing** | ☐ | ☐ | ☐ |
+| REQ-040 | **M2** | Ready — audit only. **Report and stop**; produce SQL for the product owner | ☐ | — | ☐ |
 | REQ-032 | **M2** | Ready — frontend. Premise re-confirmed at v2.16 | — | ☐ | ☐ |
-| REQ-033 | M1 | Ready — frontend. Investigate with REQ-007's modal | — | ☐ | ☐ |
+| REQ-033 | M1 | Ready — frontend. **Unrelated to REQ-007** (reported); cause identified | — | ☐ | ☐ |
 | REQ-034 | **M2** | Ready — frontend, small | — | ☐ | ☐ |
 | REQ-035 | **M2** | **Pending a decision**, not investigation — schema change confirmed necessary | ☐ | ☐ | ☐ |
 | REQ-036 | **M2** | **Lowest priority, last in M2.** Product decision first — do not implement. Depends on REQ-037 | — | ☐ | ☐ |
@@ -1224,6 +1279,7 @@ Not scheduled. Not to be picked up opportunistically.
 
 | Version | Date | Change |
 |---|---|---|
+| 2.18 | 27 August 2026 | **REQ-029 complete — and there were four endpoints and six sites, not two.** `GET /api/standards`, `GET /api/assessments/by-aspect` (**two sites in one handler**), `GET /api/analytics/trends` and `POST /api/assessments`; `GET /api/assessments` and `POST /api/aspects` were already correct. **`POST /api/assessments` did not fail silently, and that made it worse:** zero matched standards raised `404 "No standards found for aspect: X"` for an aspect that *has* standards, blocking assessment creation outright for every lowercase-coded aspect — `ab`, `ey`, `mck` in HLT — with a message sending the reader to the wrong table. **A silent empty list invites a second look; a confident error about missing standards does not.** The requirement was framed around silent failure and the loud instance was the more damaging one. **Root cause: `aspect_code` has no canonical casing.** `POST /api/aspects` uppercases on write, so the lowercase codes are **seeded data that predates or bypassed that path** — the same two-era seeding behind the UUID versus `{MAT}-{CODE}` split in primary keys. **REQ-040 added** to M2 (backend, audit): a single pass over `mat_aspects` and its endpoints to establish and enforce the table's invariants. Five defects have originated there and at least three share one shape — **an endpoint assuming an invariant the data never had.** Known instances: `aspect_code` casing, `is_custom` stored in four handlers and computed in two, primary keys in two formats, `source_aspect_id` holding an empty string. Scope is enumerate, test against production, report the gaps, produce SQL for the product owner — **and fix nothing in the audit pass**, since fixing as you go is what turned one root problem into five defects. **M2 not M1**, because it is investigation and M1 was closed to scope growth at v2.15. **REQ-033 and REQ-038 are confirmed unrelated to REQ-007.** REQ-033 is a Radix `Dialog` opened from a closing `DropdownMenu` leaving `pointer-events: none` on `body`; REQ-007 is `Popover`-in-`Sheet` stacking. Same symptom, different mechanisms — **one fix will not close both, and REQ-007's frontend scope does not shrink.** |
 | 2.17 | 27 August 2026 | **REQ-012 CLOSES.** Verified in production: `/api/aspects/inactive` called as an **HLT** user returns one row, `Mock aspect`. Route ordering fixed, endpoint working, prior empty results explained by tenant scoping. Ticked in §8. **§2.2 gains a preamble and no tenth rule.** Rules 7, 8 and 9 were each added after a misdiagnosis and are **three instances of one thing: check the premise of the question before investigating the answer** — a claim asserted without checking what it rested on, an identifier reasoned about without being read, a result judged correct without establishing whose it was. The preamble states that general form once and marks 7–9 as **worked examples rather than independent rules**. Nothing renumbered; all existing §2.2.7, §2.2.8 and §2.2.9 citations survive. **The concern that prompted it, recorded rather than left implicit:** rules have been accruing faster than the defects they catch, and **a list long enough to skim is a list that stops being read**. A fourth instance belongs in a dev log as evidence the preamble is not landing, not here as rule 10. |
 | 2.16 | 27 August 2026 | **The `/api/aspects/inactive` defect is RETIRED. Not fixed — it was never a defect.** `GET /api/aspects` returned six aspects, **all with `mat_id = 'OLT'`**; the call was authenticated as an OLT user, and OLT has six aspects. `/api/aspects/inactive` filters on `mat_id` from the same JWT, and OLT has no inactive default aspects — `Mock aspect` belongs to **HLT**. **The empty array was correct behaviour throughout**, and so was the 6-of-17 count: 17 is HLT's figure, asked as OLT. **What it cost: five hypotheses across four sessions** — route shadowing, MAT scoping, NULL flags, a swallowed exception, an environmental mismatch — three disproved by code reading and one by production query, **on an endpoint that was working.** **Nobody asked which tenant the token was scoped to**, despite the handler scoping on precisely that, and despite `get_current_mat` being read, quoted, and used to rule a hypothesis out. **§2.2 gains rule 9:** in a multi-tenant system, establish which tenant a result belongs to before reasoning about whether it is correct — an answer right for a different tenant is **indistinguishable** from a wrong answer, and the two produce identical evidence. Appended as 9 rather than inserted, so existing §2.2.7 and §2.2.8 citations stay valid. **REQ-012 closes once the same call is made as an HLT user and returns `Mock aspect`.** **REQ-032 is unaffected and its M2 placement stands** — its premise was questioned at v2.15 on the assumption that `GET /api/aspects` was under-returning; it was not, so the truncation is a display defect on complete data exactly as scoped. **REQ-039 added** to M2 (frontend and backend, belongs with REQ-013): **nothing in the application or the API response indicates which MAT the displayed data belongs to.** This caused the misdiagnosis above, and the risk grows in M2 because the superadmin tier is explicitly cross-tenant, so moving between MATs becomes routine — a platform-team member acting on the wrong trust's data is materially worse than a confused debugging session. Frontend: a persistent tenant indicator visible on **every** screen. Backend: **report** whether collection endpoints should carry the `mat_id` they are scoped to, noting that per-row `mat_id` was present and still went unread, while an **empty** collection carries no rows and therefore no tenant at all — the case that actually misled. |
 | 2.15 | 27 August 2026 | **§2.4 gains a standing constraint: agents have no database access and never will.** They produce SQL for the product owner to run and interpret the results; they do not execute queries, migrations or diagnostics against any database. **A diagnostic requiring database access is written as a statement to hand over, not scoped as a task** — scoping one as a task produces a session that discovers its own inability and reports it, which is the whole of what it can do. **M1 SCOPE CLOSURE.** M1 is a stabilisation milestone that had accumulated feature work. **Five additions move to M2** — REQ-032 (pagination), REQ-034 (Expand All), REQ-035 (updater name), REQ-036 (expose default aspect deletion), REQ-037 (inactive aspects view). **Nothing renumbered:** requirements keep their ids and change milestone, and the blocks were relocated into §6's M2 section so the document does not claim otherwise. **What stays in M1 is what is broken:** REQ-007, REQ-009's backend half, REQ-028, REQ-029, REQ-030, REQ-033, REQ-038, the `/api/aspects/inactive` defect, DATA-001 and DOC-002. **The reasoning, recorded in §4.1:** M1 exists to make the platform trustworthy for the early adopter's return, and feature work displaces that — a milestone shipping an Expand All control alongside an unfixed 500 has misread its own purpose. **The `/api/aspects/inactive` defect has WIDENED and is no longer about the inactive endpoint.** Run against production with `mat_id` bound to `'HLT'`, the handler's complete query **returns the qualifying row**: SQL correct, data correct, `is_modified` and `standards_count` computing correctly, the `LEFT JOIN` dropping nothing, the deployed build current (`updated_at` present in the live spec) and `DB_NAME`/`DB_USER` matching the connection queried — **so the environmental hypothesis is dead too.** The larger finding: **`GET /api/aspects` returns 6 aspects for HLT, which has 17 active rows** — the **active** endpoint is dropping eleven, so **the aspects family is under-returning generally** and the single inactive row is presumably dropped by the same mechanism. **Pending: which six ids are returned, and whether the UI shows 17 or 6** — the second decides whether this is a broken endpoint or a screen the customer has been using with most of its data missing. **Four hypotheses now disproved** (route shadowing, MAT scoping, NULL flags, environment). **Add nothing further without evidence.** |
