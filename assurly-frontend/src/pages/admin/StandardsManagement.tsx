@@ -127,7 +127,11 @@ export default function StandardsManagement() {
 
     if (!selectedAspect && aspects.length > 0) return null; // Wait for effect to set selected aspect
 
-    const currentAspect = selectedAspect || aspects[0]; // Fallback
+    // Header and filters read from aspects[]; selectedAspect holds the selection id only.
+    const currentAspect =
+        aspects.find((a) => a.mat_aspect_id === selectedAspect?.mat_aspect_id) ??
+        selectedAspect ??
+        aspects[0];
 
     // Filter and sort aspects
     const filteredAspects = aspects
@@ -268,17 +272,6 @@ export default function StandardsManagement() {
         try {
             if (editingAspect) {
                 await updateAspect(aspect);
-                // Update selected aspect if it was the one being edited
-                if (currentAspect.mat_aspect_id === aspect.mat_aspect_id) {
-                    // The hook will reload aspects, but we need to update the selected aspect
-                    // Wait a bit for the hook to finish reloading, then update selection
-                    setTimeout(() => {
-                        const updatedAspect = aspects.find(a => a.mat_aspect_id === aspect.mat_aspect_id);
-                        if (updatedAspect) {
-                            setSelectedAspect(updatedAspect);
-                        }
-                    }, 100);
-                }
             } else {
                 await addAspect(aspect);
             }
