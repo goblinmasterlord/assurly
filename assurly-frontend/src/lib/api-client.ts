@@ -26,6 +26,38 @@ const processQueue = (error: any = null) => {
   failedQueue = [];
 };
 
+const SESSION_EXPIRED_MESSAGE =
+  'Your session has expired. Please sign in again to continue.';
+
+async function handleSessionExpired(refreshError?: unknown): Promise<never> {
+  const authError =
+    refreshError instanceof Error
+      ? refreshError
+      : new Error(SESSION_EXPIRED_MESSAGE);
+
+  if (!authError.message) {
+    authError.message = SESSION_EXPIRED_MESSAGE;
+  }
+
+  processQueue(authError);
+  isRefreshing = false;
+
+  try {
+    const { authService } = await import('@/services/auth-service');
+    authService.clearSession();
+  } catch {
+    if (typeof window !== 'undefined') {
+      localStorage.removeItem('assurly_auth_token');
+    }
+  }
+
+  if (typeof window !== 'undefined' && !window.location.pathname.includes('/auth/')) {
+    window.location.href = '/auth/login?reason=session_expired';
+  }
+
+  return Promise.reject(authError);
+};
+
 // Enhanced API client with industry-standard optimizations
 const apiClient = axios.create({
   // In development with empty base URL, use relative paths (proxied by Vite)
@@ -108,37 +140,28 @@ apiClient.interceptors.response.use(
     // Handle 401 errors with token refresh
     if (error.response?.status === 401 && error.config && !error.config.url?.includes('/auth/')) {
       if (isRefreshing) {
-        // If already refreshing, queue this request
+        // If already refreshing, queue this request until refresh succeeds or fails
         return new Promise((resolve, reject) => {
           failedQueue.push({ resolve, reject });
-        }).then(() => {
-          // Retry original request after refresh
-          return apiClient(error.config!);
-        });
+        }).then(() => apiClient(error.config!));
       }
 
       isRefreshing = true;
 
       try {
-        // Import auth service dynamically to avoid circular dependency
+        // refreshSession is a stub until the backend ships /api/auth/refresh (REQ-042
+        // backend half). Treat a null return the same as a throw — never leave the
+        // latch set or the queue unsettled.
         const { authService } = await import('@/services/auth-service');
         const response = await authService.refreshSession();
         if (response) {
           processQueue();
           isRefreshing = false;
-          // Retry original request with new token
           return apiClient(error.config);
         }
+        return handleSessionExpired();
       } catch (refreshError) {
-        processQueue(refreshError);
-        isRefreshing = false;
-        // Clear session and redirect to login
-        if (typeof window !== 'undefined') {
-          sessionStorage.removeItem('assurly_secure');
-          if (!window.location.pathname.includes('/auth/')) {
-            window.location.href = '/auth/login';
-          }
-        }
+        return handleSessionExpired(refreshError);
       }
     }
     
