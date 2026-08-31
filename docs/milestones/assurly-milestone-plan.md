@@ -1,7 +1,7 @@
 # Assurly — Milestone Plan
 
 **Suggested path:** `docs/milestones/assurly-milestone-plan.md`
-**Version:** 2.25
+**Version:** 2.26
 **Date:** 30 August 2026
 **Status:** Approved. M1 open.
 **Owner:** Product Owner
@@ -51,6 +51,29 @@ The agent confirms in its first response which documents it has read and which c
 > Each was added after a misdiagnosis, and each is a **worked example** of that general form rather than an independent rule — a claim asserted without checking what it rested on (7), an identifier reasoned about without being read (8), a result judged correct or incorrect without establishing whose it was (9). **Read them as illustrations of one habit, not as three boxes to tick.**
 >
 > **No tenth is being added, deliberately.** Rules have been accruing faster than the defects they catch, and **a list long enough to skim is a list that stops being read.** If a fourth instance appears, it belongs in a dev log as evidence that this preamble is not landing — not here as rule 10.
+>
+> ---
+>
+> ### The same failure occurs on the way in, and it is not a rule for agents.
+>
+> **Four briefs have now stated a mechanism that did not survive contact with the code.** In every case **the symptom was accurate** and the mechanism inferred from it was not:
+>
+> | Brief said | The code said |
+> |---|---|
+> | **REQ-028** — deletion is unreachable from the UI | It was reachable, and the exposed path was the broken one |
+> | **REQ-036** — the deletion flow needs building | It already existed for custom aspects; only defaults were missing |
+> | **REQ-030** — a third route shadowing | Not a shadowing at all — a missing route, with a parameterised sibling absorbing the path |
+> | **REQ-047** — the display reads the wrong column | The display was correct; a join was missing |
+>
+> **This is rules 7–9's failure mode arriving one step earlier.** Those describe how an agent investigates; this is about how the work is framed before anyone investigates. **A brief that asserts a mechanism scopes the session to the wrong work before it starts** — and the agent's own diligence cannot recover it, because the brief has already told them what they are fixing.
+>
+> **So it belongs here rather than as rule 10, and it is addressed to whoever writes the brief:**
+>
+> 1. **State the symptom and the evidence.** Both were right every time.
+> 2. **Mark any proposed mechanism as a hypothesis to be tested, not a diagnosis to be implemented.** A named suspect is useful; a named suspect stated as fact is not.
+> 3. **Scope the first task as establishing the cause.**
+>
+> **The cost is asymmetric and that is the argument.** Checking a premise took four greps on REQ-047 and was written into the requirement before anyone was scoped to it. Not checking one cost REQ-030 a wrong claim carried across fourteen plan versions and into a test specification in another milestone.
 
 1. **Audit before fix.** Every requirement opens with a diagnostic pass: current behaviour, affected files, affected tables, blast radius. The agent reports and **stops**. No fixes during the audit pass.
 2. **Decide before code.** Direction is confirmed and any open questions in Section 5 are resolved before implementation begins.
@@ -236,7 +259,7 @@ Internal is not further subdivided at this stage. Requirements below refer to th
 | ID | Milestone | Requirements | Gate |
 |---|---|---|---|
 | **M1** | Stabilise — live defects | **REQ-042 (first)**, AUD-001, DATA-001, DOC-001 → DOC-003, SEC-001, REQ-007 → REQ-012, REQ-027 → REQ-031, REQ-033, REQ-038, REQ-041, REQ-043, REQ-047 | None. Starts immediately. |
-| **M2** | Role model, plus the additions displaced from M1 | REQ-013, REQ-032, REQ-034 → REQ-037, REQ-039, REQ-040, REQ-044 → REQ-046 | None |
+| **M2** | Role model, plus the additions displaced from M1 | REQ-013, REQ-032, REQ-034 → REQ-037, REQ-039, REQ-040, REQ-044 → REQ-046, REQ-048 | None |
 | **M3** | Assessment lifecycle | REQ-014 → REQ-016 | M2 complete |
 | **M4** | Evidence model | REQ-017 | **M2 and M3 complete** |
 | **M5** | Applicability | REQ-018 | None |
@@ -347,6 +370,24 @@ Settled. Applicability is **per school, per term, carried forward**:
 > **Request-driven is the only signal that means what it claims to mean:** a request is the app doing work on the user's behalf, which is exactly the thing the session should be kept alive for. The 15-minute threshold gives four chances to renew inside the last quarter-hour, so a single failed attempt is not the end of the session.
 >
 > **A `401` from the refresh endpoint is treated as end-of-session** and falls through to the redirect rather than being retried — the two cases it can mean (expired, or past the ceiling) both resolve to "sign in again".
+
+> ### ⚠️ SHIPPED BUT UNVERIFIED — **not passed. Do not read the absence of a failure as a pass.**
+>
+> **Gate 5 found both halves failing:** an hour of normal activity did **not** keep the session alive, and an **idle tab past expiry produced a spinner rather than a redirect.** **Neither symptom reproduced in the follow-up session**, and **further testing is parked indefinitely by decision of the product owner.** Full diagnostic: `docs/dev-log/2026-08-31-frontend-req-042-gate5-diagnosis.md`.
+>
+> **What that means concretely, and it is the whole of what is known:**
+>
+> | Merged | Confirmed working in production |
+> |---|---|
+> | The `401` handler | **No** |
+> | Proactive renewal | **No** |
+> | The redirect | **No** |
+>
+> **All three are in production and none is confirmed.** A gate that failed and then could not be reproduced establishes neither outcome — **it is not a pass, and it is not a standing failure.** The requirement sits in that state deliberately rather than being resolved by assumption in either direction.
+>
+> **🔴 If a user reports an indefinite spinner or an unexplained logout, look here first.** That is the reason this block exists, and the reason **REQ-042 does not tick in §8.**
+>
+> **The leading explanation for the first symptom, recorded because it bears on a decision made above.** The renewal trigger is request-gated: it fires only when axios traffic occurs in the final 15 minutes before expiry. **On a cache-heavy page, an actively-working user generates no traffic and therefore looks idle** — which is the same failure the timer was rejected for causing in reverse. The trigger decision is **not reopened here** and testing is parked, but **that gap is the first thing to test if it ever is.**
 >
 > **A refresh token remains the better long-term answer and belongs with REQ-013**, where revocation stops being optional. Choosing A does not block it; the two compose.
 >
@@ -881,6 +922,8 @@ The user drags a standard, the list reorders on screen, and the change is gone o
 
 **Related to REQ-011** — the same family of "this field says something about editing that is not true", and the same corrective: **show nothing rather than something plausible.**
 
+**This is also the known instance of REQ-048 (M2)**, which audits display fallback chains generally. **The chain here is four rungs deep and never renders a gap**, which is why a field the API has never returned produced a plausible name instead of an obvious absence — and therefore went unreported. **REQ-047 fixes this surface; REQ-048 asks how many others there are.**
+
 ---
 
 #### REQ-033 — The application goes click-dead after deleting a standard
@@ -1095,6 +1138,27 @@ Note the starting position: **`assurly-backend/test_phase2_auth.py` is the only 
 - **Report the gaps, ranked by whether the path has a visible symptom** — the silent ones matter more, since nothing else will surface them.
 
 **Do not fix anything in the audit pass.** §2.2.1 applies: **report and stop.** Same shape as REQ-040 on `mat_aspects`, and for the same reason — fixing as you go is what turns one root problem into a series of defects.
+
+---
+
+#### REQ-048 — Audit display fallback chains
+**Type:** Audit. **Frontend.** **M2.**
+
+**Why:** **A long fallback chain converts missing data into wrong data.** It never renders a gap, so a field the API does not return produces a **plausible but incorrect value** instead of an obvious absence — and a plausible value is not reported, because nothing looks broken.
+
+**The known instance is REQ-047**, and it shows the shape exactly. `AssessmentDetail.tsx` reads `updated_by_name`, falling through `submitted_by_name`, then `assigned_to_name`, then the newest standard's assignee, then an em dash. **`updated_by_name` is never returned by any endpoint** — so the chain silently resolved to the assignee, and "Updated by" named the wrong person **on every assessment, for as long as the field has existed**, while looking entirely normal.
+
+> **Note what the chain cost beyond the wrong name: it hid the missing field.** A gap would have been reported the first week. Four rungs of fallback turned an API defect into a display that nobody could tell was wrong from the outside.
+
+**Scope:**
+- **Enumerate display fallback chains across the frontend** — `||` chains, `??` chains, and the multi-branch IIFEs used in `AssessmentDetail.tsx`.
+- **For each, identify what the chain is falling back *from*, and whether that value is actually supplied by the API.** The dangerous case is a first rung that never arrives.
+- **Report where a missing value silently becomes a *different* value**, as distinct from where it becomes an em dash or an empty state. **Only the first is a defect** — a fallback to a genuine absence is correct and should not be flagged.
+- Note where the fallback is defensible (a real alternative meaning) versus where it is a guess.
+
+**Report and stop; produce no fixes.** Same shape and same reasoning as REQ-040 and REQ-044 — the remedies differ per site and are scoped once the list exists.
+
+**Related to REQ-047**, which is one instance and is being fixed on its own in M1. **This does not wait on it.**
 
 ---
 
@@ -1562,6 +1626,7 @@ Not scheduled. Not to be picked up opportunistically.
 | REQ-044 | **M2** | Ready — audit only, frontend. **Report and stop.** Check the REQ-043 dev log first | — | ☐ | ☐ |
 | REQ-045 | **M2** | Ready — backend. Hash magic-link tokens; enforce the rate-limit constants that already exist | ☐ | — | ☐ |
 | REQ-046 | **M2** | Ready — backend. **Report the full list before changing anything.** Should land **before or with REQ-014** | ☐ | — | ☐ |
+| REQ-048 | **M2** | Ready — audit only, frontend. **Report and stop.** REQ-047 is one instance; does not wait on it | — | ☐ | ☐ |
 | REQ-032 | **M2** | Ready — frontend. Premise re-confirmed at v2.16 | — | ☐ | ☐ |
 | REQ-033 | M1 | **CLOSED — passes UAT.** Two Radix layers, second unmount clobbering the first's `pointer-events` cleanup | — | ☑ | ☑ |
 | REQ-034 | **M2** | Ready — frontend, small | — | ☐ | ☐ |
@@ -1570,9 +1635,9 @@ Not scheduled. Not to be picked up opportunistically.
 | REQ-037 | **M2** | Ready — frontend. Build the inactive aspects view | — | ☐ | ☐ |
 | REQ-038 | M1 | **Gate 4 PASSED** — header and description both update on rename | — | ☑ | ☑ |
 | REQ-041 | M1 | **CLOSED — passes UAT.** End-of-list behaviour decided: hold on the last standard with a toast | — | ☑ | ☑ |
-| REQ-042 | M1 | **Option A built, not yet wired.** Backend merged, contract v2.10, frontend `401` path fixed — but **`refreshSession()` does not call the new endpoint yet**, so nothing slides. Pending that change and the auth gate (§2.7) | ☐ | ☐ | ☐ |
+| REQ-042 | M1 | **🔴 SHIPPED BUT UNVERIFIED — not passed.** Gate 5 failed on both paths; neither symptom reproduced; **testing parked by the product owner.** All three parts are in production and none is confirmed. **First place to look on a spinner or unexplained logout.** Does not tick | ☐ | ☐ | ☐ |
 | REQ-043 | M1 | **CLOSED — passes UAT.** Dashboard and aspect metric caches now invalidated on create. **Opens REQ-044** | — | ☑ | ☑ |
-| REQ-047 | M1 | Ready — backend adds the missing `updated_by_name` join; frontend verifies. **Decide the NULL case explicitly** | ☐ | ☐ | ☐ |
+| REQ-047 | M1 | Ready — backend adds the missing `updated_by_name` join; frontend verifies. **Decide the NULL case explicitly.** One instance of REQ-048 | ☐ | ☐ | ☐ |
 | DATA-001 | M1 | Ready — **product owner runs manually**, no code | — | — | ☐ |
 | REQ-013 | M2 | Ready | ☐ | ☐ | ☐ |
 | REQ-014 | M3 | Gated on M2. **Also depends on REQ-046** — an audit trail on non-atomic writes records attempts, not outcomes | ☐ | ☐ | ☐ |
@@ -1595,6 +1660,7 @@ Not scheduled. Not to be picked up opportunistically.
 
 | Version | Date | Change |
 |---|---|---|
+| 2.26 | 31 August 2026 | **REQ-042 is recorded as SHIPPED BUT UNVERIFIED — not passed, and it does not tick in §8.** **Gate 5 failed on both paths:** an hour of normal activity did not keep the session alive, and an idle tab past expiry produced a spinner rather than a redirect. **Neither symptom reproduced in the follow-up session, and further testing is parked indefinitely by decision of the product owner** (diagnostic: `docs/dev-log/2026-08-31-frontend-req-042-gate5-diagnosis.md`). **Concretely: the `401` handler, the proactive renewal and the redirect are all merged and in production, and none of the three is confirmed working.** A gate that failed and then could not be reproduced **establishes neither outcome** — it is not a pass and not a standing failure, and the requirement is held in that state rather than resolved by assumption in either direction. **🔴 If a user reports an indefinite spinner or an unexplained logout, this is the first place to look.** **The leading explanation for the first symptom is recorded because it bears on the trigger decision settled at v2.24:** renewal is request-gated and fires only when axios traffic occurs in the final 15 minutes before expiry, so **on a cache-heavy page an actively-working user generates no traffic and looks idle** — the same failure the timer was rejected for causing in reverse. **The decision is not reopened and testing stays parked**, but that gap is the first thing to test if it ever is. **§2.2's preamble is extended, and deliberately not as rule 10.** **Four briefs have now stated a mechanism that did not survive contact with the code, and the symptom was accurate every time:** REQ-028 (deletion unreachable from the UI — it was reachable, and the exposed path was the broken one), REQ-036 (the flow needed building — it existed for customs), REQ-030 (a third route shadowing — a missing route, with a parameterised sibling absorbing the path), REQ-047 (the display read the wrong column — the display was correct and a join was missing). **This is rules 7–9's failure mode arriving one step earlier:** those describe how an agent investigates; this is how the work is framed before anyone investigates, and **an agent's own diligence cannot recover it, because the brief has already told them what they are fixing.** So it is addressed to whoever writes the brief: **state the symptom and the evidence; mark any proposed mechanism as a hypothesis to be tested, not a diagnosis to be implemented; scope the first task as establishing the cause.** **The cost is asymmetric** — checking the premise took four greps on REQ-047, before anyone was scoped; not checking one cost REQ-030 a wrong claim carried across fourteen plan versions and into a test specification in another milestone. **REQ-048 added** to M2 (frontend, audit): **long fallback chains convert missing data into wrong data.** `AssessmentDetail.tsx` reads `updated_by_name`, falling through `submitted_by_name`, `assigned_to_name` and the newest standard's assignee before an em dash — and **`updated_by_name` is returned by no endpoint**, so the chain resolved silently to the assignee and "Updated by" named the wrong person on every assessment while looking entirely normal. **Note what the chain cost beyond the wrong name: it hid the missing field** — a gap would have been reported in the first week. Scope is to enumerate fallback chains, establish for each whether the value it falls back *from* is actually supplied, and **report only where a missing value becomes a *different* value** — a fallback to a genuine absence is correct and is not a finding. **Report and stop; no fixes**, as with REQ-040 and REQ-044. **REQ-047 is one instance, fixed separately in M1; REQ-048 does not wait on it.** |
 | 2.25 | 30 August 2026 | **REQ-047 added** to M1 (backend and frontend, small): the **"Updated by" field on the assessments page names the assignee, not the editor**, so it is wrong as soon as anyone other than the assignee edits a rating — the normal case — and wrong in a way that reads as authoritative. **The premise was checked against the code before the requirement was written, and it changes the framing.** **`updated_by` IS populated on the write path** — both `PUT /api/assessments/{assessment_id}` (`main.py:3473`) and the bulk update (`:3551`) set it alongside `last_updated = NOW()` — **so populating the column is not the work**, and the brief's "if it is not populated" branch does not apply. **The frontend is already asking for the right field:** `AssessmentDetail.tsx:1756` and `:1920` read **`updated_by_name` first**, falling back through `submitted_by_name` to `assigned_to_name`. **What is missing is the name itself.** `assigned_to` and `submitted_by` each carry a `LEFT JOIN` producing a `_name` alias; **`updated_by` has no such join** — `GET /api/assessments/{assessment_id}` selects the raw id and no endpoint returns a name. **So this is a missing join, not a mis-wired display: a correct fallback chain resolving to its last rung.** Backend adds `updated_by_name` on the endpoints feeding these surfaces, matching the existing pattern, with a contract entry since it adds a field; frontend is verification. **The NULL case must be decided explicitly, not left to fall out:** `updated_by` is written only on UPDATE and never on INSERT (data model §15 — 1142 of 1198 rows NULL as of April 2026), so an assessment nobody has edited legitimately has none, and **the choice between an em dash, `submitted_by`, and the assignee is a product decision** — an em dash says "nobody has edited this", the assignee says something untrue. **Distinct from REQ-035 (M2)**, recorded in both blocks: that one adds an updater to **standards**, where `mat_standards` has no `updated_by` column at all and a **schema change** is required. **REQ-047 is a join; REQ-035 is a migration.** **Note on versioning:** the brief said "bump to v2.24", which was already used by the routing correction pushed earlier today. Per §2.6 a published version is **superseded, not overwritten**, so this is v2.25; the two versions share no items. |
 | 2.24 | 30 August 2026 | **REQ-030's shadowing claim is CORRECTED. There are two confirmed instances, not three, and REQ-030 was not one of them.** The claim has been carried since v2.10. **Starlette prefers a full match anywhere in the routing table over an earlier partial match**, and a path-match with a **method**-mismatch yields only a partial. Verified by test: `POST /x/reorder` registered **after** `GET /x/{id}` returns **`200`**; with no `POST` route at all it returns **`405`**; `GET /x/reorder` under `GET /x/{id}` **is** genuinely shadowed. **REQ-012's two cases were real shadowing because they were `GET`-on-`GET`.** The `405` here was simply what a missing endpoint looks like when a parameterised sibling absorbs the path — **registration order was never the fault**, and v2.10's assertion that registering below "would leave the `405` in place" was never tested. **The route is registered above its sibling regardless**, because a future `GET /api/standards/reorder` would make ordering matter; a comment at the site says so, to stop the placement being "corrected" back. **REQ-013's route-ordering test is amended, and this is the consequence that matters:** the assertion must be on **same-method collisions only**. The unqualified version was wrong in both directions — it would **not** have caught REQ-030, since there was no route to be out of order, and it would **fail a correctly-working `POST` registered below a parameterised `GET`**. A test that flags working code and misses the defect that shipped trains people to ignore it. **REQ-046 added** to M2 (backend): **no multi-statement write in `main.py` is transactional.** `DB_CONFIG` sets `autocommit: True` (`main.py:231`), so `commit()` is redundant and **`rollback()` rolls back nothing** — 18 `commit()` calls, 9 `rollback()` calls, and **no `begin()`** outside the reorder endpoint. **The dangerous case is `update_standard`**, which writes `standard_versions`, `mat_standards` and `standard_edit_log` in sequence: a failure on the third leaves the first two committed, producing **a live version row whose edit was never logged**, with nothing to detect the divergence. Scope is to enumerate every multi-statement write path, make each transactional via an explicit `begin()`, and **report the full list before changing anything**. **Not by setting `autocommit: False`** — that would make every handler transactional at once, and any path returning without committing would silently start discarding its write; the failure mode of getting it wrong is data loss, not an error. **M3 dependency recorded in both directions:** REQ-014's audit trail for assessment amendments is worthless if the writes producing it are not atomic, so **REQ-046 lands before or with it** — building the trail first builds it on the defect. **REQ-030 records the one claim only production can confirm:** that **`updated_at = updated_at` suppresses `ON UPDATE CURRENT_TIMESTAMP`**. MySQL-documented and implemented, but unprovable without database access (§2.4), and **it is the half of this change nothing else would notice** — reordering works either way. If it fails, every reordered standard silently reports today's date as its last update, **which is REQ-011's defect undone by the endpoint meant to respect it.** The gate step is to check the "Updated" date, not the order. **REQ-042's renewal trigger is settled:** renewal is attempted **before each API request when the token has 15 minutes or less remaining**, deduped by a shared in-flight promise so a burst of parallel requests produces one renewal. **Rejected: a timer**, which renews idle tabs and can exhaust the 12-hour ceiling while nobody is working — signing out the user who returns in the morning *because* the client kept the session alive; **and activity listeners alone**, which miss a user reading a long page without making requests. **A request is the app doing work on the user's behalf**, which is the only signal that means what it claims to. A `401` from the refresh endpoint is **end-of-session** and falls through to the redirect rather than being retried. **Note on versioning:** the brief said "bump to v2.23", which had already been used by the §2.6 correction pushed earlier today. Per the precedent in §2.6, a published version is **superseded, not overwritten**, so this is v2.24; **none of its five items overlaps v2.23, so nothing was re-applied.** |
 | 2.23 | 30 August 2026 | **§2.6 corrected: the version number is set by hand, and nothing computes or checks it.** The section previously read as a specification of something the system tracks. It is not. **No artefact asserts a version** — not the repository, not a tag, not the application, not a config file, not a package manifest — so the number exists **only where a person writes it**, in this plan and in dev log prose written after the fact. Nothing derives a version from the commits, nothing validates that a recorded bump matches what shipped, and no build fails if a bump is skipped, duplicated or wrong. **An agent recording a bump is making a note, not performing a release**, and a version in a dev log is a claim by its author rather than a fact about a build. Wording implying otherwise is removed, and the ⚠️ footnote that said as much has been promoted to the head of the section, since it describes what versioning here *is* rather than qualifying it. **The target ladder is now recorded explicitly:** one minor bump per milestone close — M1 → 1.44, M2 → 1.45, M3 → 1.46, M4 → 1.47, M5 → 1.48, M6 → 1.49, M7 → 1.50, **M8 → 2.0**, because M8's close is the sprint close and takes a major bump rather than the 1.51 the arithmetic gives. **That last rung is an interpretation and is flagged as one** — if 1.51 followed by a separately declared 2.0 was the intent, the table is what needs correcting, not the practice. **Patch numbers accumulate under the current minor and are superseded at milestone close**; no attempt is made to make the patch count mean anything, since not every requirement merges as one commit and not every merge is a requirement. **The "single source of truth needed before 2.0" line is restated as a want, not a requirement:** the in-app version history is the one consumer that needs the version as data rather than prose, nothing is blocked on it today, and it stays out of M1. |
