@@ -14,6 +14,12 @@ carried verbatim from the plan, and compression is by **omission only**, marked 
 **What is here:** the rules an agent operates under, the milestone shape, everything **open in M1**, everything
 in **M2**, and the status table as it stands.
 
+> ### ⚠️ Three M1 requirements below were merged AFTER plan v2.27 was written. Read Extraction note 8 first.
+>
+> **REQ-007's frontend half, REQ-049 and REQ-050 all have code on `sprint-2.0`** as of 31 August 2026. **The
+> plan has not yet been updated**, so their blocks below — and §8 — still describe them as open. That is
+> faithful to v2.27 and stale against the branch.
+
 **What is deliberately NOT here:** closed M1 requirements, superseded findings, the changelog, and M3–M8.
 **An orchestration session needs what is open and the rules it operates under, not the record of what has
 already been settled.** For any of that, read the plan.
@@ -865,6 +871,29 @@ go elsewhere. Not wrong; worth knowing before treating the range as a work list.
 
 Header: **30 August 2026.** The v2.26 and v2.27 rows are both dated **31 August 2026.** The version number
 (2.27) is current; the date is not.
+
+### 8. 🔴 The extract went stale during extraction — three requirements were merged after v2.27
+
+Between plan v2.27 being written and this extract being committed, the frontend agent merged:
+
+| REQ | Commit | Change |
+|---|---|---|
+| **REQ-049** | `fa13a44` | `map[aspectCode.toUpperCase()]` in `data-transformers.ts` — the fix the requirement names |
+| **REQ-050** | `26ae3fd` | `|| new Date().toISOString()` removed from the display paths |
+| **REQ-007** (frontend half) | `8601b2c` | `due_date` derived in `transformAssessmentByAspectToAssessment` instead of hardcoded `null`; invitation date picker |
+
+**The plan does not yet record any of it**, so the three blocks above and their §8 rows still read as open work.
+**This is not a contradiction in the plan — it is the plan lagging the branch**, which is exactly what §2.6 says
+to expect: a version records a merge, and the plan is edited in its own session.
+
+**For an orchestration session: do not schedule these three as open.** Confirm against `git log` and the
+frontend dev log `docs/dev-log/2026-08-31-frontend-req-050-req-007-req-049.md`. **None of them has passed a
+gate** — merged is not deployed (§2.6, §2.7).
+
+**Note also that REQ-049's priority question was never answered.** The requirement made priority conditional on
+a production query (does any `aspect_code` lowercase into a mapping key?). **The fix shipped without that query
+being run** — which is fine, since `toUpperCase()` is correct either way, but it means **nobody yet knows
+whether any aspect was silently unfilterable**, and therefore whether anything needs re-checking in production.
 
 ---
 
