@@ -90,6 +90,12 @@ function transformAssessmentByAspectToAssessment(data: AssessmentByAspect): Asse
       .filter((d): d is string => typeof d === 'string' && d.length > 0)
       .sort((a, b) => (new Date(b).getTime() || 0) - (new Date(a).getTime() || 0))[0] || null;
 
+  const effectiveDueDate =
+    data.standards
+      .map(s => s.due_date)
+      .filter((d): d is string => typeof d === 'string' && d.length > 0)
+      .sort((a, b) => new Date(b).getTime() - new Date(a).getTime())[0] ?? null;
+
   return {
     id: `${data.school_id}-${data.aspect_code}-${data.term_id}-${data.academic_year}`,
     assessment_id: `${data.school_id}-${data.aspect_code}-${data.term_id}-${data.academic_year}`,
@@ -103,7 +109,7 @@ function transformAssessmentByAspectToAssessment(data: AssessmentByAspect): Asse
     rating: null,
     evidence_comments: null,
     status: data.status,
-    due_date: null,
+    due_date: effectiveDueDate,
     assigned_to: null,
     assigned_to_name: null,
     submitted_at: null,
@@ -113,7 +119,7 @@ function transformAssessmentByAspectToAssessment(data: AssessmentByAspect): Asse
     // what sent the "Updated by" card down its fallback chain to the assignee.
     updated_by: data.updated_by ?? null,
     updated_by_name: data.updated_by_name ?? null,
-    last_updated: lastUpdatedFromStandards || new Date().toISOString(),
+    last_updated: lastUpdatedFromStandards,
     mat_standard_id: '',
     standard_code: '',
     standard_name: data.aspect_name,
@@ -155,8 +161,8 @@ function transformAssessmentByAspectToAssessment(data: AssessmentByAspect): Asse
     },
     completedStandards: data.completed_standards,
     totalStandards: data.total_standards,
-    lastUpdated: lastUpdatedFromStandards || new Date().toISOString(),
-    dueDate: undefined,
+    lastUpdated: lastUpdatedFromStandards ?? undefined,
+    dueDate: effectiveDueDate ?? undefined,
     assignedTo: [],
   };
 }

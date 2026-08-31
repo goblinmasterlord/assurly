@@ -573,7 +573,7 @@ export function AssessmentInvitationSheet({ open, onOpenChange, onSuccess }: Ass
               <Label htmlFor="dueDate" className="text-xs text-muted-foreground">
                 Due Date (Optional)
               </Label>
-              <Popover open={datePickerOpen} onOpenChange={setDatePickerOpen}>
+              <Popover modal={false} open={datePickerOpen} onOpenChange={setDatePickerOpen}>
                 <PopoverTrigger asChild>
                   <Button
                     id="dueDate"
@@ -587,7 +587,7 @@ export function AssessmentInvitationSheet({ open, onOpenChange, onSuccess }: Ass
                     {dueDate ? format(dueDate, "PPP") : "No due date"}
                   </Button>
                 </PopoverTrigger>
-                <PopoverContent align="start" className="p-0 w-auto">
+                <PopoverContent align="start" className="p-0 w-auto z-[100]">
                   <SimpleDatePicker
                     selected={dueDate}
                     onSelect={(date) => {

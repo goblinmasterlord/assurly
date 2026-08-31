@@ -70,11 +70,12 @@ export function VersionHistoryModal({ open, onOpenChange, standard }: VersionHis
         return 1;
     };
 
-    // Use v3.0 fields
+    const createdAt = standard.updated_at || standard.created_at || null;
+
     const currentVersion = {
         id: 'current',
         version: getVersionNumber(standard),
-        createdAt: standard.updated_at || standard.created_at || new Date().toISOString(),
+        createdAt,
         createdBy: 'System', // TODO: Add created_by_user to Standard type when available
         changeType: 'current'
     };
@@ -106,7 +107,9 @@ export function VersionHistoryModal({ open, onOpenChange, standard }: VersionHis
                                     <Badge variant="outline">v{currentVersion.version}</Badge>
                                 </TableCell>
                                 <TableCell className="text-muted-foreground">
-                                    {new Date(currentVersion.createdAt).toLocaleDateString()}
+                                    {currentVersion.createdAt
+                                        ? new Date(currentVersion.createdAt).toLocaleDateString()
+                                        : "—"}
                                 </TableCell>
                                 <TableCell>{currentVersion.createdBy}</TableCell>
                                 <TableCell>

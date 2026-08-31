@@ -19,7 +19,7 @@ export interface LegacyAssessment {
   status: 'Not Started' | 'In Progress' | 'Completed' | 'Overdue';
   dueDate: string | null;
   assignedTo: Array<{ id: string; name: string }> | null;
-  lastUpdated: string;
+  lastUpdated: string | null;
   completedStandards: number;
   totalStandards: number;
   standards?: LegacyStandard[];
