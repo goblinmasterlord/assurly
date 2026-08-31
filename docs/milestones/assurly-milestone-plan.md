@@ -1,7 +1,7 @@
 # Assurly — Milestone Plan
 
 **Suggested path:** `docs/milestones/assurly-milestone-plan.md`
-**Version:** 2.26
+**Version:** 2.27
 **Date:** 30 August 2026
 **Status:** Approved. M1 open.
 **Owner:** Product Owner
@@ -258,7 +258,7 @@ Internal is not further subdivided at this stage. Requirements below refer to th
 
 | ID | Milestone | Requirements | Gate |
 |---|---|---|---|
-| **M1** | Stabilise — live defects | **REQ-042 (first)**, AUD-001, DATA-001, DOC-001 → DOC-003, SEC-001, REQ-007 → REQ-012, REQ-027 → REQ-031, REQ-033, REQ-038, REQ-041, REQ-043, REQ-047 | None. Starts immediately. |
+| **M1** | Stabilise — live defects | **REQ-042 (first)**, AUD-001, DATA-001, DOC-001 → DOC-003, SEC-001, REQ-007 → REQ-012, REQ-027 → REQ-031, REQ-033, REQ-038, REQ-041, REQ-043, REQ-047, REQ-049, REQ-050 | None. Starts immediately. |
 | **M2** | Role model, plus the additions displaced from M1 | REQ-013, REQ-032, REQ-034 → REQ-037, REQ-039, REQ-040, REQ-044 → REQ-046, REQ-048 | None |
 | **M3** | Assessment lifecycle | REQ-014 → REQ-016 | M2 complete |
 | **M4** | Evidence model | REQ-017 | **M2 and M3 complete** |
@@ -502,6 +502,20 @@ An explicit per-assessment date overrides; historical rows behave sensibly with 
 - Bind the date selector to the real payload and surface the due date to the **recipient** of the request, not only the sender.
 - Stop discarding it on read: `transformAssessmentByAspectToAssessment` (`use-assessments.ts:84`) hardcodes `due_date: null`.
 
+> ### The frontend half lives in the same function as REQ-050. **Ship them in one session.**
+>
+> `transformAssessmentByAspectToAssessment` hardcodes **`due_date: null`** (this requirement) and ends **`|| new Date().toISOString()`** (REQ-050) — **two fabrications, twelve lines apart, in one function.** The backend now computes a real effective due date via `COALESCE(a.due_date, t.end_date)` on every read path, and **this line throws it away.**
+>
+> Splitting them across sessions means reading the same function twice and risking the second session reverting the first's understanding of it. **One session, two commits.**
+
+> ### ⚠️ `due_date` and overdue use different aggregates, deliberately — and it will be reported as a bug.
+>
+> Contract §21: the group's **`due_date` is the LATEST** effective date across its standards — when everything must be done. **Overdue keys on the EARLIEST outstanding one** — when the group first fell behind.
+>
+> **So a group can read `overdue` while showing a future `due_date`.** That is correct and it looks wrong. Using `due_date` for the overdue test was the previous behaviour and is exactly the defect REQ-009 fixed: it flagged a group only once its **last** standard was past due.
+>
+> **Recorded here so it is not "fixed" back.** A client showing both should say what each means; the alternative — making `due_date` the earliest — loses the "when is everything due" answer, which is the question the field was added to answer.
+
 > **Manual test complete — the question is settled, and the create path is sound.** 180 assessments were created with a due date and **all 180 persisted**. The 1,921 pre-existing nulls are **non-use, not a silent drop**. The scope does not grow: the defect is confirmed as `transformAssessmentByAspectToAssessment` nulling `due_date` on read.
 
 **Also in frontend scope — the date selector modal is not clickable.** It can currently be operated only by keyboard tabbing. Likely a `pointer-events` or overlay stacking defect. **Fix alongside the display work** — a due date the user cannot set with a mouse is not meaningfully different from one that is discarded on read, and shipping the read fix alone would leave the feature still unusable for most users.
@@ -534,7 +548,19 @@ An explicit per-assessment date overrides; historical rows behave sensibly with 
 
 **Backend audit finding — `MAX(due_date)` is the wrong aggregate.** The group-level due date is `MAX(a.due_date)` (`main.py:838`), documented at API contract line 848 as "Latest due date across standards in the group". For the question actually being asked — *is anything in this group overdue?* — `MAX` is wrong: it flags the group only once the **last** standard is past due. An aspect holding one standard three months overdue and one due next month reads as not overdue. The correct aggregate is the earliest due date among standards **not yet complete**. **This misreports a documented contract field today, independent of anything REQ-009 changes.**
 
-Also confirmed: **`?status=overdue` can never return rows.** The grouped `CASE` (`main.py:840-844`) has three total branches — `not_started`, `completed`, `in_progress` — and the filter compares against that derived column, so the endpoint returns `200` with an empty array. A caller cannot distinguish "nothing is overdue" from "this filter does not work".
+Also confirmed: **`?status=overdue` can never return rows.** The grouped `CASE` (`main.py:840-844`) has three total branches — `not_started`, `completed`, `in_progress` — and the filter compares against that derived column, so the endpoint returns ~~`200` with an empty array~~ **`500` — see the correction below.** A caller cannot distinguish "nothing is overdue" from "this filter does not work".
+
+> ### ✅ Backend half merged. **Two corrections and one consequence worth reading before the gate.**
+>
+> **1. `?status=` was returning `500` for every value, not `200` with an empty array.** The filtered path wrapped the grouped query in a derived table and then ordered on `unique_term_id`, which that table does not expose — `Unknown column 'unique_term_id' in 'ORDER BY'`, caught by the handler's bare `except` and returned as `500`. **Executed against a database to confirm it.** So the filter had never worked for **any** value, and adding `overdue` alone would have fixed nothing. Both paths now share one shape.
+>
+> **Why nobody noticed: no frontend caller sends `?status=`** — the Assessments view filters client-side. **Second time an uncalled surface has hidden a defect**, after `/api/aspects/inactive` under REQ-012.
+>
+> **2. 🔴 `overdue` now SHADOWS `not_started` and `in_progress` for past-due groups.** The `CASE` tests it first, so those two now mean **"not yet due"**. **Any client filtering on them sees fewer rows than before.** This is intended, and it is **the most likely surprise at gate time** — a screen that looks like it has lost data has not; the rows moved to a status that did not previously exist. A fully completed group is never overdue.
+>
+> **3. `due_date` is unchanged** and still reports the latest effective date — see the note under REQ-007 on why the two aggregates differ.
+>
+> **Known Issue #14 recorded, not fixed:** an unrecognised `?status=` value still returns `200` with an empty array rather than `400`.
 
 > **Interaction with REQ-007.** If every standard inherits the same `t.end_date` via the REQ-007 `COALESCE`, then `MAX` and `MIN` agree across the group and **this defect goes quiet** — it does not get fixed, it stops being observable. It resurfaces the moment explicit per-standard due dates are set. Sequencing REQ-007 first therefore hides REQ-009's aggregate bug rather than resolving it; fix the aggregate on its own merits, not on whether the symptom is currently visible.
 
@@ -886,14 +912,83 @@ The user drags a standard, the list reorders on screen, and the change is gone o
 
 ---
 
-#### REQ-031 — `VersionHistoryModal` still fabricates today's date
-**Type:** Defect. **Frontend, small.** **Assigned to the frontend agent.**
+#### REQ-031 — `VersionHistoryModal` still fabricates today's date — **FOLDED INTO REQ-050**
+**Type:** Defect. **Frontend, small.**
 
 **Problem:** `VersionHistoryModal.tsx:77` carries the same `|| new Date()` fabrication that REQ-011 removed from `SortableStandardCard.tsx`. Where the value is absent it renders today, which reads as data and is not.
 
-**Why it needs its own number:** both agents scoped it out — the backend brief covered the API, the frontend brief covered the standards card — so **it currently belongs to nobody**. It is named in the plan under REQ-011 and in both dev logs, and has still not been picked up.
+> ### Folded into REQ-050 at v2.27. **Not retired — the work stands; the number does not.**
+>
+> **Same defect, same fix, and a third instance has now appeared** in `use-assessments.ts`. Keeping them as separate requirements is what let this one sit unclaimed across five plan versions while a third copy shipped. **See REQ-050 for the scope, which includes this file.**
+>
+> **Why it went unclaimed is worth keeping:** both agents scoped it out — the backend brief covered the API, the frontend brief covered the standards card — so **it belonged to nobody.** A defect named in the plan and in two dev logs still needs an owner.
 
-**Scope:** Show an em dash when the value is absent, matching the treatment now shipped on the standards card.
+---
+
+#### REQ-049 — Lowercase `aspect_code` falls out of the category mapping
+**Type:** Defect. **Frontend.**
+
+**Problem:** The console logs `Unknown category` for lowercase `aspect_code` values — `ld`, and by extension `ab`, `ey`, `mck`. **The same invariant the backend assumed before REQ-029 corrected it in six places:** that `aspect_code` is uppercase. It is not, and there is no canonical casing.
+
+> ### ⚠️ The premise was checked against the code, and it does not hold as stated. **Read this before scoping.**
+>
+> **1. The warning does not come from `aspectCodeToCategory`.** It comes from **`getCategoryIcon` (`Assessments.tsx:458`)**, a `switch` over *display* category names whose `default` warns and returns a generic `ClipboardCheck` icon. **That path is cosmetic by construction** — it always returns an icon.
+>
+> **2. `aspectCodeToCategory` does not return `undefined`.** `data-transformers.ts:39` reads `return (map[aspectCode] || aspectCode.toLowerCase())`. An unmapped code falls through to its own lowercased form. **So `assessment.category` is never undefined, and the chain "undefined category → REQ-008's filter breaks" does not follow.**
+>
+> **3. For `ld`, `ab`, `ey` and `mck`, filtering should work — and the reason is worth understanding, because it is also the reason the real defect is invisible.** The filter's option values are built by **the same function** (`Assessments.tsx:267`, `SchoolPerformanceView.tsx:531`). Both sides miss the map and both lowercase, so both produce the same string.
+>
+> **4. There IS a real filter defect, and it is a different one.** The two sides get the code from **different endpoints with different casing**: `GET /api/assessments` returns **`UPPER(ma.aspect_code)`** (`main.py:938`), while `GET /api/aspects` returns the code **as stored**. That is harmless for an unmapped code — both lowercase to the same value — but **breaks whenever a stored lowercase code lowercases into a map key**:
+>
+> | Side | Input | Result |
+> |---|---|---|
+> | Assessment (uppercased by the API) | `EDU` | `map['EDU']` → **`education`** |
+> | Filter (stored casing) | `edu` | miss → **`edu`** |
+>
+> **`education !== edu`, so that aspect is silently unfilterable** — which would present exactly like the defect REQ-008 closed.
+
+**The question that decides priority is a production one, and agents cannot answer it (§2.4).** Hand this over:
+
+```sql
+-- Does any aspect carry a code that lowercases into a mapping key?
+SELECT mat_id, aspect_code, aspect_name FROM mat_aspects
+WHERE LOWER(aspect_code) IN ('edu','hr','fin','est','gov','it','is')
+  AND aspect_code <> UPPER(aspect_code);
+```
+
+- **No rows → cosmetic.** A console warning and a generic icon for `ld`, `ab`, `ey`, `mck`. Normal M1 priority, small.
+- **Any rows → M1-blocking.** Those aspects cannot be filtered on the Ratings page, silently.
+
+**Still run the Leadership test the brief asks for** — but note the prediction, so the result means something either way: **`ld` is not a map key, so filtering by Leadership should work.** If it does not, this analysis is wrong somewhere and that is the more valuable finding. **A test whose outcome nobody predicted cannot discriminate** — the lesson from REQ-010's gate 2.
+
+**Scope, once the answer is in:** uppercase the key before the lookup — `map[aspectCode.toUpperCase()]` — so the mapped branch is reached regardless of stored casing, and both sides agree in every case. **That is the same fix REQ-029 applied on the backend**, and it closes the icon warning as a side effect rather than as its own patch.
+
+> **This is the aspects family again.** Five of the last seven defects have originated in `aspect_code`'s missing casing invariant. **REQ-040 (M2) exists for exactly this**, and this instance is frontend rather than backend — worth recording there that the invariant leaks past the API.
+
+---
+
+#### REQ-050 — `|| new Date()` fabricates a timestamp in three places
+**Type:** Defect. **Frontend.** **Absorbs REQ-031.**
+
+**Problem:** **`use-assessments.ts:112` ends `|| new Date().toISOString()`**, so an aspect whose standards carry no `last_updated` reports **the current time**. It reads as data and is not. **Live in production.**
+
+**This is the third instance of one defect**, and the reason it is one requirement rather than three:
+
+| Site | State |
+|---|---|
+| `SortableStandardCard.tsx` | Fixed under REQ-011 |
+| `VersionHistoryModal.tsx:77` | Open — was REQ-031, folded in here |
+| `use-assessments.ts:112` | Open — **found during REQ-047**, on a surface neither requirement named |
+
+**Fixing them one file at a time has already failed once.** REQ-011 fixed the first and named the second; REQ-031 was raised for the second and never picked up; the third was found by accident while reading the same function for something else. **They should not be found a fourth time separately.**
+
+**Scope:**
+- **Show an em dash when the value is absent**, at all remaining sites. This is REQ-047's convention and the same reasoning: **a plausible value is worse than a visible gap**, because nothing reports it.
+- **Search for the pattern rather than fixing the two named files.** `|| new Date`, `?? new Date`, `new Date()` as a default in a display path. Three instances is evidence the file list is not the scope.
+
+**Note the aspect-level case specifically.** `use-assessments.ts` derives `lastUpdatedFromStandards` and then falls back — so an aspect with **no edited standards at all** reports now. That is precisely the population REQ-047 established is the majority: as of April 2026, 1142 of 1198 assessments had never been edited.
+
+**Related to REQ-048 (M2)**, which audits fallback chains generally. This one is already established and does not wait on it.
 
 ---
 
@@ -1118,6 +1213,8 @@ Note the starting position: **`assurly-backend/test_phase2_auth.py` is the only 
 
 **Out of scope:** `mat_standards`, which may have the same disease but is a separate table and a separate pass. Note the finding either way if it becomes obvious.
 
+> **The invariant leaks past the API — record this in the audit.** REQ-049 (M1) is the same missing casing invariant **on the frontend**: `aspectCodeToCategory` keys an uppercase-only map, while `GET /api/assessments` uppercases `aspect_code` and `GET /api/aspects` does not. **So an endpoint that "normalises" casing on one route and not another pushes the problem outward rather than containing it.** Whatever this audit settles about canonical casing has to reach the clients, not just the queries.
+
 ---
 
 #### REQ-044 — Audit every mutation path against the caches it invalidates
@@ -1315,6 +1412,8 @@ Two faults on the login path, found during REQ-042's diagnosis. Neither is urgen
 - Remove the post-submission lock; gate editability on term state rather than submission state.
 - Retain submission as a meaningful state for reporting and completion tracking — an assessment can be submitted and still amendable.
 - Audit trail: who changed what, from what to what, when. This is the prerequisite for trusting the historical series M6 will visualise.
+
+- **Settle `'approved'`. The enum carries a value the code does not believe in.** `assessments.status` is `enum('not_started','in_progress','completed','approved')`, and **no branch of the grouped status `CASE` treats `approved` as done** — "done" is tested as `status = 'completed'` throughout. Consequences today: an all-approved group reports `in_progress`, and since REQ-009 **an all-approved past-due group reports `overdue`**, because every row counts as outstanding. **Decide whether `approved` is a real lifecycle state or dead, then make the code and the enum agree** — either every "is this done" test accepts it, or it comes out of the enum. **Do not add a second definition of done**; there is one today and it is the reason this is a single decision rather than a sweep. This is REQ-014's business because it is the requirement that settles what the lifecycle states mean.
 
 > **Depends on REQ-046 (M2), which should land before or with this.** **No multi-statement write in `main.py` is currently transactional** — `autocommit` is on and every `rollback()` is a no-op — so an amendment and its audit record can be committed independently and diverge. **An audit trail built on that records what was attempted, not what happened**, and `standard_versions` versus `standard_edit_log` already shows the shape of the failure. Building the trail first would mean building it on the defect.
 
@@ -1610,9 +1709,9 @@ Not scheduled. Not to be picked up opportunistically.
 | DOC-003 | M1 | Complete — corrections applied, tags re-verified | ☑ | — | ☑ |
 | SEC-001 | M1 | Complete — verified and documented | ☑ | — | ☑ |
 | REQ-006 | — | **Retired** — merged into REQ-017 | — | — | — |
-| REQ-007 | M1 | Ready | ☐ | ☐ | ☐ |
+| REQ-007 | M1 | **Backend merged** (effective due date on all three read paths), contract v2.12 — pending gate. **Frontend half ships with REQ-050**, same function | ☐ | ☐ | ☐ |
 | REQ-008 | M1 | **Gate 1 PASSED** in production | — | ☑ | ☑ |
-| REQ-009 | M1 | Frontend **gate 1 PASSED**. Backend `MAX(due_date)` aggregate still outstanding | ☐ | ☑ | ☐ |
+| REQ-009 | M1 | Frontend **gate 1 PASSED**. **Backend merged** — `overdue` added, aggregate corrected, `?status=` 500 fixed. Pending gate | ☐ | ☑ | ☐ |
 | REQ-010 | M1 | **CLOSED at gate 2.** Migration **retired** — see the standing caveats. Original cause remains unexplained | ☑ | ☑ | ☑ |
 | REQ-011 | M1 | **Gate 1 PASSED**, both halves | ☑ | ☑ | ☑ |
 | REQ-012 | M1 | **CLOSED.** Verified in production as an HLT user — one row, `Mock aspect` | ☑ | — | ☑ |
@@ -1620,7 +1719,7 @@ Not scheduled. Not to be picked up opportunistically.
 | REQ-028 | M1 | Ready — **normal M1 priority** (v2.11 reduction reversed). Ships with the REQ-010 migration | ☐ | — | ☐ |
 | REQ-029 | M1 | **Gate 4 PASSED** — all four endpoints, including creation against lowercase-coded aspects and analytics trends | ☑ | — | ☑ |
 | REQ-030 | M1 | **Backend merged**, contract v2.11 — pending gate, which must confirm **`updated_at` did not move**. Frontend verifies the success path | ☐ | ☐ | ☐ |
-| REQ-031 | M1 | Ready — **frontend agent** | — | ☐ | ☐ |
+| REQ-031 | M1 | **Folded into REQ-050** — same defect, third instance found. Not retired; the work stands | — | ☐ | ☐ |
 | REQ-039 | **M2** | Ready — build with REQ-013. Backend half **reports before implementing** | ☐ | ☐ | ☐ |
 | REQ-040 | **M2** | Ready — audit only. **Report and stop**; produce SQL for the product owner | ☐ | — | ☐ |
 | REQ-044 | **M2** | Ready — audit only, frontend. **Report and stop.** Check the REQ-043 dev log first | — | ☐ | ☐ |
@@ -1637,7 +1736,9 @@ Not scheduled. Not to be picked up opportunistically.
 | REQ-041 | M1 | **CLOSED — passes UAT.** End-of-list behaviour decided: hold on the last standard with a toast | — | ☑ | ☑ |
 | REQ-042 | M1 | **🔴 SHIPPED BUT UNVERIFIED — not passed.** Gate 5 failed on both paths; neither symptom reproduced; **testing parked by the product owner.** All three parts are in production and none is confirmed. **First place to look on a spinner or unexplained logout.** Does not tick | ☐ | ☐ | ☐ |
 | REQ-043 | M1 | **CLOSED — passes UAT.** Dashboard and aspect metric caches now invalidated on create. **Opens REQ-044** | — | ☑ | ☑ |
-| REQ-047 | M1 | Ready — backend adds the missing `updated_by_name` join; frontend verifies. **Decide the NULL case explicitly.** One instance of REQ-048 | ☐ | ☐ | ☐ |
+| REQ-047 | M1 | **Both halves merged** — pending gate. Null case decided: **em dash, no fallback**, reused by REQ-035 | ☐ | ☐ | ☐ |
+| REQ-049 | M1 | Ready — frontend. **Priority pending one production query** (in the block): cosmetic, or filter-breaking | — | ☐ | ☐ |
+| REQ-050 | M1 | Ready — frontend. **Absorbs REQ-031.** Third instance; search the pattern, do not fix two files | — | ☐ | ☐ |
 | DATA-001 | M1 | Ready — **product owner runs manually**, no code | — | — | ☐ |
 | REQ-013 | M2 | Ready | ☐ | ☐ | ☐ |
 | REQ-014 | M3 | Gated on M2. **Also depends on REQ-046** — an audit trail on non-atomic writes records attempts, not outcomes | ☐ | ☐ | ☐ |
@@ -1660,6 +1761,7 @@ Not scheduled. Not to be picked up opportunistically.
 
 | Version | Date | Change |
 |---|---|---|
+| 2.27 | 31 August 2026 | **REQ-049 added** to M1 (frontend): the console logs `Unknown category` for lowercase `aspect_code` values — `ld`, and by extension `ab`, `ey`, `mck`. **The premise was checked against the code and does not hold as stated, which changes both the scope and the priority.** ① The warning comes from **`getCategoryIcon` (`Assessments.tsx:458`)**, whose `default` warns and returns a generic icon — **cosmetic by construction.** ② **`aspectCodeToCategory` does not return `undefined`**: `data-transformers.ts:39` falls through to `aspectCode.toLowerCase()`, so `assessment.category` is never undefined and **the chain "undefined category → REQ-008's filter breaks" does not follow.** ③ **For the four codes named, filtering should work**, because the filter's option values are built by the **same function** — both sides miss the map, both lowercase, both agree. ④ **There is a real filter defect and it is a different one:** `GET /api/assessments` returns **`UPPER(ma.aspect_code)`** while `GET /api/aspects` returns the code **as stored**, so a code stored lowercase that lowercases into a **map key** produces `education` on one side and `edu` on the other — **silently unfilterable, presenting exactly like the defect REQ-008 closed.** **Priority therefore turns on a production query, recorded in the block for the product owner to run** (§2.4): no rows ⇒ cosmetic, small; any rows ⇒ M1-blocking. **The Leadership test is still worth running, with the prediction stated** — `ld` is not a map key, so it should filter; if it does not, this analysis is wrong and that is the more valuable result. **A test whose outcome nobody predicted cannot discriminate** — REQ-010's gate 2. Fix is `map[aspectCode.toUpperCase()]`, the same correction REQ-029 applied on the backend; **five of the last seven defects have originated in `aspect_code`'s missing casing invariant**, and REQ-040 now records that it leaks past the API. **REQ-050 added** to M1 (frontend) and **REQ-031 folded into it**: `use-assessments.ts:112` ends `|| new Date().toISOString()`, so **an aspect whose standards carry no `last_updated` reports the current time** — live in production, and **the third instance of one defect** after `SortableStandardCard.tsx` (fixed under REQ-011) and `VersionHistoryModal.tsx:77` (REQ-031, never picked up). **Fixing them one file at a time has already failed once**, and the third was found by accident while reading the same function for REQ-047, so they are one requirement now. **Scope is to search the pattern, not to fix the two named files** — three instances is evidence the file list is not the scope — and to show an em dash, per REQ-047's convention. **REQ-031 is folded, not retired: the work stands, the number does not.** **REQ-007's frontend half is recorded as living in the same function as REQ-050** — `transformAssessmentByAspectToAssessment` hardcodes `due_date: null` **twelve lines** from the fabricated timestamp, and now discards the effective date the backend computes. **Ship them in one session, two commits**, rather than reading the same function twice. **Two REQ-007/REQ-009 consequences recorded so they are not "fixed" back:** ⓐ the group's **`due_date` is the LATEST** effective date while **overdue keys on the EARLIEST outstanding** one, so **a group can read `overdue` while showing a future `due_date`** — correct, deliberate, and counterintuitive enough that it will be reported as a bug; making `due_date` the earliest would lose the question the field exists to answer. ⓑ **`overdue` now shadows `not_started` and `in_progress`** for past-due groups, so those two mean "not yet due" and **any client filtering on them sees fewer rows** — intended, and the most likely surprise at gate time. Also corrected: **`?status=` was returning `500` for every value, not `200` with an empty array** — the filtered path ordered on a column its derived table does not expose; **the filter had never worked for any value**, and nobody noticed because **no frontend caller sends it**, the second time an uncalled surface has hidden a defect. **REQ-014 (M3) gains `'approved'`:** the enum carries a value **no branch of the status `CASE` treats as done**, so an all-approved group reads `in_progress` and, since REQ-009, an all-approved past-due group reads **`overdue`**. **Settle whether `approved` is a real lifecycle state or dead and make the code and the enum agree** — without adding a second definition of done. |
 | 2.26 | 31 August 2026 | **REQ-042 is recorded as SHIPPED BUT UNVERIFIED — not passed, and it does not tick in §8.** **Gate 5 failed on both paths:** an hour of normal activity did not keep the session alive, and an idle tab past expiry produced a spinner rather than a redirect. **Neither symptom reproduced in the follow-up session, and further testing is parked indefinitely by decision of the product owner** (diagnostic: `docs/dev-log/2026-08-31-frontend-req-042-gate5-diagnosis.md`). **Concretely: the `401` handler, the proactive renewal and the redirect are all merged and in production, and none of the three is confirmed working.** A gate that failed and then could not be reproduced **establishes neither outcome** — it is not a pass and not a standing failure, and the requirement is held in that state rather than resolved by assumption in either direction. **🔴 If a user reports an indefinite spinner or an unexplained logout, this is the first place to look.** **The leading explanation for the first symptom is recorded because it bears on the trigger decision settled at v2.24:** renewal is request-gated and fires only when axios traffic occurs in the final 15 minutes before expiry, so **on a cache-heavy page an actively-working user generates no traffic and looks idle** — the same failure the timer was rejected for causing in reverse. **The decision is not reopened and testing stays parked**, but that gap is the first thing to test if it ever is. **§2.2's preamble is extended, and deliberately not as rule 10.** **Four briefs have now stated a mechanism that did not survive contact with the code, and the symptom was accurate every time:** REQ-028 (deletion unreachable from the UI — it was reachable, and the exposed path was the broken one), REQ-036 (the flow needed building — it existed for customs), REQ-030 (a third route shadowing — a missing route, with a parameterised sibling absorbing the path), REQ-047 (the display read the wrong column — the display was correct and a join was missing). **This is rules 7–9's failure mode arriving one step earlier:** those describe how an agent investigates; this is how the work is framed before anyone investigates, and **an agent's own diligence cannot recover it, because the brief has already told them what they are fixing.** So it is addressed to whoever writes the brief: **state the symptom and the evidence; mark any proposed mechanism as a hypothesis to be tested, not a diagnosis to be implemented; scope the first task as establishing the cause.** **The cost is asymmetric** — checking the premise took four greps on REQ-047, before anyone was scoped; not checking one cost REQ-030 a wrong claim carried across fourteen plan versions and into a test specification in another milestone. **REQ-048 added** to M2 (frontend, audit): **long fallback chains convert missing data into wrong data.** `AssessmentDetail.tsx` reads `updated_by_name`, falling through `submitted_by_name`, `assigned_to_name` and the newest standard's assignee before an em dash — and **`updated_by_name` is returned by no endpoint**, so the chain resolved silently to the assignee and "Updated by" named the wrong person on every assessment while looking entirely normal. **Note what the chain cost beyond the wrong name: it hid the missing field** — a gap would have been reported in the first week. Scope is to enumerate fallback chains, establish for each whether the value it falls back *from* is actually supplied, and **report only where a missing value becomes a *different* value** — a fallback to a genuine absence is correct and is not a finding. **Report and stop; no fixes**, as with REQ-040 and REQ-044. **REQ-047 is one instance, fixed separately in M1; REQ-048 does not wait on it.** |
 | 2.25 | 30 August 2026 | **REQ-047 added** to M1 (backend and frontend, small): the **"Updated by" field on the assessments page names the assignee, not the editor**, so it is wrong as soon as anyone other than the assignee edits a rating — the normal case — and wrong in a way that reads as authoritative. **The premise was checked against the code before the requirement was written, and it changes the framing.** **`updated_by` IS populated on the write path** — both `PUT /api/assessments/{assessment_id}` (`main.py:3473`) and the bulk update (`:3551`) set it alongside `last_updated = NOW()` — **so populating the column is not the work**, and the brief's "if it is not populated" branch does not apply. **The frontend is already asking for the right field:** `AssessmentDetail.tsx:1756` and `:1920` read **`updated_by_name` first**, falling back through `submitted_by_name` to `assigned_to_name`. **What is missing is the name itself.** `assigned_to` and `submitted_by` each carry a `LEFT JOIN` producing a `_name` alias; **`updated_by` has no such join** — `GET /api/assessments/{assessment_id}` selects the raw id and no endpoint returns a name. **So this is a missing join, not a mis-wired display: a correct fallback chain resolving to its last rung.** Backend adds `updated_by_name` on the endpoints feeding these surfaces, matching the existing pattern, with a contract entry since it adds a field; frontend is verification. **The NULL case must be decided explicitly, not left to fall out:** `updated_by` is written only on UPDATE and never on INSERT (data model §15 — 1142 of 1198 rows NULL as of April 2026), so an assessment nobody has edited legitimately has none, and **the choice between an em dash, `submitted_by`, and the assignee is a product decision** — an em dash says "nobody has edited this", the assignee says something untrue. **Distinct from REQ-035 (M2)**, recorded in both blocks: that one adds an updater to **standards**, where `mat_standards` has no `updated_by` column at all and a **schema change** is required. **REQ-047 is a join; REQ-035 is a migration.** **Note on versioning:** the brief said "bump to v2.24", which was already used by the routing correction pushed earlier today. Per §2.6 a published version is **superseded, not overwritten**, so this is v2.25; the two versions share no items. |
 | 2.24 | 30 August 2026 | **REQ-030's shadowing claim is CORRECTED. There are two confirmed instances, not three, and REQ-030 was not one of them.** The claim has been carried since v2.10. **Starlette prefers a full match anywhere in the routing table over an earlier partial match**, and a path-match with a **method**-mismatch yields only a partial. Verified by test: `POST /x/reorder` registered **after** `GET /x/{id}` returns **`200`**; with no `POST` route at all it returns **`405`**; `GET /x/reorder` under `GET /x/{id}` **is** genuinely shadowed. **REQ-012's two cases were real shadowing because they were `GET`-on-`GET`.** The `405` here was simply what a missing endpoint looks like when a parameterised sibling absorbs the path — **registration order was never the fault**, and v2.10's assertion that registering below "would leave the `405` in place" was never tested. **The route is registered above its sibling regardless**, because a future `GET /api/standards/reorder` would make ordering matter; a comment at the site says so, to stop the placement being "corrected" back. **REQ-013's route-ordering test is amended, and this is the consequence that matters:** the assertion must be on **same-method collisions only**. The unqualified version was wrong in both directions — it would **not** have caught REQ-030, since there was no route to be out of order, and it would **fail a correctly-working `POST` registered below a parameterised `GET`**. A test that flags working code and misses the defect that shipped trains people to ignore it. **REQ-046 added** to M2 (backend): **no multi-statement write in `main.py` is transactional.** `DB_CONFIG` sets `autocommit: True` (`main.py:231`), so `commit()` is redundant and **`rollback()` rolls back nothing** — 18 `commit()` calls, 9 `rollback()` calls, and **no `begin()`** outside the reorder endpoint. **The dangerous case is `update_standard`**, which writes `standard_versions`, `mat_standards` and `standard_edit_log` in sequence: a failure on the third leaves the first two committed, producing **a live version row whose edit was never logged**, with nothing to detect the divergence. Scope is to enumerate every multi-statement write path, make each transactional via an explicit `begin()`, and **report the full list before changing anything**. **Not by setting `autocommit: False`** — that would make every handler transactional at once, and any path returning without committing would silently start discarding its write; the failure mode of getting it wrong is data loss, not an error. **M3 dependency recorded in both directions:** REQ-014's audit trail for assessment amendments is worthless if the writes producing it are not atomic, so **REQ-046 lands before or with it** — building the trail first builds it on the defect. **REQ-030 records the one claim only production can confirm:** that **`updated_at = updated_at` suppresses `ON UPDATE CURRENT_TIMESTAMP`**. MySQL-documented and implemented, but unprovable without database access (§2.4), and **it is the half of this change nothing else would notice** — reordering works either way. If it fails, every reordered standard silently reports today's date as its last update, **which is REQ-011's defect undone by the endpoint meant to respect it.** The gate step is to check the "Updated" date, not the order. **REQ-042's renewal trigger is settled:** renewal is attempted **before each API request when the token has 15 minutes or less remaining**, deduped by a shared in-flight promise so a burst of parallel requests produces one renewal. **Rejected: a timer**, which renews idle tabs and can exhaust the 12-hour ceiling while nobody is working — signing out the user who returns in the morning *because* the client kept the session alive; **and activity listeners alone**, which miss a user reading a long page without making requests. **A request is the app doing work on the user's behalf**, which is the only signal that means what it claims to. A `401` from the refresh endpoint is **end-of-session** and falls through to the redirect rather than being retried. **Note on versioning:** the brief said "bump to v2.23", which had already been used by the §2.6 correction pushed earlier today. Per the precedent in §2.6, a published version is **superseded, not overwritten**, so this is v2.24; **none of its five items overlaps v2.23, so nothing was re-applied.** |
