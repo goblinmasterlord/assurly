@@ -3264,7 +3264,10 @@ async def get_assessment_details(
                 a.submitted_by,
                 u_submitted.full_name as submitted_by_name,
                 a.last_updated,
-                a.updated_by
+                a.updated_by,
+                -- REQ-047. Null when nobody has edited this assessment: updated_by
+                -- is written only on UPDATE, never on INSERT.
+                u_updated.full_name as updated_by_name
             FROM assessments a
             JOIN schools s ON a.school_id = s.school_id
             JOIN mat_standards ms ON a.mat_standard_id = ms.mat_standard_id
@@ -3272,6 +3275,7 @@ async def get_assessment_details(
             JOIN standard_versions sv ON a.version_id = sv.version_id
             LEFT JOIN users u_assigned ON a.assigned_to = u_assigned.user_id
             LEFT JOIN users u_submitted ON a.submitted_by = u_submitted.user_id
+            LEFT JOIN users u_updated ON a.updated_by = u_updated.user_id
             LEFT JOIN terms t ON t.unique_term_id = a.unique_term_id
             WHERE a.assessment_id = %s
               AND s.mat_id = %s
@@ -3375,7 +3379,12 @@ async def get_assessments_by_aspect(
                 a.assigned_to,
                 u.full_name as assigned_to_name,
                 a.submitted_at,
-                a.last_updated
+                a.last_updated,
+                a.updated_by,
+                -- REQ-047: assigned_to and submitted_by each had a name join and
+                -- updated_by did not, so every consumer's fallback chain resolved
+                -- to the assignee and "Updated by" named the wrong person.
+                u_updated.full_name as updated_by_name
             FROM mat_standards ms
             JOIN mat_aspects ma ON ms.mat_aspect_id = ma.mat_aspect_id
             LEFT JOIN assessments a ON ms.mat_standard_id = a.mat_standard_id
@@ -3383,6 +3392,7 @@ async def get_assessments_by_aspect(
                 AND a.unique_term_id = %s
             LEFT JOIN standard_versions sv ON a.version_id = sv.version_id
             LEFT JOIN users u ON a.assigned_to = u.user_id
+            LEFT JOIN users u_updated ON a.updated_by = u_updated.user_id
             LEFT JOIN terms t ON t.unique_term_id = %s
             WHERE UPPER(ma.aspect_code) = UPPER(%s)
               AND ms.mat_id = %s
@@ -3421,7 +3431,12 @@ async def get_assessments_by_aspect(
                 "assigned_to": row['assigned_to'],
                 "assigned_to_name": row['assigned_to_name'],
                 "submitted_at": row['submitted_at'].strftime('%Y-%m-%dT%H:%M:%SZ') if row['submitted_at'] else None,
-                "last_updated": row['last_updated'].strftime('%Y-%m-%dT%H:%M:%SZ') if row['last_updated'] else None
+                "last_updated": row['last_updated'].strftime('%Y-%m-%dT%H:%M:%SZ') if row['last_updated'] else None,
+                # Null when nobody has edited this standard. updated_by is written
+                # only on UPDATE, never on INSERT, so null means "not yet edited"
+                # and the client shows an em dash rather than naming someone else.
+                "updated_by": row['updated_by'],
+                "updated_by_name": row['updated_by_name']
             }
             standards_list.append(standard)
 
@@ -3433,9 +3448,18 @@ async def get_assessments_by_aspect(
         else:
             overall_status = 'in_progress'
 
+        # Aspect-level updater (REQ-047): whoever made the most recent edit within
+        # the aspect, taken from the standard rows already fetched rather than a
+        # second query. Null when no standard has been edited — the aspect has no
+        # updater, and naming anyone would be inventing one.
+        edited = [r for r in standards if r['last_updated'] and r['updated_by']]
+        latest_edit = max(edited, key=lambda r: r['last_updated']) if edited else None
+
         connection.close()
 
         return JSONResponse(content={
+            "updated_by": latest_edit['updated_by'] if latest_edit else None,
+            "updated_by_name": latest_edit['updated_by_name'] if latest_edit else None,
             "school_id": info['school_id'],
             "school_name": info['school_name'],
             "aspect_code": info['aspect_code'],

@@ -1,7 +1,7 @@
 # Assurly API Contract
 
 **Status:** Authoritative. Both backend (Claude Code) and frontend (Cursor) reference this doc.
-**Version:** v2.13
+**Version:** v2.14
 **Last updated:** 31 August 2026
 **Backend base URL:** `http://localhost:8000` (local) / `https://assurly-frontend-400616570417.europe-west2.run.app` (Cloud Run production)
 
@@ -69,6 +69,16 @@ Authentication (a valid Bearer token) is not the same as authorisation. Three ti
 - **`GET /api/assessments/by-aspect` returns it even for a standard with no assessment row**, because the request names the term.
 
 > **Not yet term-state aware.** Overdue is computed against the calendar, so **a closed term's assessments continue to read as overdue.** Suppressing that requires term state, which does not exist until REQ-015 (M3).
+
+### "Updated by" means edited, and null means nobody has
+
+`assessments.updated_by` is written **only on UPDATE, never on INSERT**, so a freshly created assessment has none. **Null therefore means "not yet edited" — a fact, not a gap to be filled.**
+
+**Clients must render it as an em dash and must not fall back** to `assigned_to`, `submitted_by`, or a raw user id. Each answers a different question, and the assignee in particular is *usually* not the editor once anyone else touches a rating.
+
+> **`submitted_by` could not serve as a fallback even if it were wanted:** both write paths set `submitted_by` and `updated_by` in the same statement, so an assessment with no `updated_by` has no `submitted_by` either. The rung is unreachable, not merely undesirable.
+
+**REQ-035 (M2) reuses this convention** for standards rather than deciding it again.
 
 ### MAT isolation
 
@@ -1090,7 +1100,8 @@ Authorization: Bearer <token>
   "submitted_by": "user10",
   "submitted_by_name": "Richard Briggs",
   "last_updated": "2024-11-15T10:30:00Z",
-  "updated_by": "user10"
+  "updated_by": "user10",
+  "updated_by_name": "Richard Briggs"
 }
 ```
 
@@ -1122,7 +1133,8 @@ Authorization: Bearer <token>
 | `submitted_by` | string | yes | User ID. |
 | `submitted_by_name` | string | yes | |
 | `last_updated` | string (ISO 8601) | yes | |
-| `updated_by` | string | yes | User ID. |
+| `updated_by` | string | yes | User ID. **Null until the assessment is first edited** — see the note below. |
+| `updated_by_name` | string | yes | Full name for `updated_by`. **Null when `updated_by` is null.** |
 
 Action checklist items are not embedded in this response — fetch them via `GET /api/assessments/{assessment_id}/actions` (see §32a).
 
@@ -1187,7 +1199,9 @@ Returns all standards within an aspect for a specific school and term, with thei
       "assigned_to": "user10",
       "assigned_to_name": "Richard Briggs",
       "submitted_at": "2025-11-15T10:30:00Z",
-      "last_updated": "2025-11-15T10:30:00Z"
+      "last_updated": "2025-11-15T10:30:00Z",
+      "updated_by": "user10",
+      "updated_by_name": "Richard Briggs"
     }
   ]
 }
@@ -1210,11 +1224,15 @@ Each standard in the `standards` array:
 | `version_id` | string | yes | |
 | `version_number` | integer | yes | |
 | `status` | string | no | Defaults to `"not_started"` if no assessment. |
+| `updated_by` | string | yes | User ID of the last editor. **Null until first edited.** |
+| `updated_by_name` | string | yes | Full name for `updated_by`. **Null when `updated_by` is null.** |
 | `due_date` | string (date) | yes | **Effective** — see **Effective due date** under Conventions. Present even for a standard with no assessment row, since it inherits the requested term's end date. |
 | `assigned_to` | string | yes | |
 | `assigned_to_name` | string | yes | |
 | `submitted_at` | string (ISO 8601) | yes | |
 | `last_updated` | string (ISO 8601) | yes | |
+
+The **aspect level** also carries `updated_by` and `updated_by_name`: whoever made the **most recent edit within the aspect**, taken from the standard with the latest `last_updated` that has an editor. **Null when no standard in the aspect has been edited.**
 
 **Response 404:** `"School or aspect not found in your MAT"`.
 
@@ -2167,6 +2185,7 @@ Admin/cron utility. Not called by the frontend.
 
 | Version | Date | Change |
 |---|---|---|
+| v2.14 | 2026-08-31 | **REQ-047 — `updated_by_name` now exists.** `assigned_to` and `submitted_by` each had a `LEFT JOIN` producing a `_name` alias and **`updated_by` had none**, so every consumer's fallback chain resolved to the assignee and **"Updated by" named the wrong person whenever the editor was not the assignee** — the normal case once anyone else edits a rating. Added to **§23** (single detail) and **§24** (by-aspect), per standard **and at the aspect level**, where it is whoever made the most recent edit within the aspect. **`GET /api/assessments` (§21) is deliberately unchanged:** it returns no `updated_by` in any form, no surface reads one from it, and a group-level "last editor" is an aggregate to design rather than a join to add. **The null case is decided, not inherited: an em dash.** `updated_by` is written only on UPDATE and never on INSERT, so null means **"not yet edited"** — a fact rather than a gap, and as of April 2026 that was 1142 of 1198 rows. **Clients must not fall back** to the assignee, the submitter or a raw id. Recorded under Conventions, including that **`submitted_by` is an unreachable fallback rather than merely an undesirable one** — both write paths set it in the same statement as `updated_by`, so a row with no updater has no submitter. **REQ-035 (M2) reuses this convention for standards rather than re-deciding it.** |
 | v2.13 | 2026-08-31 | **REQ-009 — `overdue` is a real group status, and the aggregate behind it is corrected.** §21's computed `status` gains **`overdue`**, tested first and taking precedence over `not_started` and `in_progress` (which now mean "not yet due"); **a fully completed group is never overdue.** `?status=overdue` is accordingly a working filter — previously it could match nothing, because the `CASE` could emit only three values. **The aggregate is the substantive fix:** overdue is keyed on the **earliest outstanding** effective due date, not `MAX`, so **a group is overdue when anything in it is** rather than only once its last standard is past due. `due_date` is unchanged and remains the **latest** effective date in the group, which means **a group can read `overdue` while showing a future `due_date`** — correct, deliberate, and documented under §21 so a client can present both honestly. **Also fixed: `?status=` was returning `500` for every value.** The filtered path wrapped the grouped query in a derived table but ordered on `unique_term_id`, which the derived table does not expose, raising `Unknown column ... in ORDER BY`. Both paths now share one shape and order on `term_id`, a column of the derived table that sorts identically. **New Known Issue #14:** an unrecognised `?status=` value still returns `200` with an empty array rather than `400`. |
 | v2.12 | 2026-08-31 | **REQ-007 — effective due date.** All three assessment read endpoints (§21, §23, §24) now return `COALESCE(assessments.due_date, terms.end_date)`: **an assessment with no explicit due date inherits its term's end date, and an explicit date overrides it.** Documented once under **Effective due date** in Conventions and cross-referenced from each field. **Derived on read — no backfill, no migration, no column changed**, so correcting a term's `end_date` immediately corrects every assessment inheriting it. Write paths are untouched: a `due_date` sent to §22 is stored and returned as given. **§24 returns a date even for a standard with no assessment row**, because the request names the term and the join is on that parameter rather than on the assessment. §21's group value remains the **latest** across the group, now of effective dates. **Recorded as a known limit: overdue is computed against the calendar and is not term-state aware**, so a closed term's assessments keep reading as overdue until REQ-015 (M3) introduces term state. |
 | v2.11 | 2026-08-30 | **REQ-030 — `POST /api/standards/reorder` (§16a) now exists.** The frontend has called it since drag-and-drop shipped and **it had never been implemented**, so reordering has never persisted. Accepts `{ "standards": [{ "mat_standard_id", "sort_order" }] }` and applies the set **all or nothing** — every id is validated against the caller's MAT before anything is written, and the writes run in one explicit transaction, because a partial application leaves the list in an order nobody chose. **`updated_at` deliberately does not move:** the column carries `ON UPDATE CURRENT_TIMESTAMP`, so the statement sets it to itself — reordering is not a material edit, and letting the timestamp drift would silently undo REQ-011. Rejects an empty array and duplicate ids with `400`; unknown or other-MAT ids with `404` and no write. **`sort_order` removed from the `PUT` model (§16)**, where it was declared and silently ignored — a single-record `PUT` is the wrong shape for a multi-record operation. **No shape change to §16**: the field was never documented there, so the contract was already correct and the model was over-declaring against it. |

@@ -109,6 +109,10 @@ function transformAssessmentByAspectToAssessment(data: AssessmentByAspect): Asse
     submitted_at: null,
     submitted_by: null,
     submitted_by_name: null,
+    // REQ-047: carried through from the API rather than left undefined, which is
+    // what sent the "Updated by" card down its fallback chain to the assignee.
+    updated_by: data.updated_by ?? null,
+    updated_by_name: data.updated_by_name ?? null,
     last_updated: lastUpdatedFromStandards || new Date().toISOString(),
     mat_standard_id: '',
     standard_code: '',

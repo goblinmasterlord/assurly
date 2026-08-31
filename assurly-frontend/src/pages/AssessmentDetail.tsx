@@ -1751,19 +1751,11 @@ export function AssessmentDetailPage() {
                   <div>
                     <p className="text-xs text-slate-500 font-medium">Updated by</p>
                     <p className="text-sm font-semibold text-slate-900">
-                      {(() => {
-                        const a: any = assessment as any;
-                        if (a.updated_by_name) return a.updated_by_name;
-                        if (assessment.submitted_by_name) return assessment.submitted_by_name;
-                        if (assessment.assigned_to_name) return assessment.assigned_to_name;
-
-                        // For aspect-level view, derive from the most recently updated standard if possible
-                        const standardsWithMeta = (assessment.standards || []) as Array<Standard & { assigned_to_name?: string; last_updated?: string | null }>;
-                        const latest = standardsWithMeta
-                          .filter(s => !!s.last_updated)
-                          .sort((x, y) => (new Date(y.last_updated as string).getTime() || 0) - (new Date(x.last_updated as string).getTime() || 0))[0];
-                        return latest?.assigned_to_name || a.updated_by || "—";
-                      })()}
+                      {/* REQ-047: no fallback. updated_by is written only on edit, so
+                          its absence means nobody has edited this — and the assignee,
+                          the submitter and a raw user id are all answers to a
+                          different question. An em dash is the true one. */}
+                      {assessment.updated_by_name || "—"}
                     </p>
                   </div>
                 </div>
@@ -1915,10 +1907,9 @@ export function AssessmentDetailPage() {
 
                           <TableCell>
                             <span className="text-sm text-slate-600">
-                              {(() => {
-                                const s: any = standard as any;
-                                return s.updated_by_name || s.assigned_to_name || "—";
-                              })()}
+                              {/* REQ-047: see the "Updated by" card above — no fallback
+                                  to the assignee, who is not the editor. */}
+                              {(standard as any).updated_by_name || "—"}
                             </span>
                           </TableCell>
 

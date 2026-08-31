@@ -128,6 +128,10 @@ export interface AssessmentByAspect {
     total_standards: number;
     completed_standards: number;
     status: AssessmentStatus;
+    // Whoever made the most recent edit within the aspect. Null when no standard
+    // has been edited — the aspect has no updater (REQ-047).
+    updated_by?: string | null;
+    updated_by_name?: string | null;
     standards: AssessmentStandard[];
 }
 
