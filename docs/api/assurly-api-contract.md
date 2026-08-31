@@ -1,7 +1,7 @@
 # Assurly API Contract
 
 **Status:** Authoritative. Both backend (Claude Code) and frontend (Cursor) reference this doc.
-**Version:** v2.12
+**Version:** v2.13
 **Last updated:** 31 August 2026
 **Backend base URL:** `http://localhost:8000` (local) / `https://assurly-frontend-400616570417.europe-west2.run.app` (Cloud Run production)
 
@@ -944,7 +944,7 @@ Returns assessment summaries grouped by (school, aspect, term).
 | `aspect_code` | string | — | Optional filter. |
 | `term_id` | string | — | Short term ID, e.g. `T1`. |
 | `academic_year` | string | — | e.g. `2025-26`. |
-| `status` | string | — | `not_started`, `in_progress`, or `completed`. |
+| `status` | string | — | `not_started`, `in_progress`, `completed` or `overdue`. Matched against the **computed** group status below, so exactly one of the four applies to any group. **An unrecognised value returns `200` with an empty array, not `400`** — see Known Issue #14. |
 
 **Response 200:**
 
@@ -984,9 +984,13 @@ Returns assessment summaries grouped by (school, aspect, term).
 | `academic_year` | string | no | `2025-26`. |
 | `due_date` | string (date) | yes | `YYYY-MM-DD`. **Effective** due date — latest across standards in the group; see **Effective due date** under Conventions. |
 | `last_updated` | string (ISO 8601) | yes | Most recent update across standards. |
-| `status` | string | no | Computed: `not_started`, `in_progress`, or `completed`. |
+| `status` | string | no | Computed: `overdue`, `not_started`, `in_progress` or `completed`, tested in that order. **`overdue` takes precedence** over `not_started` and `in_progress`, so those two now mean "not yet due". **A fully completed group is never overdue.** Overdue is keyed on the **earliest outstanding** effective due date — a group is overdue when *anything* in it is — which is not the `due_date` above; see the note under this table. |
 | `total_standards` | integer | no | |
 | `completed_standards` | integer | no | |
+
+> **`due_date` and `status` are computed from different aggregates, deliberately.** `due_date` is the **latest** effective date in the group — when everything must be done. `overdue` is keyed on the **earliest outstanding** one — when the group first fell behind. **So a group can read `overdue` while showing a future `due_date`**, which is correct but reads oddly; a client displaying both should say what each means. Using `due_date` for the overdue test was the previous behaviour and is the defect REQ-009 fixed: it flagged a group only once its *last* standard was past due.
+>
+> **Overdue is not term-state aware** — see **Effective due date** under Conventions.
 
 ---
 
@@ -2155,6 +2159,7 @@ Admin/cron utility. Not called by the frontend.
 | 11 | `GET /api/assessments/by-aspect/{aspect_code}` | **Resolved 2026-05-28** — `standard_type` is now added to the per-standard response dict. `actions` is no longer part of this payload (see §32a-d). | Resolved | — |
 | 12 | `GET /api/standards/{mat_standard_id}` (single detail) | Selects `ms.standard_type` in the SQL but omits it from the `JSONResponse` content dict. The list endpoint (`GET /api/standards`) correctly returns it via `MatStandardResponse`. | **Cosmetic** — data is available, just not serialised | Standalone |
 | 13 | `GET /api/assessments/{assessment_id}` (single detail) | **Resolved 2026-05-28** — `ms.standard_type` added to the SELECT and flows through `process_row_for_json` into the response. `actions` is no longer part of this payload (see §32a-d). | Resolved | — |
+| 14 | `GET /api/assessments` `?status=` | An unrecognised value returns `200` with an empty array rather than `400`, so a caller cannot distinguish an unsupported filter from a genuinely empty result. Noted while adding `overdue` (REQ-009); the four valid values now all return rows, so this is the residue rather than the defect. **No frontend caller sends this parameter today** — the Assessments view filters client-side. | **Cosmetic** | Standalone |
 
 ---
 
@@ -2162,6 +2167,7 @@ Admin/cron utility. Not called by the frontend.
 
 | Version | Date | Change |
 |---|---|---|
+| v2.13 | 2026-08-31 | **REQ-009 — `overdue` is a real group status, and the aggregate behind it is corrected.** §21's computed `status` gains **`overdue`**, tested first and taking precedence over `not_started` and `in_progress` (which now mean "not yet due"); **a fully completed group is never overdue.** `?status=overdue` is accordingly a working filter — previously it could match nothing, because the `CASE` could emit only three values. **The aggregate is the substantive fix:** overdue is keyed on the **earliest outstanding** effective due date, not `MAX`, so **a group is overdue when anything in it is** rather than only once its last standard is past due. `due_date` is unchanged and remains the **latest** effective date in the group, which means **a group can read `overdue` while showing a future `due_date`** — correct, deliberate, and documented under §21 so a client can present both honestly. **Also fixed: `?status=` was returning `500` for every value.** The filtered path wrapped the grouped query in a derived table but ordered on `unique_term_id`, which the derived table does not expose, raising `Unknown column ... in ORDER BY`. Both paths now share one shape and order on `term_id`, a column of the derived table that sorts identically. **New Known Issue #14:** an unrecognised `?status=` value still returns `200` with an empty array rather than `400`. |
 | v2.12 | 2026-08-31 | **REQ-007 — effective due date.** All three assessment read endpoints (§21, §23, §24) now return `COALESCE(assessments.due_date, terms.end_date)`: **an assessment with no explicit due date inherits its term's end date, and an explicit date overrides it.** Documented once under **Effective due date** in Conventions and cross-referenced from each field. **Derived on read — no backfill, no migration, no column changed**, so correcting a term's `end_date` immediately corrects every assessment inheriting it. Write paths are untouched: a `due_date` sent to §22 is stored and returned as given. **§24 returns a date even for a standard with no assessment row**, because the request names the term and the join is on that parameter rather than on the assessment. §21's group value remains the **latest** across the group, now of effective dates. **Recorded as a known limit: overdue is computed against the calendar and is not term-state aware**, so a closed term's assessments keep reading as overdue until REQ-015 (M3) introduces term state. |
 | v2.11 | 2026-08-30 | **REQ-030 — `POST /api/standards/reorder` (§16a) now exists.** The frontend has called it since drag-and-drop shipped and **it had never been implemented**, so reordering has never persisted. Accepts `{ "standards": [{ "mat_standard_id", "sort_order" }] }` and applies the set **all or nothing** — every id is validated against the caller's MAT before anything is written, and the writes run in one explicit transaction, because a partial application leaves the list in an order nobody chose. **`updated_at` deliberately does not move:** the column carries `ON UPDATE CURRENT_TIMESTAMP`, so the statement sets it to itself — reordering is not a material edit, and letting the timestamp drift would silently undo REQ-011. Rejects an empty array and duplicate ids with `400`; unknown or other-MAT ids with `404` and no write. **`sort_order` removed from the `PUT` model (§16)**, where it was declared and silently ignored — a single-record `PUT` is the wrong shape for a multi-record operation. **No shape change to §16**: the field was never documented there, so the contract was already correct and the model was over-declaring against it. |
 | v2.10 | 2026-08-30 | **REQ-042 — sliding session expiry.** New endpoint **`POST /api/auth/refresh` (§3a)**: exchanges a valid, unexpired Bearer token for a new one with a fresh `JWT_ACCESS_TOKEN_EXPIRE_MINUTES` window. **It renews a live session and does not resurrect a dead one** — an expired token is refused, and the only way back from expiry is a new magic link. No request body; the token to renew is the one in the header. Response shape is identical to §2, and the `user` block is read **from the database rather than copied from the presented token**, so a changed school or MAT is picked up on renewal. **The JWT gains an `auth_time` claim** — the original magic-link login, carried unchanged across every renewal — and renewal is refused beyond an absolute ceiling measured from it (`JWT_ABSOLUTE_SESSION_HOURS`, **12 hours**), returning `401` with a distinct message. The ceiling exists because **nothing in the platform can revoke a JWT** (§4, stateless logout), so an uncapped sliding window would turn a stolen token into a permanent one. Tokens minted before this change carry no `auth_time` and fall back to their own `iat`, so they are capped from issue rather than rejected — **the deploy signs nobody out.** **`expires_in` is now derived** from `JWT_ACCESS_TOKEN_EXPIRE_MINUTES` on both §2 and §3a; it was hardcoded to `3600` and would have misstated the lifetime had the env var ever changed. Numbered `3a` rather than `4` so that no existing endpoint reference is renumbered. |

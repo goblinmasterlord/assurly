@@ -945,6 +945,16 @@ async def get_assessments(
                 MAX(COALESCE(a.due_date, t.end_date)) as due_date,
                 MAX(a.last_updated) as last_updated,
                 CASE
+                    -- Overdue (REQ-009). Keyed on the EARLIEST outstanding effective
+                    -- due date, not MAX: a group is overdue when anything in it is,
+                    -- rather than only once its last standard is past due. The
+                    -- COUNT guard states the rule the MIN would otherwise only
+                    -- imply — a fully completed group is never overdue, because
+                    -- MIN over no outstanding rows is NULL and NULL < date is not true.
+                    WHEN COUNT(CASE WHEN a.status = 'completed' THEN 1 END) < COUNT(*)
+                         AND MIN(CASE WHEN a.status <> 'completed' OR a.status IS NULL
+                                      THEN COALESCE(a.due_date, t.end_date) END) < CURDATE()
+                        THEN 'overdue'
                     WHEN COUNT(CASE WHEN a.rating IS NULL THEN 1 END) = COUNT(*) THEN 'not_started'
                     WHEN COUNT(CASE WHEN a.status = 'completed' THEN 1 END) = COUNT(*) THEN 'completed'
                     ELSE 'in_progress'
@@ -982,16 +992,20 @@ async def get_assessments(
                      a.unique_term_id, a.academic_year
         """
 
+        # Always wrap, and always order on the derived table. The two paths used to
+        # differ — the filtered one ordered on columns the derived table does not
+        # expose, so ANY ?status= value raised "Unknown column ... in ORDER BY" and
+        # the handler returned 500. One shape means the filtered path cannot drift
+        # from the unfiltered one again. term_id orders identically to
+        # unique_term_id, academic_year being the outer key, and unlike it is a
+        # column of `grouped`.
+        query = f"SELECT * FROM ({query}) grouped"
+
         if status:
-            query = f"""
-                SELECT * FROM ({query}) grouped
-                WHERE status = %s
-            """
+            query += " WHERE status = %s"
             params.append(status)
 
-        # Qualified because the terms join above introduces its own academic_year
-        # and unique_term_id; unqualified names here would now be ambiguous.
-        query += " ORDER BY a.academic_year DESC, a.unique_term_id DESC, s.school_name"
+        query += " ORDER BY academic_year DESC, term_id DESC, school_name"
 
         cursor.execute(query, params)
         rows = cursor.fetchall()
