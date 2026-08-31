@@ -1007,8 +1007,8 @@ export function AssessmentDetailPage() {
                   Due Date
                 </p>
                 <p className="text-sm text-slate-900 font-medium">
-                  {assessment.dueDate 
-                    ? new Date(assessment.dueDate).toLocaleDateString('en-GB', {
+                  {(assessment.due_date || assessment.dueDate)
+                    ? new Date(assessment.due_date || assessment.dueDate!).toLocaleDateString('en-GB', {
                         day: 'numeric',
                         month: 'short',
                         year: 'numeric'
