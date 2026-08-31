@@ -1028,12 +1028,12 @@ export function AssessmentDetailPage() {
                   Last Updated
                 </p>
                 <p className="text-sm text-slate-900 font-medium">
-                  {(assessment.last_updated || assessment.lastUpdated) && assessment.lastUpdated !== "-" 
+                  {(assessment.last_updated || assessment.lastUpdated)
                     ? new Date(assessment.last_updated || assessment.lastUpdated!).toLocaleDateString('en-GB', {
                         day: 'numeric',
                         month: 'short'
                       })
-                    : "Never"
+                    : "—"
                   }
                 </p>
               </div>
@@ -1727,7 +1727,7 @@ export function AssessmentDetailPage() {
                       {assessment.last_updated ? new Date(assessment.last_updated).toLocaleDateString('en-GB', {
                         day: 'numeric',
                         month: 'short'
-                      }) : 'N/A'}
+                      }) : '—'}
                     </p>
                   </div>
                 </div>

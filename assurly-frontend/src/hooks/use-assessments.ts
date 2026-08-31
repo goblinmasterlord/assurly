@@ -113,7 +113,7 @@ function transformAssessmentByAspectToAssessment(data: AssessmentByAspect): Asse
     // what sent the "Updated by" card down its fallback chain to the assignee.
     updated_by: data.updated_by ?? null,
     updated_by_name: data.updated_by_name ?? null,
-    last_updated: lastUpdatedFromStandards || new Date().toISOString(),
+    last_updated: lastUpdatedFromStandards,
     mat_standard_id: '',
     standard_code: '',
     standard_name: data.aspect_name,
@@ -155,7 +155,7 @@ function transformAssessmentByAspectToAssessment(data: AssessmentByAspect): Asse
     },
     completedStandards: data.completed_standards,
     totalStandards: data.total_standards,
-    lastUpdated: lastUpdatedFromStandards || new Date().toISOString(),
+    lastUpdated: lastUpdatedFromStandards ?? undefined,
     dueDate: undefined,
     assignedTo: [],
   };

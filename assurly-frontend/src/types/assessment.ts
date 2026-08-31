@@ -99,7 +99,7 @@ export interface Assessment {
     submitted_at: string | null;
     submitted_by: string | null;
     submitted_by_name: string | null;
-    last_updated: string;
+    last_updated: string | null;
     updated_by?: string | null;
     updated_by_name?: string | null;
     // Legacy fields for backward compatibility
@@ -112,7 +112,7 @@ export interface Assessment {
     standards?: Standard[];
     dueDate?: string | null;
     assignedTo?: Array<{id: string; name: string}> | null;
-    lastUpdated?: string;
+    lastUpdated?: string | null;
     academicYear?: AcademicYear;
     overallScore?: number;
 }
