@@ -36,7 +36,7 @@ const aspectCodeToCategory = (aspectCode: string): AssessmentCategory => {
     'IT': 'it',
     'IS': 'is',
   };
-  return (map[aspectCode] || aspectCode.toLowerCase()) as AssessmentCategory;
+  return (map[aspectCode.toUpperCase()] || aspectCode.toLowerCase()) as AssessmentCategory;
 };
 
 /**
