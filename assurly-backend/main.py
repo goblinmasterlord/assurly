@@ -939,7 +939,10 @@ async def get_assessments(
                 ma.aspect_name,
                 SUBSTRING(a.unique_term_id, 1, 2) as term_id,
                 a.academic_year,
-                MAX(a.due_date) as due_date,
+                -- Effective due date (REQ-007): an assessment with no explicit
+                -- due date inherits its term's end date. No backfill and no
+                -- migration, so a corrected term date propagates on the next read.
+                MAX(COALESCE(a.due_date, t.end_date)) as due_date,
                 MAX(a.last_updated) as last_updated,
                 CASE
                     WHEN COUNT(CASE WHEN a.rating IS NULL THEN 1 END) = COUNT(*) THEN 'not_started'
@@ -952,6 +955,7 @@ async def get_assessments(
             JOIN schools s ON a.school_id = s.school_id
             JOIN mat_standards ms ON a.mat_standard_id = ms.mat_standard_id
             JOIN mat_aspects ma ON ms.mat_aspect_id = ma.mat_aspect_id
+            LEFT JOIN terms t ON t.unique_term_id = a.unique_term_id
             WHERE s.mat_id = %s
         """
         params = [current_mat_id]
@@ -985,7 +989,9 @@ async def get_assessments(
             """
             params.append(status)
 
-        query += " ORDER BY academic_year DESC, unique_term_id DESC, school_name"
+        # Qualified because the terms join above introduces its own academic_year
+        # and unique_term_id; unqualified names here would now be ambiguous.
+        query += " ORDER BY a.academic_year DESC, a.unique_term_id DESC, s.school_name"
 
         cursor.execute(query, params)
         rows = cursor.fetchall()
@@ -3236,7 +3242,8 @@ async def get_assessment_details(
                 a.rating,
                 a.evidence_comments,
                 a.status,
-                a.due_date,
+                -- Effective due date (REQ-007) — see GET /api/assessments.
+                COALESCE(a.due_date, t.end_date) as due_date,
                 a.assigned_to,
                 u_assigned.full_name as assigned_to_name,
                 a.submitted_at,
@@ -3251,6 +3258,7 @@ async def get_assessment_details(
             JOIN standard_versions sv ON a.version_id = sv.version_id
             LEFT JOIN users u_assigned ON a.assigned_to = u_assigned.user_id
             LEFT JOIN users u_submitted ON a.submitted_by = u_submitted.user_id
+            LEFT JOIN terms t ON t.unique_term_id = a.unique_term_id
             WHERE a.assessment_id = %s
               AND s.mat_id = %s
         """
@@ -3345,7 +3353,11 @@ async def get_assessments_by_aspect(
                 a.version_id,
                 sv.version_number,
                 a.status,
-                a.due_date,
+                -- Effective due date (REQ-007) — see GET /api/assessments. The
+                -- terms join is on the requested term rather than on a.unique_term_id
+                -- because assessments is LEFT JOINed here: a standard with no
+                -- assessment row still belongs to the term being asked about.
+                COALESCE(a.due_date, t.end_date) as due_date,
                 a.assigned_to,
                 u.full_name as assigned_to_name,
                 a.submitted_at,
@@ -3357,13 +3369,14 @@ async def get_assessments_by_aspect(
                 AND a.unique_term_id = %s
             LEFT JOIN standard_versions sv ON a.version_id = sv.version_id
             LEFT JOIN users u ON a.assigned_to = u.user_id
+            LEFT JOIN terms t ON t.unique_term_id = %s
             WHERE UPPER(ma.aspect_code) = UPPER(%s)
               AND ms.mat_id = %s
               AND ms.is_active = TRUE
             ORDER BY ms.sort_order
         """
 
-        cursor.execute(standards_query, (school_id, term_id, aspect_code, current_mat_id))
+        cursor.execute(standards_query, (school_id, term_id, term_id, aspect_code, current_mat_id))
         standards = cursor.fetchall()
 
         # Process standards

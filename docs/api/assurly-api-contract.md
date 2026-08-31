@@ -1,8 +1,8 @@
 # Assurly API Contract
 
 **Status:** Authoritative. Both backend (Claude Code) and frontend (Cursor) reference this doc.
-**Version:** v2.11
-**Last updated:** 30 August 2026
+**Version:** v2.12
+**Last updated:** 31 August 2026
 **Backend base URL:** `http://localhost:8000` (local) / `https://assurly-frontend-400616570417.europe-west2.run.app` (Cloud Run production)
 
 This document defines every HTTP endpoint the frontend calls. If the frontend needs a shape that isn't here, the fix is to **update this doc first**, then code follows. If the backend diverges from what's here, it's a backend bug.
@@ -59,6 +59,16 @@ Authentication (a valid Bearer token) is not the same as authorisation. Three ti
 | **None** | `POST /api/auth/request-magic-link`, `GET /api/auth/verify/{token}` (both public by design), `GET /api/terms` (Known Issue #9), `POST /api/auth/cleanup-expired-tokens` (Known Issue #8) |
 
 > **Note on the delete endpoints in the Authenticated row.** Any authenticated user in the MAT may delete standards, aspects and action items. That is consistent with the Internal tier of the role model, which holds full write access within its MAT — it is not an oversight. The External (trustee/governor) tier, which must have no write access anywhere, **does not yet exist**; until it does, read-only access cannot be granted to anyone. That is REQ-013.
+
+### Effective due date
+
+**Every read endpoint returns an *effective* due date: `COALESCE(assessments.due_date, terms.end_date)`.** An assessment with no explicit due date **inherits its term's end date**; an explicit date overrides it.
+
+- **Derived on read.** Nothing is backfilled and no column changed, so **correcting a term's `end_date` immediately corrects every assessment that inherits it.**
+- **Write paths are unaffected.** `due_date` sent on create is stored and returned as given (§22).
+- **`GET /api/assessments/by-aspect` returns it even for a standard with no assessment row**, because the request names the term.
+
+> **Not yet term-state aware.** Overdue is computed against the calendar, so **a closed term's assessments continue to read as overdue.** Suppressing that requires term state, which does not exist until REQ-015 (M3).
 
 ### MAT isolation
 
@@ -972,7 +982,7 @@ Returns assessment summaries grouped by (school, aspect, term).
 | `aspect_name` | string | no | |
 | `term_id` | string | no | Short form: `T1`, `T2`, `T3`. |
 | `academic_year` | string | no | `2025-26`. |
-| `due_date` | string (date) | yes | `YYYY-MM-DD`. Latest due date across standards in the group. |
+| `due_date` | string (date) | yes | `YYYY-MM-DD`. **Effective** due date — latest across standards in the group; see **Effective due date** under Conventions. |
 | `last_updated` | string (ISO 8601) | yes | Most recent update across standards. |
 | `status` | string | no | Computed: `not_started`, `in_progress`, or `completed`. |
 | `total_standards` | integer | no | |
@@ -1101,7 +1111,7 @@ Authorization: Bearer <token>
 | `rating` | integer | yes | 1–4 or `null`. |
 | `evidence_comments` | string | yes | |
 | `status` | string | no | `not_started`, `in_progress`, `completed`, or `approved`. |
-| `due_date` | string (date) | yes | `YYYY-MM-DD`. |
+| `due_date` | string (date) | yes | `YYYY-MM-DD`. **Effective** — see **Effective due date** under Conventions. |
 | `assigned_to` | string | yes | User ID. |
 | `assigned_to_name` | string | yes | |
 | `submitted_at` | string (ISO 8601) | yes | |
@@ -1196,7 +1206,7 @@ Each standard in the `standards` array:
 | `version_id` | string | yes | |
 | `version_number` | integer | yes | |
 | `status` | string | no | Defaults to `"not_started"` if no assessment. |
-| `due_date` | string (date) | yes | |
+| `due_date` | string (date) | yes | **Effective** — see **Effective due date** under Conventions. Present even for a standard with no assessment row, since it inherits the requested term's end date. |
 | `assigned_to` | string | yes | |
 | `assigned_to_name` | string | yes | |
 | `submitted_at` | string (ISO 8601) | yes | |
@@ -2152,6 +2162,7 @@ Admin/cron utility. Not called by the frontend.
 
 | Version | Date | Change |
 |---|---|---|
+| v2.12 | 2026-08-31 | **REQ-007 — effective due date.** All three assessment read endpoints (§21, §23, §24) now return `COALESCE(assessments.due_date, terms.end_date)`: **an assessment with no explicit due date inherits its term's end date, and an explicit date overrides it.** Documented once under **Effective due date** in Conventions and cross-referenced from each field. **Derived on read — no backfill, no migration, no column changed**, so correcting a term's `end_date` immediately corrects every assessment inheriting it. Write paths are untouched: a `due_date` sent to §22 is stored and returned as given. **§24 returns a date even for a standard with no assessment row**, because the request names the term and the join is on that parameter rather than on the assessment. §21's group value remains the **latest** across the group, now of effective dates. **Recorded as a known limit: overdue is computed against the calendar and is not term-state aware**, so a closed term's assessments keep reading as overdue until REQ-015 (M3) introduces term state. |
 | v2.11 | 2026-08-30 | **REQ-030 — `POST /api/standards/reorder` (§16a) now exists.** The frontend has called it since drag-and-drop shipped and **it had never been implemented**, so reordering has never persisted. Accepts `{ "standards": [{ "mat_standard_id", "sort_order" }] }` and applies the set **all or nothing** — every id is validated against the caller's MAT before anything is written, and the writes run in one explicit transaction, because a partial application leaves the list in an order nobody chose. **`updated_at` deliberately does not move:** the column carries `ON UPDATE CURRENT_TIMESTAMP`, so the statement sets it to itself — reordering is not a material edit, and letting the timestamp drift would silently undo REQ-011. Rejects an empty array and duplicate ids with `400`; unknown or other-MAT ids with `404` and no write. **`sort_order` removed from the `PUT` model (§16)**, where it was declared and silently ignored — a single-record `PUT` is the wrong shape for a multi-record operation. **No shape change to §16**: the field was never documented there, so the contract was already correct and the model was over-declaring against it. |
 | v2.10 | 2026-08-30 | **REQ-042 — sliding session expiry.** New endpoint **`POST /api/auth/refresh` (§3a)**: exchanges a valid, unexpired Bearer token for a new one with a fresh `JWT_ACCESS_TOKEN_EXPIRE_MINUTES` window. **It renews a live session and does not resurrect a dead one** — an expired token is refused, and the only way back from expiry is a new magic link. No request body; the token to renew is the one in the header. Response shape is identical to §2, and the `user` block is read **from the database rather than copied from the presented token**, so a changed school or MAT is picked up on renewal. **The JWT gains an `auth_time` claim** — the original magic-link login, carried unchanged across every renewal — and renewal is refused beyond an absolute ceiling measured from it (`JWT_ABSOLUTE_SESSION_HOURS`, **12 hours**), returning `401` with a distinct message. The ceiling exists because **nothing in the platform can revoke a JWT** (§4, stateless logout), so an uncapped sliding window would turn a stolen token into a permanent one. Tokens minted before this change carry no `auth_time` and fall back to their own `iat`, so they are capped from issue rather than rejected — **the deploy signs nobody out.** **`expires_in` is now derived** from `JWT_ACCESS_TOKEN_EXPIRE_MINUTES` on both §2 and §3a; it was hardcoded to `3600` and would have misstated the lifetime had the env var ever changed. Numbered `3a` rather than `4` so that no existing endpoint reference is renumbered. |
 | v2.9 | 2026-08-27 | `GET /api/standards/inactive` (§19) now returns a real `updated_at` rather than the `null` it advertised via the shared `MatStandardResponse`. Closes the gap left open in v2.8: §19 states it returns the "same shape as the list endpoint", and as of v2.8 that was true of the declared shape but not of the values. Same ISO 8601 UTC serialisation as §13. Additive; no other field touched. |
